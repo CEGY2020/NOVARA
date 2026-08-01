@@ -1,5 +1,6 @@
-const signInButton = document.querySelector("button");
+document.querySelector("form").addEventListener("submit", function (e) {
+    e.preventDefault();
 
-signInButton.addEventListener("click", function () {
-    alert("NOVARA login page is working.");
+    // Temporary login for demo
+    window.location.href = "dashboard.html";
 });
