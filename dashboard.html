@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVARA Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+<div class="dashboard-layout">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <img src="logo.png" alt="AEM Logo">
+            <div>
+                <h1>NOVARA</h1>
+                <p>Operational Intelligence</p>
+            </div>
+        </div>
+
+        <nav>
+            <a href="#" class="active">Dashboard</a>
+            <a href="#">Sites</a>
+            <a href="#">Systems</a>
+            <a href="#">Active Alarms</a>
+            <a href="#">Energy Savings</a>
+            <a href="#">Reports</a>
+            <a href="#">Settings</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Advanced Energy Management</p>
+            <p>Version 1.0</p>
+        </div>
+    </aside>
+
+    <main class="main-content">
+
+        <header class="topbar">
+            <div>
+                <h2>Executive Dashboard</h2>
+                <p>Portfolio operational overview</p>
+            </div>
+
+            <div class="user-profile">
+                <div class="user-avatar">SN</div>
+                <div>
+                    <strong>Steve Nold</strong>
+                    <span>Administrator</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="summary-grid">
+
+            <article class="summary-card">
+                <span class="card-label">Customer Sites</span>
+                <strong>12</strong>
+                <small>11 online</small>
+            </article>
+
+            <article class="summary-card">
+                <span class="card-label">Systems Monitored</span>
+                <strong>48</strong>
+                <small>46 reporting</small>
+            </article>
+
+            <article class="summary-card warning">
+                <span class="card-label">Active Alarms</span>
+                <strong>3</strong>
+                <small>1 critical</small>
+            </article>
+
+            <article class="summary-card savings">
+                <span class="card-label">Verified Savings</span>
+                <strong>$184,620</strong>
+                <small>Rolling 12 months</small>
+            </article>
+
+        </section>
+
+        <section class="content-grid">
+
+            <article class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>System Status</h3>
+                        <p>Current portfolio condition</p>
+                    </div>
+                </div>
+
+                <div class="status-list">
+                    <div class="status-row">
+                        <span class="status-dot online"></span>
+                        <div>
+                            <strong>Domestic Hot Water</strong>
+                            <small>24 systems online</small>
+                        </div>
+                        <span>Normal</span>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="status-dot online"></span>
+                        <div>
+                            <strong>Boiler Systems</strong>
+                            <small>11 systems online</small>
+                        </div>
+                        <span>Normal</span>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="status-dot warning-dot"></span>
+                        <div>
+                            <strong>Pool Heating</strong>
+                            <small>2 systems require review</small>
+                        </div>
+                        <span>Attention</span>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="status-dot offline"></span>
+                        <div>
+                            <strong>Solar Thermal</strong>
+                            <small>1 system offline</small>
+                        </div>
+                        <span>Offline</span>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>Active Alarms</h3>
+                        <p>Highest-priority conditions</p>
+                    </div>
+                    <a href="#">View all</a>
+                </div>
+
+                <div class="alarm-list">
+                    <div class="alarm critical">
+                        <strong>High temperature differential</strong>
+                        <span>Vista Springs · DHW System 3</span>
+                        <small>12 minutes ago</small>
+                    </div>
+
+                    <div class="alarm medium">
+                        <strong>Extended heater runtime</strong>
+                        <span>Highlander Pointe · Boiler 2</span>
+                        <small>48 minutes ago</small>
+                    </div>
+
+                    <div class="alarm low">
+                        <strong>Sensor communication delay</strong>
+                        <span>La Verne Pool · Controller</span>
+                        <small>1 hour ago</small>
+                    </div>
+                </div>
+            </article>
+
+            <article class="panel large-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>Recent Sites</h3>
+                        <p>Portfolio performance overview</p>
+                    </div>
+                    <a href="#">View all sites</a>
+                </div>
+
+                <div class="site-table">
+                    <div class="table-row table-header">
+                        <span>Site</span>
+                        <span>Systems</span>
+                        <span>Status</span>
+                        <span>Savings</span>
+                    </div>
+
+                    <div class="table-row">
+                        <span>Vista Springs</span>
+                        <span>9</span>
+                        <span class="status-text online-text">Online</span>
+                        <span>$48,730</span>
+                    </div>
+
+                    <div class="table-row">
+                        <span>Highlander Pointe</span>
+                        <span>9</span>
+                        <span class="status-text warning-text">Review</span>
+                        <span>$42,180</span>
+                    </div>
+
+                    <div class="table-row">
+                        <span>La Verne Aquatic Center</span>
+                        <span>4</span>
+                        <span class="status-text online-text">Online</span>
+                        <span>$21,460</span>
+                    </div>
+
+                    <div class="table-row">
+                        <span>Saddleback Pool</span>
+                        <span>3</span>
+                        <span class="status-text online-text">Online</span>
+                        <span>$18,920</span>
+                    </div>
+                </div>
+            </article>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>
