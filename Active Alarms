@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NOVARA - Active Alarms</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #eef3f8;
+    }
+
+    header {
+      background: #12345c;
+      color: white;
+      padding: 20px 30px;
+      font-size: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .container {
+      padding: 30px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th {
+      background: #1b4f7c;
+      color: white;
+      padding: 15px;
+      text-align: left;
+    }
+
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    .severity-critical {
+      color: #d32f2f;
+      font-weight: bold;
+    }
+
+    .severity-warning {
+      color: #f57c00;
+      font-weight: bold;
+    }
+
+    .severity-info {
+      color: #1976d2;
+      font-weight: bold;
+    }
+
+    .back-btn {
+      color: white;
+      text-decoration: none;
+      background: #1976d2;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div><strong>NOVARA Active Alarms</strong></div>
+    <a href="dashboard.html" class="back-btn">← Dashboard</a>
+  </header>
+
+  <div class="container">
+    <table>
+      <tr>
+        <th>Alarm</th>
+        <th>Site</th>
+        <th>System</th>
+        <th>Severity</th>
+        <th>Time</th>
+      </tr>
+      <tr>
+        <td>High temperature differential</td>
+        <td>Vista Springs</td>
+        <td>DHW System 3</td>
+        <td class="severity-critical">Critical</td>
+        <td>12 minutes ago</td>
+      </tr>
+      <tr>
+        <td>Extended heater runtime</td>
+        <td>Highlander Pointe</td>
+        <td>Boiler 2</td>
+        <td class="severity-warning">Warning</td>
+        <td>48 minutes ago</td>
+      </tr>
+      <tr>
+        <td>Sensor communication delay</td>
+        <td>La Verne Pool</td>
+        <td>Controller</td>
+        <td class="severity-info">Info</td>
+        <td>1 hour ago</td>
+      </tr>
+    </table>
+  </div>
+
+</body>
+</html>
