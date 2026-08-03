@@ -71,3 +71,62 @@
 
     .graph-placeholder {
       height: 350px;
+      background: #f8f9fa;
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 18px;
+    }
+
+    .range-btn {
+      padding: 6px 14px;
+      border: 1px solid #ccc;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .range-btn.active {
+      background: #1976d2;
+      color: white;
+      border-color: #1976d2;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><strong>NOVARA System Detail</strong></h1>
+    <div class="header-actions">
+      <a href="systems.html" class="back-btn">← Back to Systems</a>
+      <a href="index.html" class="logout-btn">Logout</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h2>Vista Springs – Domestic Hot Water</h2>
+      <p><strong>Status:</strong> <span style="color: green;">Online</span> &nbsp; | &nbsp; Last update: 2 minutes ago</p>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Temperature Trends</h2>
+        <div style="display: flex; gap: 8px;">
+          <button class="range-btn" data-days="3">Last 3 Days</button>
+          <button class="range-btn active" data-days="7">Last 7 Days</button>
+          <button class="range-btn" data-days="30">Last 30 Days</button>
+        </div>
+      </div>
+
+      <div class="graph-placeholder">
+        Graph will go here
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+
