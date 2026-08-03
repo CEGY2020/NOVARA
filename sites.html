@@ -1,138 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>NOVARA - Sites</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Sites</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #ecf0f1;
+    }
 
-<style>
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 20px 30px;
+      font-size: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-body{
-    margin:0;
-    font-family:Arial,Helvetica,sans-serif;
-    background:#eef3f8;
-}
+    .container {
+      padding: 30px;
+    }
 
-header{
-    background:#12385c;
-    color:white;
-    padding:20px 35px;
-    font-size:28px;
-}
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
 
-.container{
-    padding:30px;
-}
+    th {
+      background: #1b4f7c;
+      color: white;
+      padding: 15px;
+      text-align: left;
+    }
 
-table{
-    width:100%;
-    border-collapse:collapse;
-    background:white;
-    border-radius:10px;
-    overflow:hidden;
-}
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #e5e5e5;
+    }
 
-th{
-    background:#1b4f7c;
-    color:white;
-    padding:15px;
-    text-align:left;
-}
+    .back-btn {
+      color: white;
+      text-decoration: none;
+      background: #1976d2;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
 
-td{
-    padding:15px;
-    border-bottom:1px solid #e5e5e5;
-}
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
 
-.status-online{
-    color:green;
-    font-weight:bold;
-}
+    .logout-btn {
+      padding: 6px 14px;
+      background-color: #e74c3c;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
 
-.status-warning{
-    color:orange;
-    font-weight:bold;
-}
-
-.status-offline{
-    color:red;
-    font-weight:bold;
-}
-
-button{
-    background:#1976d2;
-    color:white;
-    border:none;
-    padding:8px 18px;
-    border-radius:5px;
-    cursor:pointer;
-}
-
-button:hover{
-    background:#145ea8;
-}
-
-</style>
-
+    .logout-btn:hover {
+      background-color: #c0392b;
+    }
+  </style>
 </head>
-
 <body>
+  <header>
+    <h1><strong>NOVARA Sites</strong></h1>
+    <div class="header-actions">
+      <a href="dashboard.html" class="back-btn">← Dashboard</a>
+      <a href="index.html" class="logout-btn">Logout</a>
+    </div>
+  </header>
 
-<header style="display:flex;justify-content:space-between;align-items:center;">
-    <div><strong>NOVARA Customer Sites</strong></div>
-
-    <a href="dashboard.html"
-       style="color:white;text-decoration:none;background:#1976d2;padding:10px 18px;border-radius:6px;">
-        ← Dashboard
-    </a>
-</header>
-
-<div class="container">
-
-<table>
-
-<tr>
-<th>Property</th>
-<th>System</th>
-<th>Status</th>
-<th>Savings</th>
-<th></th>
-</tr>
-
-<tr>
-<td>Vista Springs</td>
-<td>DHW System</td>
-<td class="status-online">Online</td>
-<td>34.2%</td>
-<td><button>Open</button></td>
-</tr>
-
-<tr>
-<td>Highlander Pointe</td>
-<td>DHW System</td>
-<td class="status-online">Online</td>
-<td>31.8%</td>
-<td><button>Open</button></td>
-</tr>
-
-<tr>
-<td>La Verne Pool</td>
-<td>Pool Heating</td>
-<td class="status-warning">Needs Review</td>
-<td>28.4%</td>
-<td><button>Open</button></td>
-</tr>
-
-<tr>
-<td>Solar Thermal Demo</td>
-<td>Solar</td>
-<td class="status-offline">Offline</td>
-<td>--</td>
-<td><button>Open</button></td>
-</tr>
-
-</table>
-
-</div>
-
-</body>
-</html>
+  <div class="container">
+    <table>
+      <tr>
+        <th>Site Name</th>
+        <th>Location</th>
+        <th>Systems</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <td>Vista Springs</td>
+        <td>Huntington Beach, CA</td>
+        <td>3</td>
+        <td>Online</td>
+      </tr>
+      <tr>
+        <td>Highlander Pointe</td>
+        <td>Irvine, CA</td>
+        <td>2</td>
+        <td>Online</td>
+      </tr>
+      <tr>
+        <td>La Verne Pool</td>
+        <td>La Verne, CA</td>
+        <td>1</td>
+        <td>Needs Review</td>
+      </tr>
+    </table>
+  </div>
+</body
