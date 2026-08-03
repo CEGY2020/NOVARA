@@ -11,6 +11,16 @@ const togglePassword = document.getElementById("togglePassword");
 const passwordInput = document.getElementById("password");
 
 if (togglePassword && passwordInput) {
+
+    // Forgot Password (temporary)
+const forgotPassword = document.getElementById("forgotPassword");
+
+if (forgotPassword) {
+  forgotPassword.addEventListener("click", function (e) {
+    e.preventDefault();
+    alert("Password reset is coming soon. For now, please contact support.");
+  });
+}
   togglePassword.addEventListener("click", function () {
     const type = passwordInput.getAttribute("type") === "password" ? "text" : "password";
     passwordInput.setAttribute("type", type);
