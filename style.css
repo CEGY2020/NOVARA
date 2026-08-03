@@ -31,8 +31,8 @@ body {
 
 .logo {
     display: block;
-    width: 130px;
-    max-height: 70px;
+    width: 180px;
+    max-height: 95px;
     object-fit: contain;
     margin: 0 auto 20px;
 }
