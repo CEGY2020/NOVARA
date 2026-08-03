@@ -28,5 +28,3 @@ if (forgotPassword) {
     alert("Password reset is coming soon. For now, please contact support.");
   });
 }
-
-}
