@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Reports</title>
   <style>
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
-      background: #eef3f8;
+      background: #ecf0f1;
     }
 
     header {
-      background: #12345c;
+      background: #2c3e50;
       color: white;
       padding: 20px 30px;
       font-size: 20px;
@@ -53,37 +54,35 @@
       font-size: 14px;
     }
 
-    .btn {
-      background: #1976d2;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 5px;
-      text-decoration: none;
-      font-size: 13px;
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    <header>
-  <h1><strong>NOVARA Reports</strong></h1>
-  <div class="header-actions">
-    <a href="dashboard.html" class="back-btn">← Dashboard</a>
-    <a href="index.html" class="logout-btn">Logout</a>
-  </div>
-</header>
+    .logout-btn {
+      padding: 6px 14px;
+      background-color: #e74c3c;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+
+    .logout-btn:hover {
+      background-color: #c0392b;
+    }
   </style>
 </head>
 <body>
-
   <header>
-  <h1><strong>NOVARA Reports</strong></h1>
-  <div class="header-actions">
-    <a href="dashboard.html" class="back-btn">← Dashboard</a>
-    <a href="index.html" class="logout-btn">Logout</a>
-  </div>
-</header>
-  
-  <header>
-    <div><strong>NOVARA Reports</strong></div>
-    <a href="dashboard.html" class="back-btn">← Dashboard</a>
+    <h1><strong>NOVARA Reports</strong></h1>
+    <div class="header-actions">
+      <a href="dashboard.html" class="back-btn">← Dashboard</a>
+      <a href="index.html" class="logout-btn">Logout</a>
+    </div>
   </header>
 
   <div class="container">
@@ -92,15 +91,21 @@
         <th>Report Name</th>
         <th>Period</th>
         <th>Generated</th>
-        <th>Action</th>
+        <th>Actions</th>
       </tr>
       <tr>
         <td>Monthly Energy Performance</td>
         <td>July 2026</td>
         <td>Aug 1, 2026</td>
-        <td><a href="#" class="btn">View</a></td>
+        <td><a href="#">View</a></td>
       </tr>
       <tr>
         <td>Quarterly Savings Summary</td>
         <td>Q2 2026</td>
-        <td>Jul 15,
+        <td>Jul 15, 2026</td>
+        <td><a href="#">View</a></td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>
