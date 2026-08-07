@@ -6,34 +6,11 @@
     <title>NOVARA Dashboard</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
-<body>
+<body data-page="dashboard">
 
 <div class="dashboard-layout">
 
-    <aside class="sidebar">
-        <div class="brand">
-            <img src="logo.png" alt="AEM Logo">
-            <div>
-                <h1>NOVARA</h1>
-                <p>Operational Intelligence</p>
-            </div>
-        </div>
-
-        <nav>
-            <a href="#" class="active">Dashboard</a>
-            <a href="sites.html">Sites</a>
-            <a href="systems.html">Systems</a>
-            <a href="active-alarms.html">Active Alarms</a>
-            <a href="energy-savings.html">Energy Savings</a>
-            <a href="reports.html">Reports</a>
-            <a href="settings.html">Settings</a>
-        </nav>
-
-        <div class="sidebar-footer">
-            <p>Advanced Energy Management</p>
-            <p>Version 1.0</p>
-        </div>
-    </aside>
+    <aside class="sidebar" id="sidebar-root"></aside>
 
     <main class="main-content">
 
@@ -42,15 +19,7 @@
                 <h2>Executive Dashboard</h2>
                 <p>Portfolio operational overview</p>
             </div>
-
-            <div class="user-profile">
-  <div class="user-avatar">SN</div>
-  <div>
-    <strong>Steve Nold</strong>
-    <span>Administrator</span>
-  </div>
-  <a href="index.html" class="logout-btn">Logout</a>
-</div>
+            <div id="user-profile-root"></div>
         </header>
 
         <section class="summary-grid">
@@ -136,7 +105,7 @@
                         <h3>Active Alarms</h3>
                         <p>Highest-priority conditions</p>
                     </div>
-                    <a href="#">View all</a>
+                    <a href="active-alarms.html">View all</a>
                 </div>
 
                 <div class="alarm-list">
@@ -166,7 +135,7 @@
                         <h3>Recent Sites</h3>
                         <p>Portfolio performance overview</p>
                     </div>
-                    <a href="#">View all sites</a>
+                    <a href="sites.html">View all sites</a>
                 </div>
 
                 <div class="site-table">
@@ -213,5 +182,6 @@
 
 </div>
 
+<script src="nav.js"></script>
 </body>
 </html>

@@ -4,129 +4,56 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - System Detail</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #ecf0f1;
-    }
-
-    header {
-      background: #2c3e50;
-      color: white;
-      padding: 20px 30px;
-      font-size: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .container {
-      padding: 30px;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    .back-btn {
-      color: white;
-      text-decoration: none;
-      background: #1976d2;
-      padding: 10px 18px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logout-btn {
-      padding: 6px 14px;
-      background-color: #e74c3c;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .logout-btn:hover {
-      background-color: #c0392b;
-    }
-
-    .card {
-      background: white;
-      border-radius: 10px;
-      padding: 25px;
-      margin-bottom: 25px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-
-    .card h2 {
-      margin-top: 0;
-      color: #2c3e50;
-    }
-
-    .graph-placeholder {
-      height: 350px;
-      background: #f8f9fa;
-      border: 2px dashed #ccc;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #666;
-      font-size: 18px;
-    }
-
-    .range-btn {
-      padding: 6px 14px;
-      border: 1px solid #ccc;
-      background: white;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .range-btn.active {
-      background: #1976d2;
-      color: white;
-      border-color: #1976d2;
-    }
-  </style>
+  <link rel="stylesheet" href="dashboard.css">
 </head>
-<body>
-  <header>
-    <h1><strong>NOVARA System Detail</strong></h1>
-    <div class="header-actions">
-      <a href="systems.html" class="back-btn">← Back to Systems</a>
-      <a href="index.html" class="logout-btn">Logout</a>
-    </div>
-  </header>
+<body data-page="systems">
 
-  <div class="container">
-    <div class="card">
-      <h2>Vista Springs – Domestic Hot Water</h2>
-      <p><strong>Status:</strong> <span style="color: green;">Online</span> &nbsp; | &nbsp; Last update: 2 minutes ago</p>
-    </div>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
 
-    <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0;">Temperature Trends</h2>
-        <div style="display: flex; gap: 8px;">
-          <button class="range-btn" data-days="3">Last 3 Days</button>
-          <button class="range-btn active" data-days="7">Last 7 Days</button>
-          <button class="range-btn" data-days="30">Last 30 Days</button>
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>System Detail</h2>
+        <p><a class="inline-link" href="systems.html">← Back to Systems</a></p>
+      </div>
+      <div id="user-profile-root"></div>
+    </header>
+
+    <section class="page-panel">
+      <h3>Vista Springs – Domestic Hot Water</h3>
+      <p class="detail-meta"><strong>Status:</strong> <span class="status-online">Online</span> &nbsp;|&nbsp; Last update: 2 minutes ago</p>
+    </section>
+
+    <section class="page-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Temperature Trends</h3>
+          <p>Historical performance for this system</p>
+        </div>
+        <div class="range-controls">
+          <button class="range-btn" type="button" data-days="3">Last 3 Days</button>
+          <button class="range-btn active" type="button" data-days="7">Last 7 Days</button>
+          <button class="range-btn" type="button" data-days="30">Last 30 Days</button>
         </div>
       </div>
-
       <div class="graph-placeholder">
         Graph will go here
       </div>
-    </div>
-  </div>
+    </section>
+  </main>
+</div>
+
+<script src="nav.js"></script>
+<script>
+  document.querySelectorAll(".range-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".range-btn").forEach(function (b) {
+        b.classList.remove("active");
+      });
+      btn.classList.add("active");
+    });
+  });
+</script>
 </body>
 </html>
-

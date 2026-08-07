@@ -2,96 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Energy Savings</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #eef3f8;
-    }
-
-    header {
-      background: #12345c;
-      color: white;
-      padding: 20px 30px;
-      font-size: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .container {
-      padding: 30px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    th {
-      background: #1b4f7c;
-      color: white;
-      padding: 15px;
-      text-align: left;
-    }
-
-    td {
-      padding: 15px;
-      border-bottom: 1px solid #e5e5e5;
-    }
-
-    .savings {
-      color: #2e7d32;
-      font-weight: bold;
-    }
-
-    .back-btn {
-      color: white;
-      text-decoration: none;
-      background: #1976d2;
-      padding: 10px 18px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    .header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logout-btn {
-  padding: 6px 14px;
-  background-color: #e74c3c;
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.logout-btn:hover {
-  background-color: #c0392b;
-}
-  </style>
+  <link rel="stylesheet" href="dashboard.css">
 </head>
-<body>
+<body data-page="savings">
 
-  <header>
-  <h1><strong>NOVARA Energy Savings</strong></h1>
-  <div class="header-actions">
-    <a href="dashboard.html" class="back-btn">← Dashboard</a>
-    <a href="index.html" class="logout-btn">Logout</a>
-  </div>
-</header>
-  
-  <div class="container">
-    <table>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>Energy Savings</h2>
+        <p>Verified savings across monitored systems</p>
+      </div>
+      <div id="user-profile-root"></div>
+    </header>
+
+    <table class="data-table">
       <tr>
         <th>Site</th>
         <th>System Type</th>
@@ -102,25 +31,35 @@
       <tr>
         <td>Vista Springs</td>
         <td>Domestic Hot Water</td>
-        <td class="savings">34.2%</td>
-        <td class="savings">$42,850</td>
+        <td class="savings-value">34.2%</td>
+        <td class="savings-value">$42,850</td>
         <td>Rolling 12 months</td>
       </tr>
       <tr>
         <td>Highlander Pointe</td>
         <td>Boiler System</td>
-        <td class="savings">31.8%</td>
-        <td class="savings">$38,920</td>
+        <td class="savings-value">31.8%</td>
+        <td class="savings-value">$38,920</td>
         <td>Rolling 12 months</td>
       </tr>
       <tr>
         <td>La Verne Pool</td>
         <td>Pool Heating</td>
-        <td class="savings">28.4%</td>
-        <td class="savings">$21,450</td>
+        <td class="savings-value">28.4%</td>
+        <td class="savings-value">$21,450</td>
         <td>Rolling 12 months</td>
       </tr>
       <tr>
         <td>Solar Thermal Demo</td>
         <td>Solar Thermal</td>
-        <td class="savings
+        <td class="savings-value">22.1%</td>
+        <td class="savings-value">$12,480</td>
+        <td>Rolling 12 months</td>
+      </tr>
+    </table>
+  </main>
+</div>
+
+<script src="nav.js"></script>
+</body>
+</html>
