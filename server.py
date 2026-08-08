@@ -16,10 +16,26 @@ DEFAULT_PORT = int(os.environ.get("PORT", "8000"))
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
 
+def _sanitize_aws_env() -> None:
+    """Drop placeholder/invalid session tokens that break long-term IAM keys."""
+    access_key = (os.environ.get("AWS_ACCESS_KEY_ID") or "").strip()
+    session_token = (os.environ.get("AWS_SESSION_TOKEN") or "").strip()
+    # Long-term keys (AKIA...) must not send a session token. Short placeholders
+    # like "none"/"n/a" also produce InvalidClientTokenId from STS/DynamoDB.
+    if not session_token:
+        os.environ.pop("AWS_SESSION_TOKEN", None)
+        return
+    if access_key.startswith("AKIA") or len(session_token) < 100:
+        os.environ.pop("AWS_SESSION_TOKEN", None)
+
+
 def _dynamodb_table():
     import boto3
 
+    _sanitize_aws_env()
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    if region:
+        region = region.strip()
     if not region:
         raise RuntimeError(
             "AWS_REGION (or AWS_DEFAULT_REGION) must be set to query DynamoDB."
@@ -152,6 +168,7 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    _sanitize_aws_env()
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
