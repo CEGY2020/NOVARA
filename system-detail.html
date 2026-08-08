@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - System Detail</title>
   <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body data-page="systems">
 
@@ -22,14 +23,18 @@
 
     <section class="page-panel">
       <h3>Vista Springs – Domestic Hot Water</h3>
-      <p class="detail-meta"><strong>Status:</strong> <span class="status-online">Online</span> &nbsp;|&nbsp; Last update: 2 minutes ago</p>
+      <p class="detail-meta">
+        <strong>Status:</strong> <span class="status-online">Online</span>
+        &nbsp;|&nbsp; SiteID: <code>VS001</code>
+        &nbsp;|&nbsp; Last update: <span id="system-last-update">Loading…</span>
+      </p>
     </section>
 
     <section class="page-panel">
       <div class="panel-heading">
         <div>
           <h3>Temperature Trends</h3>
-          <p>Historical performance for this system</p>
+          <p>Supply (T1) and return (T2) from NOVARAReadings</p>
         </div>
         <div class="range-controls">
           <button class="range-btn" type="button" data-days="3">Last 3 Days</button>
@@ -37,23 +42,15 @@
           <button class="range-btn" type="button" data-days="30">Last 30 Days</button>
         </div>
       </div>
-      <div class="graph-placeholder">
-        Graph will go here
+      <p id="chart-status" class="chart-status" aria-live="polite">Loading readings…</p>
+      <div class="chart-wrap">
+        <canvas id="temperature-trends-chart" aria-label="Temperature trends chart"></canvas>
       </div>
     </section>
   </main>
 </div>
 
 <script src="nav.js"></script>
-<script>
-  document.querySelectorAll(".range-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll(".range-btn").forEach(function (b) {
-        b.classList.remove("active");
-      });
-      btn.classList.add("active");
-    });
-  });
-</script>
+<script src="temperature-trends.js"></script>
 </body>
 </html>

@@ -1,0 +1,17 @@
+{
+  "name": "NOVARA",
+  "install": "python3 -m pip install --user -r requirements.txt",
+  "ports": [
+    {
+      "name": "web",
+      "port": 8000
+    }
+  ],
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 server.py",
+      "description": "NOVARA static site + /api/readings (DynamoDB NOVARAReadings). Open http://localhost:8000/system-detail.html"
+    }
+  ]
+}
