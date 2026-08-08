@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites)
+
+Parameters:
+  ReadingsTableName:
+    Type: String
+    Default: NOVARAReadings
+  SitesTableName:
+    Type: String
+    Default: NOVARASites
+  MaxChartPoints:
+    Type: Number
+    Default: 720
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+
+Resources:
+  NovaraApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: novara-api
+      Handler: lambda_function.handler
+      CodeUri: .
+      Description: NOVARA readings/sites JSON API backed by DynamoDB
+      Environment:
+        Variables:
+          NOVARA_READINGS_TABLE: !Ref ReadingsTableName
+          NOVARA_SITES_TABLE: !Ref SitesTableName
+          NOVARA_MAX_CHART_POINTS: !Ref MaxChartPoints
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:GetItem
+                - dynamodb:BatchGetItem
+                - dynamodb:DescribeTable
+              Resource:
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}/index/*
+      Events:
+        Readings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/readings
+            Method: GET
+        Sites:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/sites
+            Method: GET
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/health
+            Method: GET
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /{proxy+}
+            Method: ANY
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: BUFFERED
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowMethods:
+            - GET
+          AllowHeaders:
+            - content-type
+          MaxAge: 86400
+
+  NovaraHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - GET
+          - OPTIONS
+        MaxAge: 86400
+
+Outputs:
+  HttpApiUrl:
+    Description: API Gateway HTTP API base URL (use with Amplify /api rewrite)
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  FunctionName:
+    Value: !Ref NovaraApiFunction
