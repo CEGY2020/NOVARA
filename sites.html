@@ -20,35 +20,27 @@
       <div id="user-profile-root"></div>
     </header>
 
+    <p id="sites-status" class="chart-status" aria-live="polite">Loading sites…</p>
+
     <table class="data-table">
-      <tr>
-        <th>Site Name</th>
-        <th>Location</th>
-        <th>Systems</th>
-        <th>Status</th>
-      </tr>
-      <tr>
-        <td>Vista Springs</td>
-        <td>Huntington Beach, CA</td>
-        <td>3</td>
-        <td class="status-online">Online</td>
-      </tr>
-      <tr>
-        <td>Highlander Pointe</td>
-        <td>Irvine, CA</td>
-        <td>2</td>
-        <td class="status-online">Online</td>
-      </tr>
-      <tr>
-        <td>La Verne Pool</td>
-        <td>La Verne, CA</td>
-        <td>1</td>
-        <td class="status-warning">Needs Review</td>
-      </tr>
+      <thead>
+        <tr>
+          <th>Site Name</th>
+          <th>Location</th>
+          <th>Systems</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="sites-tbody">
+        <tr>
+          <td colspan="4">Loading…</td>
+        </tr>
+      </tbody>
     </table>
   </main>
 </div>
 
 <script src="nav.js"></script>
+<script src="sites.js"></script>
 </body>
 </html>
