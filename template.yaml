@@ -81,9 +81,8 @@ Resources:
             - "*"
           AllowMethods:
             - GET
-            - OPTIONS
           AllowHeaders:
-            - "*"
+            - content-type
           MaxAge: 86400
 
   NovaraHttpApi:
