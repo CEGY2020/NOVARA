@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings API."""
+"""NOVARA local server: static files + DynamoDB readings/sites APIs."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
+SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
 DEFAULT_SITE_ID = "VS001"
 DEFAULT_PORT = int(os.environ.get("PORT", "8000"))
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
@@ -29,7 +30,7 @@ def _sanitize_aws_env() -> None:
         os.environ.pop("AWS_SESSION_TOKEN", None)
 
 
-def _dynamodb_table():
+def _dynamodb_resource():
     import boto3
 
     _sanitize_aws_env()
@@ -40,8 +41,124 @@ def _dynamodb_table():
         raise RuntimeError(
             "AWS_REGION (or AWS_DEFAULT_REGION) must be set to query DynamoDB."
         )
-    resource = boto3.resource("dynamodb", region_name=region)
-    return resource.Table(TABLE_NAME)
+    return boto3.resource("dynamodb", region_name=region)
+
+
+def _dynamodb_table(table_name: str = TABLE_NAME):
+    return _dynamodb_resource().Table(table_name)
+
+
+def _json_safe(value):
+    """Convert DynamoDB types (Decimal, sets, etc.) into JSON-serializable values."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value
+    try:
+        from decimal import Decimal
+
+        if isinstance(value, Decimal):
+            if value % 1 == 0:
+                return int(value)
+            return float(value)
+    except Exception:  # noqa: BLE001
+        pass
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
+def _first_present(item: dict, keys: tuple[str, ...], default=None):
+    for key in keys:
+        if key in item and item[key] is not None and item[key] != "":
+            return item[key]
+    return default
+
+
+def _systems_count(value) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        return len(value)
+    if isinstance(value, dict):
+        return len(value)
+    try:
+        from decimal import Decimal
+
+        if isinstance(value, Decimal):
+            return int(value)
+    except Exception:  # noqa: BLE001
+        pass
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return int(text)
+    return None
+
+
+def _normalize_site(item: dict) -> dict:
+    site_id = _first_present(item, ("SiteID", "siteId", "site_id", "id", "PK"))
+    name = _first_present(
+        item,
+        ("SiteName", "siteName", "Name", "name", "site", "Site"),
+        default=site_id or "Unknown site",
+    )
+    location = _first_present(
+        item,
+        ("Location", "location", "City", "city", "Address", "address"),
+        default="—",
+    )
+    systems_raw = _first_present(
+        item,
+        (
+            "Systems",
+            "systems",
+            "SystemCount",
+            "systemCount",
+            "NumSystems",
+            "numSystems",
+        ),
+    )
+    systems = _systems_count(systems_raw)
+    if systems is None:
+        systems = "—"
+    status = _first_present(
+        item,
+        ("Status", "status", "SiteStatus", "siteStatus"),
+        default="Unknown",
+    )
+    return {
+        "siteId": "" if site_id is None else str(site_id),
+        "name": str(name),
+        "location": str(location),
+        "systems": systems,
+        "status": str(status),
+    }
+
+
+def _scan_sites() -> dict:
+    table = _dynamodb_table(SITES_TABLE_NAME)
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    sites = [_normalize_site(_json_safe(item)) for item in items]
+    sites.sort(key=lambda site: (site.get("name") or "").lower())
+    return {
+        "table": SITES_TABLE_NAME,
+        "count": len(sites),
+        "sites": sites,
+    }
 
 
 def _to_float(value):
@@ -124,8 +241,18 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/readings":
             self._handle_readings(parsed)
             return
+        if parsed.path == "/api/sites":
+            self._handle_sites()
+            return
         if parsed.path == "/api/health":
-            self._send_json(200, {"ok": True, "table": TABLE_NAME})
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "table": TABLE_NAME,
+                    "sitesTable": SITES_TABLE_NAME,
+                },
+            )
             return
         super().do_GET()
 
@@ -154,6 +281,20 @@ class NovaraHandler(SimpleHTTPRequestHandler):
                 },
             )
 
+    def _handle_sites(self):
+        try:
+            payload = _scan_sites()
+            self._send_json(200, payload)
+        except Exception as exc:  # noqa: BLE001 - surface DynamoDB/config errors to UI
+            traceback.print_exc()
+            self._send_json(
+                500,
+                {
+                    "error": "Failed to load sites from DynamoDB",
+                    "detail": str(exc),
+                },
+            )
+
     def _send_json(self, status: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -172,8 +313,8 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
-        "NOVARA server on http://0.0.0.0:%s (table=%s)"
-        % (DEFAULT_PORT, TABLE_NAME)
+        "NOVARA server on http://0.0.0.0:%s (readings=%s sites=%s)"
+        % (DEFAULT_PORT, TABLE_NAME, SITES_TABLE_NAME)
     )
     try:
         server.serve_forever()
