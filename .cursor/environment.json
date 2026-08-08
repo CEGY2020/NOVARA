@@ -1,0 +1,16 @@
+{
+  "name": "NOVARA",
+  "ports": [
+    {
+      "name": "web",
+      "port": 8000
+    }
+  ],
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000",
+      "description": "Static file server for the NOVARA site. Open the app at http://localhost:8000/index.html"
+    }
+  ]
+}
