@@ -1,0 +1,11 @@
+.git/
+.cursor/
+.aws-sam/
+__pycache__/
+*.pyc
+*.png
+*.md
+amplify.yml
+scripts/
+test_*.py
+.git*

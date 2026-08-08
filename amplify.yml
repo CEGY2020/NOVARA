@@ -1,0 +1,46 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - |
+          if [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
+            echo "Deploying NOVARA API (Lambda + HTTP API) for Amplify /api rewrite..."
+            python3 -m pip install --user awscli aws-sam-cli boto3 >/tmp/sam-install.log
+            export PATH="$HOME/.local/bin:$PATH"
+            sam build --template-file template.yaml
+            sam deploy \
+              --stack-name "${NOVARA_API_STACK:-novara-api}" \
+              --resolve-s3 \
+              --capabilities CAPABILITY_IAM \
+              --no-confirm-changeset \
+              --no-fail-on-empty-changeset \
+              --parameter-overrides \
+                "ReadingsTableName=${NOVARA_READINGS_TABLE:-NOVARAReadings}" \
+                "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}"
+            NOVARA_API_URL=$(aws cloudformation describe-stacks \
+              --stack-name "${NOVARA_API_STACK:-novara-api}" \
+              --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+              --output text)
+            echo "NOVARA_API_URL=${NOVARA_API_URL}"
+            if [ -n "${AWS_APP_ID}" ] && [ -n "${NOVARA_API_URL}" ] && [ "${NOVARA_API_URL}" != "None" ]; then
+              python3 scripts/configure_amplify_api_rewrites.py \
+                --app-id "${AWS_APP_ID}" \
+                --api-url "${NOVARA_API_URL}" \
+                --region "${AWS_REGION}"
+            else
+              echo "Skipping Amplify rewrite update (AWS_APP_ID or API URL missing)."
+            fi
+          else
+            echo "AWS credentials not available in Amplify build; skipping API deploy."
+            echo "Configure AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (and AWS_REGION) in Amplify env vars."
+          fi
+    build:
+      commands:
+        - echo "Publishing NOVARA static site"
+  artifacts:
+    baseDirectory: .
+    files:
+      - "**/*"
+  cache:
+    paths: []
