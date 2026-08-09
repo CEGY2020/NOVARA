@@ -1563,6 +1563,155 @@ def query_readings(site_id: str, days: int) -> dict:
     }
 
 
+# Portfolio verified-savings baselines used by Energy Savings graphs.
+# Matches the sites shown on energy-savings.html (rolling 12-month totals).
+SAVINGS_PORTFOLIO = (
+    {"name": "Vista Springs", "annual": 42850.0, "pct": 34.2},
+    {"name": "Highlander Pointe", "annual": 38920.0, "pct": 31.8},
+    {"name": "La Verne Pool", "annual": 21450.0, "pct": 28.4},
+    {"name": "Solar Thermal Demo", "annual": 12480.0, "pct": 22.1},
+)
+SAVINGS_ALLOWED_DAYS = (30, 90)
+
+
+def _day_noise(day_key: str) -> float:
+    """Deterministic 0..1 noise from an ISO date string."""
+    acc = 0
+    for ch in day_key:
+        acc = (acc * 33 + ord(ch)) & 0xFFFFFFFF
+    return ((acc % 10000) / 10000.0)
+
+
+def _daily_delta_t_factors(site_id: str, days: int) -> tuple[dict[str, float], int]:
+    """
+    Optional performance factors from NOVARAReadings (avg daily ΔT).
+    Returns ({YYYY-MM-DD: factor}, reading_count). Factors center near 1.0.
+    """
+    try:
+        readings = query_readings(site_id, days)
+    except Exception:  # noqa: BLE001
+        return {}, 0
+
+    buckets: dict[str, list[float]] = {}
+    for point in readings.get("points") or []:
+        stamp = point.get("t")
+        t1 = point.get("t1")
+        t2 = point.get("t2")
+        if not stamp or t1 is None or t2 is None:
+            continue
+        day_key = str(stamp)[:10]
+        delta = float(t1) - float(t2)
+        buckets.setdefault(day_key, []).append(delta)
+
+    if not buckets:
+        return {}, int(readings.get("count") or 0)
+
+    averages = {day: sum(vals) / len(vals) for day, vals in buckets.items()}
+    mean_delta = sum(averages.values()) / len(averages)
+    if abs(mean_delta) < 0.1:
+        factors = {day: 1.0 for day in averages}
+    else:
+        factors = {}
+        for day, avg in averages.items():
+            # Higher ΔT → slightly stronger verified-savings day; clamp gently.
+            raw = avg / mean_delta
+            factors[day] = max(0.75, min(1.25, raw))
+    return factors, int(readings.get("count") or 0)
+
+
+def build_savings_series(days: int, site_id: str = DEFAULT_SITE_ID) -> dict:
+    """
+    Build daily verified-savings points for the Energy Savings charts.
+
+    Uses portfolio annual totals as the baseline (demo/calculated series).
+    When NOVARAReadings are available for the reference site, daily values are
+    gently scaled by measured supply/return ΔT so the graph tracks live
+    system performance without requiring a dedicated savings table.
+    """
+    if days not in SAVINGS_ALLOWED_DAYS:
+        raise ValueError("days must be one of 30 or 90")
+
+    annual_total = sum(site["annual"] for site in SAVINGS_PORTFOLIO)
+    weighted_pct = (
+        sum(site["annual"] * site["pct"] for site in SAVINGS_PORTFOLIO) / annual_total
+        if annual_total
+        else 0.0
+    )
+    daily_baseline = annual_total / 365.0
+
+    factors, reading_count = _daily_delta_t_factors(site_id, days)
+    source = "demo"
+    if reading_count > 0:
+        source = "demo+readings"
+
+    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    points: list[dict] = []
+    cumulative = 0.0
+    for offset in range(days - 1, -1, -1):
+        day = end - timedelta(days=offset)
+        day_key = day.strftime("%Y-%m-%d")
+        noise = _day_noise(day_key)
+        # Weekday / weekend-ish shape + small deterministic jitter.
+        weekday = day.weekday()
+        weekend_scale = 0.92 if weekday >= 5 else 1.0
+        shape = 0.88 + 0.24 * noise
+        performance = factors.get(day_key, 1.0)
+        daily = round(daily_baseline * weekend_scale * shape * performance, 2)
+        cumulative = round(cumulative + daily, 2)
+        pct = round(weighted_pct * (0.96 + 0.08 * noise) * (0.98 + 0.04 * (performance - 1.0)), 1)
+        points.append(
+            {
+                "t": day.strftime("%Y-%m-%dT00:00:00Z"),
+                "daily": daily,
+                "cumulative": cumulative,
+                "pct": pct,
+            }
+        )
+
+    last_update = points[-1]["t"] if points else None
+    return {
+        "points": points,
+        "lastUpdate": last_update,
+        "siteId": site_id,
+        "days": days,
+        "count": len(points),
+        "source": source,
+        "readingCount": reading_count,
+        "totals": {
+            "verifiedSavings": round(cumulative, 2),
+            "annualPortfolio": round(annual_total, 2),
+            "savingsPct": points[-1]["pct"] if points else round(weighted_pct, 1),
+        },
+        "sites": [
+            {
+                "name": site["name"],
+                "annual": site["annual"],
+                "pct": site["pct"],
+            }
+            for site in SAVINGS_PORTFOLIO
+        ],
+    }
+
+
+def handle_savings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
+    site_id = (params.get("siteId") or [DEFAULT_SITE_ID])[0] or DEFAULT_SITE_ID
+    try:
+        days = int((params.get("days") or ["30"])[0])
+    except ValueError:
+        return 400, {"error": "days must be an integer"}
+    if days not in SAVINGS_ALLOWED_DAYS:
+        return 400, {"error": "days must be one of 30 or 90"}
+
+    try:
+        return 200, build_savings_series(days, site_id=site_id)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to build savings series",
+            "detail": str(exc),
+        }
+
+
 def _query_params(event: dict) -> dict[str, list[str]]:
     params = event.get("queryStringParameters") or {}
     if params:
@@ -1923,6 +2072,10 @@ def route_request(
         if method != "GET":
             return 405, {"error": "Method not allowed"}
         return handle_readings_request(params)
+    if normalized.endswith("/api/savings") or normalized == "/savings":
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
+        return handle_savings_request(params)
     if normalized.endswith("/api/sites") or normalized == "/sites":
         if method == "GET":
             return handle_sites_request()

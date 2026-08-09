@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/owners, /api/mgmt-companies, /api/leads)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/savings, /api/sites, /api/systems, /api/owners, /api/mgmt-companies, /api/leads)
 
 Parameters:
   ReadingsTableName:
@@ -40,7 +40,7 @@ Resources:
       FunctionName: novara-api
       Handler: lambda_function.handler
       CodeUri: .
-      Description: NOVARA readings/sites/systems/owners/mgmt-companies/leads JSON API backed by DynamoDB
+      Description: NOVARA readings/savings/sites/systems/owners/mgmt-companies/leads JSON API backed by DynamoDB
       Environment:
         Variables:
           NOVARA_READINGS_TABLE: !Ref ReadingsTableName
@@ -81,6 +81,12 @@ Resources:
           Properties:
             ApiId: !Ref NovaraHttpApi
             Path: /api/readings
+            Method: GET
+        Savings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/savings
             Method: GET
         SitesGet:
           Type: HttpApi
@@ -258,6 +264,9 @@ Outputs:
   ReadingsEndpoint:
     Description: Example readings endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/readings?siteId=VS001&days=7"
+  SavingsEndpoint:
+    Description: Example savings endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/savings?days=30"
   SitesEndpoint:
     Description: Sites endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/sites"

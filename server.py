@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners/mgmt-companies/leads APIs."""
+"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners/mgmt-companies/leads/savings APIs."""
 
 from __future__ import annotations
 
@@ -33,6 +33,11 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/readings":
             params = parse_qs(parsed.query)
             status, payload = novara_api.handle_readings_request(params)
+            self._send_json(status, payload)
+            return
+        if parsed.path == "/api/savings":
+            params = parse_qs(parsed.query)
+            status, payload = novara_api.handle_savings_request(params)
             self._send_json(status, payload)
             return
         if parsed.path == "/api/sites":
@@ -191,7 +196,7 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
         "NOVARA server on http://0.0.0.0:%s "
-        "(readings=%s sites=%s systems=%s owners=%s mgmtCompanies=%s leads=%s)"
+        "(readings=%s sites=%s systems=%s owners=%s mgmtCompanies=%s leads=%s savings)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,

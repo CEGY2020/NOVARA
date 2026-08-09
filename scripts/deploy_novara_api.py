@@ -224,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         "/api/mgmt-companies",
         "/api/leads",
         "/api/readings?siteId=SITE001&days=7",
+        "/api/savings?days=30",
     ):
         url = f"{api_url}{path}"
         print(f"GET {url}")
