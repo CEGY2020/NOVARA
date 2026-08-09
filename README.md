@@ -13,6 +13,8 @@ python3 server.py
 
 Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`.
 
+Energy Savings page: [http://localhost:8000/energy-savings.html](http://localhost:8000/energy-savings.html) → Savings Graphs via `GET /api/savings?days=30|90` (portfolio demo series, optionally calibrated with `NOVARAReadings`).
+
 Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html) → `GET /api/sites` from `NOVARASites`.
 
 Systems page: [http://localhost:8000/systems.html](http://localhost:8000/systems.html) → `GET/POST/PUT /api/systems` from `NOVARASystems` (table is created automatically if missing).
@@ -31,6 +33,26 @@ Leads page: [http://localhost:8000/leads.html](http://localhost:8000/leads.html)
     { "t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1 }
   ],
   "lastUpdate": "2026-08-02T20:00:00Z"
+}
+```
+
+### Savings response shape
+
+```json
+{
+  "points": [
+    { "t": "2026-07-11T00:00:00Z", "daily": 318.4, "cumulative": 318.4, "pct": 30.1 }
+  ],
+  "lastUpdate": "2026-08-09T00:00:00Z",
+  "days": 30,
+  "count": 30,
+  "source": "demo",
+  "readingCount": 0,
+  "totals": {
+    "verifiedSavings": 9540.12,
+    "annualPortfolio": 115700,
+    "savingsPct": 30.4
+  }
 }
 ```
 
@@ -63,6 +85,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | Endpoint | DynamoDB table |
 | --- | --- |
 | `GET /api/readings?siteId=SITE001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
+| `GET /api/savings?days=30\|90` | Calculated portfolio savings series (optionally calibrated from `NOVARAReadings`) |
 | `GET /api/sites` | `NOVARASites` (systems count from linked `NOVARASystems`) |
 | `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
 | `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |

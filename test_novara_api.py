@@ -55,6 +55,87 @@ class RouteTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 mocked.assert_called_with("SITE001", days)
 
+    def test_savings_route_returns_series(self):
+        with patch.object(
+            novara_api,
+            "query_readings",
+            return_value={
+                "points": [],
+                "lastUpdate": None,
+                "siteId": "SITE001",
+                "days": 30,
+                "count": 0,
+            },
+        ):
+            status, payload = novara_api.route_request(
+                "GET", "/api/savings", {"days": ["30"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["days"], 30)
+        self.assertEqual(payload["count"], 30)
+        self.assertEqual(len(payload["points"]), 30)
+        self.assertIn("daily", payload["points"][0])
+        self.assertIn("cumulative", payload["points"][0])
+        self.assertGreater(payload["points"][-1]["cumulative"], 0)
+        self.assertEqual(payload["source"], "demo")
+
+    def test_savings_route_calibrates_with_readings(self):
+        fake_readings = {
+            "points": [
+                {"t": "2026-08-01T12:00:00Z", "t1": 140.0, "t2": 110.0},
+                {"t": "2026-08-02T12:00:00Z", "t1": 138.0, "t2": 112.0},
+            ],
+            "lastUpdate": "2026-08-02T12:00:00Z",
+            "siteId": "SITE001",
+            "days": 30,
+            "count": 2,
+        }
+        with patch.object(novara_api, "query_readings", return_value=fake_readings):
+            status, payload = novara_api.route_request(
+                "GET", "/api/savings", {"days": ["30"], "siteId": ["SITE001"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["source"], "demo+readings")
+        self.assertEqual(payload["readingCount"], 2)
+
+    def test_savings_invalid_days(self):
+        status, payload = novara_api.route_request(
+            "GET", "/api/savings", {"days": ["7"]}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("days", payload["error"])
+
+    def test_savings_90_days_accepted(self):
+        with patch.object(
+            novara_api,
+            "query_readings",
+            return_value={
+                "points": [],
+                "lastUpdate": None,
+                "siteId": "SITE001",
+                "days": 90,
+                "count": 0,
+            },
+        ):
+            status, payload = novara_api.route_request(
+                "GET", "/api/savings", {"days": ["90"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 90)
+
+    def test_energy_savings_html_has_chart(self):
+        source = (
+            Path(__file__)
+            .resolve()
+            .parent.joinpath("energy-savings.html")
+            .read_text(encoding="utf-8")
+        )
+        self.assertIn("savings-trends-chart", source)
+        self.assertIn('data-days="30"', source)
+        self.assertIn('data-days="90"', source)
+        self.assertIn("energy-savings.js", source)
+        self.assertIn("chart.js", source.lower())
+
     def test_sites_route(self):
         fake = {
             "table": "NOVARASites",

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Energy Savings</title>
   <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body data-page="savings">
 
@@ -20,46 +21,74 @@
       <div id="user-profile-root"></div>
     </header>
 
-    <table class="data-table">
-      <tr>
-        <th>Site</th>
-        <th>System Type</th>
-        <th>Savings %</th>
-        <th>Verified Savings</th>
-        <th>Period</th>
-      </tr>
-      <tr>
-        <td>Vista Springs</td>
-        <td>Domestic Hot Water</td>
-        <td class="savings-value">34.2%</td>
-        <td class="savings-value">$42,850</td>
-        <td>Rolling 12 months</td>
-      </tr>
-      <tr>
-        <td>Highlander Pointe</td>
-        <td>Boiler System</td>
-        <td class="savings-value">31.8%</td>
-        <td class="savings-value">$38,920</td>
-        <td>Rolling 12 months</td>
-      </tr>
-      <tr>
-        <td>La Verne Pool</td>
-        <td>Pool Heating</td>
-        <td class="savings-value">28.4%</td>
-        <td class="savings-value">$21,450</td>
-        <td>Rolling 12 months</td>
-      </tr>
-      <tr>
-        <td>Solar Thermal Demo</td>
-        <td>Solar Thermal</td>
-        <td class="savings-value">22.1%</td>
-        <td class="savings-value">$12,480</td>
-        <td>Rolling 12 months</td>
-      </tr>
-    </table>
+    <section class="page-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Savings Graphs</h3>
+          <p>Portfolio verified savings trend (calibrated from site totals + NOVARAReadings when available)</p>
+        </div>
+        <div class="range-controls">
+          <button class="range-btn active" type="button" data-days="30">Last 30 Days</button>
+          <button class="range-btn" type="button" data-days="90">Last 90 Days</button>
+        </div>
+      </div>
+      <p id="chart-status" class="chart-status" aria-live="polite">Loading savings…</p>
+      <div class="chart-wrap">
+        <canvas id="savings-trends-chart" aria-label="Verified savings trend chart"></canvas>
+      </div>
+    </section>
+
+    <section class="page-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Verified Savings by Site</h3>
+          <p>Rolling 12-month totals for monitored systems</p>
+        </div>
+      </div>
+      <table class="data-table">
+        <tr>
+          <th>Site</th>
+          <th>System Type</th>
+          <th>Savings %</th>
+          <th>Verified Savings</th>
+          <th>Period</th>
+        </tr>
+        <tr>
+          <td>Vista Springs</td>
+          <td>Domestic Hot Water</td>
+          <td class="savings-value">34.2%</td>
+          <td class="savings-value">$42,850</td>
+          <td>Rolling 12 months</td>
+        </tr>
+        <tr>
+          <td>Highlander Pointe</td>
+          <td>Boiler System</td>
+          <td class="savings-value">31.8%</td>
+          <td class="savings-value">$38,920</td>
+          <td>Rolling 12 months</td>
+        </tr>
+        <tr>
+          <td>La Verne Pool</td>
+          <td>Pool Heating</td>
+          <td class="savings-value">28.4%</td>
+          <td class="savings-value">$21,450</td>
+          <td>Rolling 12 months</td>
+        </tr>
+        <tr>
+          <td>Solar Thermal Demo</td>
+          <td>Solar Thermal</td>
+          <td class="savings-value">22.1%</td>
+          <td class="savings-value">$12,480</td>
+          <td>Rolling 12 months</td>
+        </tr>
+      </table>
+    </section>
   </main>
 </div>
 
-<script src="nav.js"></script>
+<script src="api-config.js?v=savings-1"></script>
+<script src="api-client.js?v=savings-1"></script>
+<script src="nav.js?v=savings-1"></script>
+<script src="energy-savings.js?v=savings-1"></script>
 </body>
 </html>
