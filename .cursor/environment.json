@@ -11,7 +11,7 @@
     {
       "name": "web",
       "command": "python3 server.py",
-      "description": "NOVARA static site + /api/readings (NOVARAReadings) + /api/sites (NOVARASites). Open http://localhost:8000/sites.html"
+      "description": "NOVARA static site + /api/readings, /api/sites, /api/systems. Open http://localhost:8000/systems.html"
     }
   ]
 }

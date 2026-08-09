@@ -15,6 +15,8 @@ Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-det
 
 Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html) → `GET /api/sites` from `NOVARASites`.
 
+Systems page: [http://localhost:8000/systems.html](http://localhost:8000/systems.html) → `GET/POST/PUT /api/systems` from `NOVARASystems` (table is created automatically if missing).
+
 ### Readings response shape
 
 ```json
@@ -55,12 +57,17 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | Endpoint | DynamoDB table |
 | --- | --- |
 | `GET /api/readings?siteId=SITE001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
-| `GET /api/sites` | `NOVARASites` |
+| `GET /api/sites` | `NOVARASites` (systems count from linked `NOVARASystems`) |
 | `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
 | `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |
+| `GET /api/systems` | `NOVARASystems` |
+| `POST /api/systems` | Create system in `NOVARASystems` (JSON body) |
+| `PUT /api/systems` | Update existing system in `NOVARASystems` (JSON body) |
 | `GET /api/health` | health check |
 
-Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner`, `MgmtCompany`, `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number).
+Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner`, `MgmtCompany`, `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
+
+Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 

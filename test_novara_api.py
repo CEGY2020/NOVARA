@@ -255,12 +255,168 @@ class RouteTests(unittest.TestCase):
         self.assertIn("api.updateSite", save_site)
         self.assertIn("api.createSite", save_site)
 
+    def test_systems_route(self):
+        fake = {
+            "table": "NOVARASystems",
+            "count": 1,
+            "systems": [
+                {
+                    "systemId": "SYS001",
+                    "siteId": "SITE001",
+                    "systemName": "DHW Loop A",
+                    "systemType": "DHW",
+                    "status": "Online",
+                    "equipmentCount": 2,
+                }
+            ],
+        }
+        with patch.object(novara_api, "scan_systems", return_value=fake):
+            status, payload = novara_api.route_request("GET", "/api/systems", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["systems"][0]["systemId"], "SYS001")
+
+    def test_create_system_route(self):
+        body = {
+            "SystemID": "SYS001",
+            "SiteID": "SITE001",
+            "SystemName": "DHW Loop A",
+            "SystemType": "DHW",
+            "Status": "Online",
+            "EquipmentCount": 2,
+        }
+        fake = {"ok": True, "table": "NOVARASystems", "system": {"systemId": "SYS001"}}
+        with patch.object(novara_api, "save_system", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_system_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "POST", "/api/systems", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+
+    def test_update_system_route(self):
+        body = {
+            "SystemID": "SYS001",
+            "SiteID": "SITE001",
+            "SystemName": "DHW Loop A",
+            "SystemType": "Boiler",
+            "Status": "Maintenance",
+            "EquipmentCount": 3,
+        }
+        fake = {"ok": True, "table": "NOVARASystems", "system": {"systemId": "SYS001"}}
+        with patch.object(novara_api, "save_system", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_system_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "PUT", "/api/systems", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+
+    def test_create_system_validation(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/systems", {}, {"SystemName": "Missing IDs"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("SystemID", payload["error"])
+
+    def test_parse_system_payload_requires_site(self):
+        with patch.object(novara_api, "get_site_item", return_value=None):
+            item, error = novara_api.parse_system_payload(
+                {
+                    "SystemID": "SYS001",
+                    "SiteID": "MISSING",
+                    "SystemName": "Orphan",
+                    "SystemType": "Pool",
+                    "Status": "Online",
+                    "EquipmentCount": 1,
+                }
+            )
+        self.assertIsNone(item)
+        self.assertIn("not found", error)
+
+    def test_parse_system_payload_accepts_boiler_and_maintenance(self):
+        with patch.object(
+            novara_api,
+            "get_site_item",
+            return_value={"siteId": "SITE001", "name": "Vista Springs"},
+        ):
+            item, error = novara_api.parse_system_payload(
+                {
+                    "systemId": "SYS002",
+                    "siteId": "SITE001",
+                    "systemName": "Boiler Plant",
+                    "systemType": "Boiler",
+                    "status": "Maintenance",
+                    "equipmentCount": "4",
+                    "installDate": "2024-06-01",
+                    "notes": "Quarterly service due",
+                }
+            )
+        self.assertIsNone(error)
+        self.assertEqual(item["SystemID"], "SYS002")
+        self.assertEqual(item["SystemType"], "Boiler")
+        self.assertEqual(item["Status"], "Maintenance")
+        self.assertEqual(item["EquipmentCount"], 4)
+        self.assertEqual(item["InstallDate"], "2024-06-01")
+
+    def test_normalize_system(self):
+        system = novara_api.normalize_system(
+            {
+                "SystemID": "SYS001",
+                "SiteID": "SITE001",
+                "SystemName": "DHW Loop A",
+                "SystemType": "Domestic Hot Water",
+                "Status": "Online",
+                "EquipmentCount": 2,
+            },
+            site_name="Vista Springs",
+        )
+        self.assertEqual(system["systemId"], "SYS001")
+        self.assertEqual(system["siteName"], "Vista Springs")
+        self.assertEqual(system["systemType"], "DHW")
+        self.assertEqual(system["equipmentCount"], 2)
+
+    def test_systems_js_keeps_edit_mode_after_form_reset(self):
+        source = Path(__file__).resolve().parent.joinpath("systems.js").read_text(
+            encoding="utf-8"
+        )
+        open_modal = source.split("function openModal", 1)[1].split(
+            "function closeModal", 1
+        )[0]
+        reset_at = open_modal.find("form.reset()")
+        mode_at = open_modal.find("currentMode = mode")
+        self.assertNotEqual(reset_at, -1, "openModal should call form.reset()")
+        self.assertNotEqual(mode_at, -1, "openModal should set currentMode")
+        self.assertLess(
+            reset_at,
+            mode_at,
+            "currentMode must be set after form.reset() so Edit Save uses PUT",
+        )
+        save_system = source.split("function saveSystem", 1)[1].split(
+            "if (addBtn)", 1
+        )[0]
+        self.assertIn("currentMode === \"edit\"", save_system)
+        self.assertIn("api.updateSystem", save_system)
+        self.assertIn("api.createSystem", save_system)
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["table"], "NOVARAReadings")
         self.assertEqual(payload["sitesTable"], "NOVARASites")
+        self.assertEqual(payload["systemsTable"], "NOVARASystems")
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})

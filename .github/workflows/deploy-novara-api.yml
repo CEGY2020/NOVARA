@@ -32,6 +32,7 @@ jobs:
       NOVARA_API_STACK: ${{ vars.NOVARA_API_STACK || 'novara-api' }}
       NOVARA_READINGS_TABLE: ${{ vars.NOVARA_READINGS_TABLE || 'NOVARAReadings' }}
       NOVARA_SITES_TABLE: ${{ vars.NOVARA_SITES_TABLE || 'NOVARASites' }}
+      NOVARA_SYSTEMS_TABLE: ${{ vars.NOVARA_SYSTEMS_TABLE || 'NOVARASystems' }}
       AWS_APP_ID: ${{ vars.AWS_APP_ID || secrets.AWS_APP_ID }}
     steps:
       - name: Checkout

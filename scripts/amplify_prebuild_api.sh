@@ -88,7 +88,8 @@ if ! sam deploy \
   --region "${AWS_REGION}" \
   --parameter-overrides \
     "ReadingsTableName=${NOVARA_READINGS_TABLE:-NOVARAReadings}" \
-    "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}"; then
+    "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}" \
+    "SystemsTableName=${NOVARA_SYSTEMS_TABLE:-NOVARASystems}"; then
   echo "WARN: sam deploy failed; continuing so the static Sites UI still publishes."
   restore_template
   exit 0

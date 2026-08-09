@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Systems</title>
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=systems-crud-1">
 </head>
 <body data-page="systems">
 
@@ -17,49 +17,112 @@
         <h2>Systems</h2>
         <p>Monitored building systems</p>
       </div>
-      <div id="user-profile-root"></div>
+      <div class="topbar-actions">
+        <button type="button" class="primary-btn" id="add-system-btn" aria-haspopup="dialog">
+          + Add System
+        </button>
+        <div id="user-profile-root"></div>
+      </div>
     </header>
 
+    <p id="systems-status" class="chart-status" aria-live="polite">Loading systems…</p>
+
     <table class="data-table">
-      <tr>
-        <th>System ID</th>
-        <th>Site</th>
-        <th>System Type</th>
-        <th>Status</th>
-        <th>Last Update</th>
-      </tr>
-      <tr>
-        <td><a href="system-detail.html">SITE001</a></td>
-        <td>Vista Springs</td>
-        <td>Domestic Hot Water</td>
-        <td class="status-online">Online</td>
-        <td>2 minutes ago</td>
-      </tr>
-      <tr>
-        <td>SYS-002</td>
-        <td>Highlander Pointe</td>
-        <td>Boiler System</td>
-        <td class="status-online">Online</td>
-        <td>5 minutes ago</td>
-      </tr>
-      <tr>
-        <td>SYS-003</td>
-        <td>La Verne Pool</td>
-        <td>Pool Heating</td>
-        <td class="status-warning">Needs Review</td>
-        <td>18 minutes ago</td>
-      </tr>
-      <tr>
-        <td>SYS-004</td>
-        <td>Solar Thermal Demo</td>
-        <td>Solar Thermal</td>
-        <td class="status-offline">Offline</td>
-        <td>1 hour ago</td>
-      </tr>
+      <thead>
+        <tr>
+          <th>System ID</th>
+          <th>System Name</th>
+          <th>Site</th>
+          <th>System Type</th>
+          <th>Status</th>
+          <th>Equipment</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="systems-tbody">
+        <tr>
+          <td colspan="7">Loading…</td>
+        </tr>
+      </tbody>
     </table>
   </main>
 </div>
 
-<script src="nav.js"></script>
+<div class="modal-backdrop" id="system-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="system-modal-title">
+    <div class="modal-header">
+      <div>
+        <h3 id="system-modal-title">Add System</h3>
+        <p id="system-modal-subtitle">Create a new system in NOVARASystems</p>
+      </div>
+      <button type="button" class="modal-close" id="system-modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="system-form" class="site-form" novalidate>
+      <input type="hidden" id="system-mode" value="create">
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>SystemID <em>*</em></span>
+          <input type="text" id="field-systemId" name="SystemID" required maxlength="64" autocomplete="off" readonly aria-readonly="true">
+          <small class="field-hint" id="system-id-hint">Auto-generated sequentially (SYS001…)</small>
+        </label>
+        <label class="form-field">
+          <span>SiteID <em>*</em></span>
+          <select id="field-siteId" name="SiteID" required>
+            <option value="">Select site…</option>
+          </select>
+        </label>
+        <label class="form-field form-field-wide">
+          <span>SystemName <em>*</em></span>
+          <input type="text" id="field-systemName" name="SystemName" required maxlength="120" autocomplete="off">
+        </label>
+        <label class="form-field">
+          <span>SystemType <em>*</em></span>
+          <select id="field-systemType" name="SystemType" required>
+            <option value="">Select…</option>
+            <option value="DHW">DHW</option>
+            <option value="Pool">Pool</option>
+            <option value="HVAC">HVAC</option>
+            <option value="Boiler">Boiler</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Status</span>
+          <select id="field-status" name="Status">
+            <option value="Online">Online</option>
+            <option value="Offline">Offline</option>
+            <option value="Needs Review">Needs Review</option>
+            <option value="Maintenance">Maintenance</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>EquipmentCount</span>
+          <input type="number" id="field-equipmentCount" name="EquipmentCount" min="0" step="1" value="0">
+        </label>
+        <label class="form-field">
+          <span>InstallDate</span>
+          <input type="date" id="field-installDate" name="InstallDate">
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Notes</span>
+          <textarea id="field-notes" name="Notes" rows="3" maxlength="2000" placeholder="Optional notes"></textarea>
+        </label>
+      </div>
+
+      <p id="system-form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" id="system-cancel-btn">Cancel</button>
+        <button type="submit" class="primary-btn" id="system-save-btn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="api-config.js?v=systems-crud-1"></script>
+<script src="api-client.js?v=systems-crud-1"></script>
+<script src="nav.js?v=systems-crud-1"></script>
+<script src="systems.js?v=systems-crud-1"></script>
 </body>
 </html>
