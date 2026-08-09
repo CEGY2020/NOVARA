@@ -56,23 +56,19 @@ a {
 .brand-link {
     display: inline-flex;
     align-items: center;
-    gap: 12px;
     text-decoration: none;
     flex-shrink: 0;
 }
 
-.brand-link img {
-    height: 44px;
+.brand-link .header-logo {
+    height: 48px;
     width: auto;
+    max-width: 180px;
     object-fit: contain;
-}
-
-.brand-wordmark {
-    font-family: "Syne", sans-serif;
-    font-weight: 700;
-    font-size: 1.35rem;
-    letter-spacing: 0.08em;
-    color: var(--white);
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    box-sizing: content-box;
 }
 
 .primary-nav {
@@ -167,13 +163,17 @@ a {
     animation: rise-in 0.9s ease both;
 }
 
-.hero-brand {
-    font-family: "Syne", sans-serif;
-    font-size: clamp(3.2rem, 9vw, 6.5rem);
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    line-height: 0.95;
-    margin-bottom: 18px;
+.hero-brand-logo {
+    display: block;
+    width: min(280px, 72vw);
+    height: auto;
+    object-fit: contain;
+    margin-bottom: 22px;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-sizing: border-box;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 .hero h1 {
@@ -386,8 +386,9 @@ a {
         display: none;
     }
 
-    .brand-wordmark {
-        display: none;
+    .brand-link .header-logo {
+        height: 40px;
+        max-width: 150px;
     }
 }
 

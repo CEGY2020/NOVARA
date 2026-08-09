@@ -45,21 +45,20 @@ body {
 
 .brand {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
 }
 
-.brand img {
-    width: 90px;
-    margin-bottom: 12px;
-}
-
-.brand h1 {
-    font-size: 28px;
-}
-
-.brand p {
-    color: var(--sidebar-muted);
-    font-size: 14px;
+.brand-logo {
+    display: block;
+    width: 170px;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-sizing: border-box;
 }
 
 .sidebar nav {

@@ -24,11 +24,7 @@
 
     root.innerHTML =
       '<div class="brand">' +
-      '  <img src="logo.png" alt="AEM Logo">' +
-      "  <div>" +
-      "    <h1>NOVARA</h1>" +
-      "    <p>Operational Intelligence</p>" +
-      "  </div>" +
+      '  <img class="brand-logo" src="images/novara-logo.png" alt="NOVARA">' +
       "</div>" +
       "<nav>" +
       links +
