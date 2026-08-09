@@ -68,6 +68,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `GET /api/owners` | `NOVARAOwners` |
 | `POST /api/owners` | Create owner in `NOVARAOwners` (JSON body) |
 | `PUT /api/owners` | Update existing owner in `NOVARAOwners` (JSON body) |
+| `PUT /api/owners/{id}` | Update owner by `OwnerID` path (JSON body) |
 | `GET /api/health` | health check |
 
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner`, `MgmtCompany`, `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).

@@ -80,6 +80,16 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_owner_write_request(body, mode=mode)
             self._send_json(status, payload)
             return
+        owner_path_id = novara_api._owner_id_from_path(parsed.path)
+        if owner_path_id is not None and mode == "update":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_owner_write_request(
+                body, mode=mode, owner_id=owner_path_id
+            )
+            self._send_json(status, payload)
+            return
         self.send_error(404)
 
     def _read_json_body(self):
