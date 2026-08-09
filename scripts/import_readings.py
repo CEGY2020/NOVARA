@@ -4,21 +4,34 @@
 Expected columns (header names are case-insensitive; aliases accepted):
 
   Required:
-    SiteID        — e.g. SITE001 (aliases: Site Id, site_id, Site)
     TimestampUTC  — ISO-8601 UTC preferred (aliases: Timestamp, DateTime, Time)
     T1            — supply temperature °F (aliases: t1, Supply, SupplyTemp)
     T2            — return temperature °F (aliases: t2, Return, ReturnTemp)
+
+  Site / system (column or CLI flag):
+    SiteID        — e.g. SITE001 (aliases: Site Id, site_id, Site)
+                    or pass --site-id / --default-site-id
+    SystemID      — e.g. SYS001 (aliases: System Id, system_id, System)
+                    or pass --system-id / --default-system-id
 
   Optional:
     RelayState    — numeric relay state (aliases: Relay, relay_state)
 
 Place files under data/readings/ (recommended), then run:
 
-  python3 scripts/import_readings.py data/readings/my_export.csv --dry-run
-  python3 scripts/import_readings.py data/readings/my_export.csv --execute
+  python3 scripts/import_readings.py data/readings/my_export.csv --dry-run \\
+    --site-id SITE001 --system-id SYS001
+  python3 scripts/import_readings.py data/readings/my_export.csv --execute \\
+    --site-id SITE001 --system-id SYS001
 
-DynamoDB keys are SiteID (HASH) + TimestampUTC (RANGE). By default, existing
-keys are skipped so re-imports are safe. Use --overwrite to replace values.
+CSV may omit SiteID/SystemID when those flags are provided, e.g.:
+
+  TimestampUTC,T1,T2,RelayState
+
+DynamoDB keys are SiteID (HASH) + TimestampUTC (RANGE). SystemID is stored on
+each item so Temperature Trends / future graphs can filter by system. By
+default, existing keys are skipped so re-imports are safe. Use --overwrite to
+replace values.
 """
 
 from __future__ import annotations
@@ -41,6 +54,7 @@ if REPO_ROOT not in sys.path:
 from novara_api import TABLE_NAME, dynamodb_resource, sanitize_aws_env  # noqa: E402
 
 SITE_ID_RE = re.compile(r"^SITE\d{3,}$", re.IGNORECASE)
+SYSTEM_ID_RE = re.compile(r"^SYS\d{3,}$", re.IGNORECASE)
 
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "SiteID": (
@@ -50,6 +64,14 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "site",
         "siteidentifier",
         "site_identifier",
+    ),
+    "SystemID": (
+        "systemid",
+        "system_id",
+        "system id",
+        "system",
+        "systemidentifier",
+        "system_identifier",
     ),
     "TimestampUTC": (
         "timestamputc",
@@ -103,7 +125,7 @@ def parse_site_id(value: Any, site_map: dict[str, str], default_site: str | None
     if not raw:
         if default_site:
             return default_site.upper()
-        raise ValueError("SiteID is empty (provide column or --default-site-id)")
+        raise ValueError("SiteID is empty (provide column or --site-id)")
     mapped = site_map.get(raw) or site_map.get(raw.upper())
     site_id = (mapped or raw).strip().upper()
     if not SITE_ID_RE.match(site_id):
@@ -112,6 +134,22 @@ def parse_site_id(value: Any, site_map: dict[str, str], default_site: str | None
             f"(map it with --site-map {raw}=SITE001 or use that form in the file)"
         )
     return site_id
+
+
+def parse_system_id(value: Any, default_system: str | None) -> str | None:
+    """Return normalized SystemID, optional default, or None when omitted."""
+    raw = "" if value is None else str(value).strip()
+    if not raw:
+        if default_system:
+            return default_system.upper()
+        return None
+    system_id = raw.upper()
+    if not SYSTEM_ID_RE.match(system_id):
+        raise ValueError(
+            f"SystemID '{raw}' is not SYS### "
+            "(use SYS001 in the file or pass --system-id SYS001)"
+        )
+    return system_id
 
 
 def _excel_serial_to_utc(serial: float) -> datetime:
@@ -211,6 +249,7 @@ def row_to_item(
     *,
     site_map: dict[str, str],
     default_site: str | None,
+    default_system: str | None,
 ) -> dict[str, Any]:
     missing = [name for name in ("TimestampUTC", "T1", "T2") if name not in columns]
     if "SiteID" not in columns and not default_site:
@@ -219,12 +258,16 @@ def row_to_item(
         raise ValueError(f"Missing required column(s): {', '.join(missing)}")
 
     site_raw = row.get(columns["SiteID"]) if "SiteID" in columns else None
+    system_raw = row.get(columns["SystemID"]) if "SystemID" in columns else None
     item: dict[str, Any] = {
         "SiteID": parse_site_id(site_raw, site_map, default_site),
         "TimestampUTC": parse_timestamp_utc(row.get(columns["TimestampUTC"])),
         "T1": parse_number(row.get(columns["T1"]), "T1"),
         "T2": parse_number(row.get(columns["T2"]), "T2"),
     }
+    system_id = parse_system_id(system_raw, default_system)
+    if system_id:
+        item["SystemID"] = system_id
     if "RelayState" in columns:
         relay = parse_number(row.get(columns["RelayState"]), "RelayState", required=False)
         if relay is not None:
@@ -299,6 +342,7 @@ def parse_items(
     *,
     site_map: dict[str, str],
     default_site: str | None,
+    default_system: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     headers, rows = load_rows(path)
     columns = resolve_columns(headers)
@@ -314,6 +358,7 @@ def parse_items(
                     columns,
                     site_map=site_map,
                     default_site=default_site,
+                    default_system=default_system,
                 )
             )
         except ValueError as exc:
@@ -322,10 +367,15 @@ def parse_items(
 
 
 def dedupe_items(items: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
-    """Keep the last occurrence of each SiteID+TimestampUTC within the file."""
-    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    """Keep the last occurrence of each SiteID(+SystemID)+TimestampUTC within the file."""
+    by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in items:
-        by_key[(item["SiteID"], item["TimestampUTC"])] = item
+        key = (
+            item["SiteID"],
+            str(item.get("SystemID") or ""),
+            item["TimestampUTC"],
+        )
+        by_key[key] = item
     return list(by_key.values()), len(items) - len(by_key)
 
 
@@ -410,8 +460,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Replace existing SiteID+TimestampUTC items (default: skip duplicates)",
     )
     parser.add_argument(
+        "--site-id",
         "--default-site-id",
-        help="SiteID to use when the file has no SiteID column (e.g. SITE001)",
+        dest="default_site_id",
+        help="SiteID when the file has no SiteID column (e.g. SITE001)",
+    )
+    parser.add_argument(
+        "--system-id",
+        "--default-system-id",
+        dest="default_system_id",
+        help="SystemID to store on each reading when the file has no SystemID column (e.g. SYS001)",
     )
     parser.add_argument(
         "--site-map",
@@ -437,7 +495,13 @@ def main(argv: list[str] | None = None) -> int:
 
     default_site = args.default_site_id.strip().upper() if args.default_site_id else None
     if default_site and not SITE_ID_RE.match(default_site):
-        parser.error("--default-site-id must look like SITE001")
+        parser.error("--site-id / --default-site-id must look like SITE001")
+
+    default_system = (
+        args.default_system_id.strip().upper() if args.default_system_id else None
+    )
+    if default_system and not SYSTEM_ID_RE.match(default_system):
+        parser.error("--system-id / --default-system-id must look like SYS001")
 
     all_items: list[dict[str, Any]] = []
     had_errors = False
@@ -452,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
                 path,
                 site_map=site_map,
                 default_site=default_site,
+                default_system=default_system,
             )
         except (ValueError, RuntimeError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -475,26 +540,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Collapsed {file_dupes} duplicate key(s) within input (kept last).")
 
     sites = sorted({item["SiteID"] for item in unique_items})
+    systems = sorted({item["SystemID"] for item in unique_items if item.get("SystemID")})
+    systems_label = ", ".join(systems) if systems else "(none)"
     print(
         f"Ready: {len(unique_items)} item(s) across site(s) {', '.join(sites)} "
-        f"→ table {args.table}"
+        f"system(s) {systems_label} → table {args.table}"
     )
     if unique_items:
         sample = unique_items[0]
-        print(
-            "Sample item:",
-            {
-                "SiteID": sample["SiteID"],
-                "TimestampUTC": sample["TimestampUTC"],
-                "T1": float(sample["T1"]),
-                "T2": float(sample["T2"]),
-                **(
-                    {"RelayState": float(sample["RelayState"])}
-                    if "RelayState" in sample
-                    else {}
-                ),
-            },
-        )
+        sample_out = {
+            "SiteID": sample["SiteID"],
+            "TimestampUTC": sample["TimestampUTC"],
+            "T1": float(sample["T1"]),
+            "T2": float(sample["T2"]),
+        }
+        if sample.get("SystemID"):
+            sample_out["SystemID"] = sample["SystemID"]
+        if "RelayState" in sample:
+            sample_out["RelayState"] = float(sample["RelayState"])
+        print("Sample item:", sample_out)
 
     if args.dry_run:
         print("[DRY-RUN] No writes performed.")

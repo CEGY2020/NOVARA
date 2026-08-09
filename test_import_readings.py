@@ -18,9 +18,10 @@ from scripts import import_readings as imp
 class ParseHelpersTests(unittest.TestCase):
     def test_resolve_columns_aliases(self):
         columns = imp.resolve_columns(
-            ["site_id", "Timestamp", "Supply", "Return", "Relay"]
+            ["site_id", "system_id", "Timestamp", "Supply", "Return", "Relay"]
         )
         self.assertEqual(columns["SiteID"], "site_id")
+        self.assertEqual(columns["SystemID"], "system_id")
         self.assertEqual(columns["TimestampUTC"], "Timestamp")
         self.assertEqual(columns["T1"], "Supply")
         self.assertEqual(columns["T2"], "Return")
@@ -51,6 +52,7 @@ class ParseHelpersTests(unittest.TestCase):
     def test_row_to_item(self):
         columns = {
             "SiteID": "SiteID",
+            "SystemID": "SystemID",
             "TimestampUTC": "TimestampUTC",
             "T1": "T1",
             "T2": "T2",
@@ -59,6 +61,7 @@ class ParseHelpersTests(unittest.TestCase):
         item = imp.row_to_item(
             {
                 "SiteID": "site001",
+                "SystemID": "sys001",
                 "TimestampUTC": "2026-08-01T00:00:00Z",
                 "T1": "120.5",
                 "T2": "110.2",
@@ -67,12 +70,21 @@ class ParseHelpersTests(unittest.TestCase):
             columns,
             site_map={},
             default_site=None,
+            default_system=None,
         )
         self.assertEqual(item["SiteID"], "SITE001")
+        self.assertEqual(item["SystemID"], "SYS001")
         self.assertEqual(item["TimestampUTC"], "2026-08-01T00:00:00Z")
         self.assertEqual(item["T1"], Decimal("120.5"))
         self.assertEqual(item["T2"], Decimal("110.2"))
         self.assertEqual(item["RelayState"], Decimal("1"))
+
+    def test_parse_system_id(self):
+        self.assertEqual(imp.parse_system_id("sys001", None), "SYS001")
+        self.assertEqual(imp.parse_system_id("", "SYS002"), "SYS002")
+        self.assertIsNone(imp.parse_system_id("", None))
+        with self.assertRaises(ValueError):
+            imp.parse_system_id("System 1", None)
 
 
 class CsvImportTests(unittest.TestCase):
@@ -83,6 +95,7 @@ class CsvImportTests(unittest.TestCase):
         self.assertEqual(len(items), 3)
         self.assertEqual(items[0]["SiteID"], "SITE001")
         self.assertEqual(items[0]["T1"], Decimal("120.5"))
+        self.assertNotIn("SystemID", items[0])
 
     def test_default_site_when_column_missing(self):
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as handle:
@@ -96,6 +109,26 @@ class CsvImportTests(unittest.TestCase):
             self.assertEqual(errors, [])
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0]["SiteID"], "SITE002")
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_default_site_and_system_when_columns_missing(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as handle:
+            handle.write("TimestampUTC,T1,T2,RelayState\n")
+            handle.write("2026-08-02T12:00:00Z,100,90,1\n")
+            path = Path(handle.name)
+        try:
+            items, errors = imp.parse_items(
+                path,
+                site_map={},
+                default_site="SITE001",
+                default_system="SYS001",
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["SiteID"], "SITE001")
+            self.assertEqual(items[0]["SystemID"], "SYS001")
+            self.assertEqual(items[0]["RelayState"], Decimal("1"))
         finally:
             path.unlink(missing_ok=True)
 
@@ -118,6 +151,27 @@ class CsvImportTests(unittest.TestCase):
         self.assertEqual(dupes, 1)
         self.assertEqual(len(unique), 1)
         self.assertEqual(unique[0]["T1"], Decimal("3"))
+
+    def test_dedupe_keeps_same_timestamp_across_systems(self):
+        items = [
+            {
+                "SiteID": "SITE001",
+                "SystemID": "SYS001",
+                "TimestampUTC": "2026-08-01T00:00:00Z",
+                "T1": Decimal("1"),
+                "T2": Decimal("2"),
+            },
+            {
+                "SiteID": "SITE001",
+                "SystemID": "SYS002",
+                "TimestampUTC": "2026-08-01T00:00:00Z",
+                "T1": Decimal("3"),
+                "T2": Decimal("4"),
+            },
+        ]
+        unique, dupes = imp.dedupe_items(items)
+        self.assertEqual(dupes, 0)
+        self.assertEqual(len(unique), 2)
 
 
 class PutItemsTests(unittest.TestCase):

@@ -92,8 +92,12 @@
     url: buildUrl,
     fetchJson: fetchJson,
     sendJson: sendJson,
-    getReadings: function (siteId, days) {
-      return fetchJson("/api/readings", { siteId: siteId, days: days });
+    getReadings: function (siteId, days, systemId) {
+      return fetchJson("/api/readings", {
+        siteId: siteId,
+        days: days,
+        systemId: systemId,
+      });
     },
     getSites: function () {
       return fetchJson("/api/sites");
