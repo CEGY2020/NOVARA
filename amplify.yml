@@ -8,81 +8,148 @@ frontend:
           echo "Publishing NOVARA static site with DynamoDB JSON API"
 
           # Prefer explicit table region; Amplify's AWS_REGION is the app region.
-          export AWS_DEFAULT_REGION="${NOVARA_AWS_REGION:-${AWS_REGION:-us-west-2}}"
+          export AWS_DEFAULT_REGION="${NOVARA_AWS_REGION:-${AWS_REGION:-}}"
           export AWS_REGION="${AWS_DEFAULT_REGION}"
+          export SAM_CLI_TELEMETRY=0
 
           # Long-term IAM keys must not carry a stale/placeholder session token.
           if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ "${AWS_ACCESS_KEY_ID#AKIA}" != "${AWS_ACCESS_KEY_ID}" ]; then
             unset AWS_SESSION_TOKEN || true
           fi
 
-          if aws sts get-caller-identity >/tmp/novara-caller.json 2>/tmp/novara-caller.err; then
+          deploy_api() {
+            if ! aws sts get-caller-identity >/tmp/novara-caller.json 2>/tmp/novara-caller.err; then
+              echo "AWS credentials not available in this build; skipping API deploy."
+              cat /tmp/novara-caller.err || true
+              echo "Configure Amplify service role (or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY),"
+              echo "Set AWS_REGION/NOVARA_AWS_REGION to the DynamoDB table region, then rebuild."
+              return 0
+            fi
+
             echo "AWS identity:"
             cat /tmp/novara-caller.json
 
             python3 -m pip install --user aws-sam-cli boto3 >/tmp/sam-install.log 2>&1 || {
               echo "WARN: sam install failed; see /tmp/sam-install.log"
               tail -n 50 /tmp/sam-install.log || true
+              return 0
             }
             export PATH="$HOME/.local/bin:$PATH"
 
-            if command -v sam >/dev/null 2>&1; then
-              echo "Deploying NOVARA API (Lambda + HTTP API)..."
-              sam build --template-file template.yaml
-              sam deploy \
-                --stack-name "${NOVARA_API_STACK:-novara-api}" \
-                --resolve-s3 \
-                --capabilities CAPABILITY_IAM \
-                --no-confirm-changeset \
-                --no-fail-on-empty-changeset \
-                --region "${AWS_REGION}" \
-                --parameter-overrides \
-                  "ReadingsTableName=${NOVARA_READINGS_TABLE:-NOVARAReadings}" \
-                  "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}"
-
-              NOVARA_API_URL=$(aws cloudformation describe-stacks \
-                --stack-name "${NOVARA_API_STACK:-novara-api}" \
-                --region "${AWS_REGION}" \
-                --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
-                --output text)
-              NOVARA_FUNCTION_URL=$(aws cloudformation describe-stacks \
-                --stack-name "${NOVARA_API_STACK:-novara-api}" \
-                --region "${AWS_REGION}" \
-                --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
-                --output text)
-
-              echo "NOVARA_API_URL=${NOVARA_API_URL}"
-              echo "NOVARA_FUNCTION_URL=${NOVARA_FUNCTION_URL}"
-
-              # Bake absolute API base into the static bundle (works even without rewrite).
-              if [ -n "${NOVARA_API_URL}" ] && [ "${NOVARA_API_URL}" != "None" ]; then
-                python3 scripts/write_api_config.py --api-url "${NOVARA_API_URL}"
-              elif [ -n "${NOVARA_FUNCTION_URL}" ] && [ "${NOVARA_FUNCTION_URL}" != "None" ]; then
-                python3 scripts/write_api_config.py --api-url "${NOVARA_FUNCTION_URL}"
-              fi
-
-              # Amplify injects AWS_APP_ID automatically on Hosting builds.
-              if [ -n "${AWS_APP_ID:-}" ] && [ -n "${NOVARA_API_URL}" ] && [ "${NOVARA_API_URL}" != "None" ]; then
-                python3 scripts/configure_amplify_api_rewrites.py \
-                  --app-id "${AWS_APP_ID}" \
-                  --api-url "${NOVARA_API_URL}" \
-                  --region "${AWS_REGION}"
-              else
-                echo "Skipping Amplify rewrite update (AWS_APP_ID or API URL missing)."
-              fi
-            else
+            if ! command -v sam >/dev/null 2>&1; then
               echo "WARN: sam CLI not available; leaving api-config.js unchanged."
+              return 0
             fi
-          else
-            echo "AWS credentials not available in this build; skipping API deploy."
-            cat /tmp/novara-caller.err || true
-            echo "Configure Amplify service role (or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY),"
-            echo "AWS_REGION/NOVARA_AWS_REGION=us-west-2 (table region), then rebuild."
+
+            # Amplify AL2023 images currently ship Python 3.10, while the Lambda
+            # runtime is python3.12. Prefer a local 3.12 interpreter when present;
+            # otherwise temporarily build/deploy as python3.10 so Hosting still works.
+            RUNTIME_PATCHED=0
+            if ! command -v python3.12 >/dev/null 2>&1; then
+              if command -v python3.10 >/dev/null 2>&1 || python3 -c 'import sys; raise SystemExit(0 if sys.version_info[:2]==(3,10) else 1)'; then
+                echo "WARN: python3.12 not on PATH; building Lambda as python3.10 for this Amplify image."
+                python3 - <<'PY'
+from pathlib import Path
+path = Path("template.yaml")
+text = path.read_text()
+updated = text.replace("Runtime: python3.12", "Runtime: python3.10")
+if updated == text:
+    raise SystemExit("template.yaml did not contain Runtime: python3.12")
+path.write_text(updated)
+print("Patched template.yaml runtime to python3.10")
+PY
+                RUNTIME_PATCHED=1
+              else
+                echo "WARN: Neither python3.12 nor python3.10 available for SAM build; skipping API deploy."
+                return 0
+              fi
+            fi
+
+            echo "Deploying NOVARA API (Lambda + HTTP API)..."
+            if ! sam build --template-file template.yaml; then
+              echo "WARN: sam build failed; continuing so the static Sites UI still publishes."
+              if [ "$RUNTIME_PATCHED" = "1" ]; then
+                git checkout -- template.yaml 2>/dev/null || true
+              fi
+              return 0
+            fi
+
+            if ! sam deploy \
+              --stack-name "${NOVARA_API_STACK:-novara-api}" \
+              --resolve-s3 \
+              --capabilities CAPABILITY_IAM \
+              --no-confirm-changeset \
+              --no-fail-on-empty-changeset \
+              --region "${AWS_REGION}" \
+              --parameter-overrides \
+                "ReadingsTableName=${NOVARA_READINGS_TABLE:-NOVARAReadings}" \
+                "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}"; then
+              echo "WARN: sam deploy failed; continuing so the static Sites UI still publishes."
+              if [ "$RUNTIME_PATCHED" = "1" ]; then
+                git checkout -- template.yaml 2>/dev/null || true
+              fi
+              return 0
+            fi
+
+            if [ "$RUNTIME_PATCHED" = "1" ]; then
+              git checkout -- template.yaml 2>/dev/null || true
+            fi
+
+            NOVARA_API_URL=$(aws cloudformation describe-stacks \
+              --stack-name "${NOVARA_API_STACK:-novara-api}" \
+              --region "${AWS_REGION}" \
+              --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+              --output text)
+            NOVARA_FUNCTION_URL=$(aws cloudformation describe-stacks \
+              --stack-name "${NOVARA_API_STACK:-novara-api}" \
+              --region "${AWS_REGION}" \
+              --query "Stacks[0].Outputs[?OutputKey=='FunctionUrl'].OutputValue" \
+              --output text)
+
+            echo "NOVARA_API_URL=${NOVARA_API_URL}"
+            echo "NOVARA_FUNCTION_URL=${NOVARA_FUNCTION_URL}"
+
+            # Bake absolute API base into the static bundle (works even without rewrite).
+            if [ -n "${NOVARA_API_URL}" ] && [ "${NOVARA_API_URL}" != "None" ]; then
+              python3 scripts/write_api_config.py --api-url "${NOVARA_API_URL}"
+            elif [ -n "${NOVARA_FUNCTION_URL}" ] && [ "${NOVARA_FUNCTION_URL}" != "None" ]; then
+              python3 scripts/write_api_config.py --api-url "${NOVARA_FUNCTION_URL}"
+            fi
+
+            # Amplify injects AWS_APP_ID automatically on Hosting builds.
+            if [ -n "${AWS_APP_ID:-}" ] && [ -n "${NOVARA_API_URL}" ] && [ "${NOVARA_API_URL}" != "None" ]; then
+              python3 scripts/configure_amplify_api_rewrites.py \
+                --app-id "${AWS_APP_ID}" \
+                --api-url "${NOVARA_API_URL}" \
+                --region "${AWS_REGION}"
+            else
+              echo "Skipping Amplify rewrite update (AWS_APP_ID or API URL missing)."
+            fi
+          }
+
+          # Never let API packaging/deploy block publishing the Sites UI.
+          set +e
+          deploy_api
+          API_RC=$?
+          set -e
+          if [ "${API_RC}" -ne 0 ]; then
+            echo "WARN: API deploy helper exited ${API_RC}; static site will still publish."
           fi
     build:
       commands:
         - echo "NOVARA_API_BASE in api-config.js:"
         - grep -n "NOVARA_API_BASE" api-config.js || true
+        - |
+          # Guardrail: Sites page must ship the Add Site control.
+          if ! grep -q 'id="add-site-btn"' sites.html; then
+            echo "ERROR: sites.html is missing #add-site-btn"
+            exit 1
+          fi
+          if ! grep -q 'id="site-modal"' sites.html; then
+            echo "ERROR: sites.html is missing #site-modal"
+            exit 1
+          fi
+          echo "Sites Add Site button + modal present in build artifacts."
   artifacts:
     baseDirectory: .
     files:
