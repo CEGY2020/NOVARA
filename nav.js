@@ -25,7 +25,6 @@
     root.innerHTML =
       '<div class="brand">' +
       '  <img class="brand-logo" src="images/novara-logo.png" alt="NOVARA">' +
-      '  <p class="brand-tagline">Operational Intelligence</p>' +
       "</div>" +
       "<nav>" +
       links +
