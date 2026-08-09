@@ -1,5 +1,5 @@
 (function () {
-  var SITE_ID = "VS001";
+  var SITE_ID = "SITE001";
   var chart = null;
   var statusEl = document.getElementById("system-last-update");
   var chartStatusEl = document.getElementById("chart-status");

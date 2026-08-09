@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Sites</title>
-  <link rel="stylesheet" href="dashboard.css?v=add-site-1">
+  <link rel="stylesheet" href="dashboard.css?v=siteid-std-1">
 </head>
 <body data-page="sites">
 
@@ -62,7 +62,8 @@
       <div class="form-grid">
         <label class="form-field">
           <span>SiteID <em>*</em></span>
-          <input type="text" id="field-siteId" name="SiteID" required maxlength="64" autocomplete="off">
+          <input type="text" id="field-siteId" name="SiteID" required maxlength="64" autocomplete="off" readonly aria-readonly="true">
+          <small class="field-hint" id="site-id-hint">Auto-generated from existing sites</small>
         </label>
         <label class="form-field">
           <span>SiteName <em>*</em></span>
@@ -125,9 +126,9 @@
   </div>
 </div>
 
-<script src="api-config.js?v=add-site-1"></script>
-<script src="api-client.js?v=add-site-1"></script>
-<script src="nav.js?v=add-site-1"></script>
-<script src="sites.js?v=add-site-1"></script>
+<script src="api-config.js?v=siteid-std-1"></script>
+<script src="api-client.js?v=siteid-std-1"></script>
+<script src="nav.js?v=siteid-std-1"></script>
+<script src="sites.js?v=siteid-std-1"></script>
 </body>
 </html>

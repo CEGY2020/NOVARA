@@ -566,6 +566,13 @@ body.modal-open {
 .form-field input[readonly] {
     background: #f4f7f9;
     color: #55707f;
+    cursor: default;
+}
+
+.form-field .field-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: #7b8993;
 }
 
 .form-error {

@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     # Smoke-test endpoints against the chosen base URL.
     import urllib.request
 
-    for path in ("/api/health", "/api/sites", "/api/readings?siteId=VS001&days=7"):
+    for path in ("/api/health", "/api/sites", "/api/readings?siteId=SITE001&days=7"):
         url = f"{api_url}{path}"
         print(f"GET {url}")
         with urllib.request.urlopen(url, timeout=30) as resp:

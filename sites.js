@@ -92,12 +92,44 @@
     };
   }
 
+  /** Next sequential SiteID from NOVARASites rows matching SITE###. */
+  function nextSiteId() {
+    var maxNum = 0;
+    var pattern = /^SITE(\d+)$/i;
+    Object.keys(sitesById).forEach(function (id) {
+      var match = pattern.exec(String(id || "").trim());
+      if (!match) return;
+      var num = parseInt(match[1], 10);
+      if (Number.isFinite(num) && num > maxNum) {
+        maxNum = num;
+      }
+    });
+    var next = maxNum + 1;
+    var width = Math.max(3, String(next).length);
+    return "SITE" + String(next).padStart(width, "0");
+  }
+
+  function setSiteIdHint(mode) {
+    var hint = document.getElementById("site-id-hint");
+    if (!hint) return;
+    if (mode === "edit") {
+      hint.textContent = "SiteID cannot be changed";
+    } else {
+      hint.textContent = "Auto-generated from existing sites";
+    }
+  }
+
   function openModal(mode, site) {
     if (!modal || !form) return;
     mode = mode === "edit" ? "edit" : "create";
     modeInput.value = mode;
     setFormError("");
     form.reset();
+
+    if (siteIdInput) {
+      siteIdInput.readOnly = true;
+    }
+    setSiteIdHint(mode);
 
     if (mode === "edit" && site) {
       modalTitle.textContent = "Edit Site";
@@ -116,22 +148,17 @@
         "field-systems",
         site.systems == null || site.systems === "—" ? 0 : site.systems
       );
-      if (siteIdInput) {
-        siteIdInput.readOnly = true;
-      }
     } else {
       modalTitle.textContent = "Add Site";
       modalSubtitle.textContent = "Create a new site in NOVARASites";
+      setFieldValue("field-siteId", nextSiteId());
       setFieldValue("field-status", "Online");
       setFieldValue("field-systems", 0);
-      if (siteIdInput) {
-        siteIdInput.readOnly = false;
-      }
     }
 
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    var focusEl = mode === "edit" ? document.getElementById("field-siteName") : siteIdInput;
+    var focusEl = document.getElementById("field-siteName");
     if (focusEl) {
       focusEl.focus();
     }
@@ -253,26 +280,60 @@
       saveBtn.textContent = "Saving…";
     }
 
-    var request =
-      mode === "edit" ? api.updateSite(payload) : api.createSite(payload);
+    function submit(payloadToSave, allowRetry) {
+      var request =
+        mode === "edit"
+          ? api.updateSite(payloadToSave)
+          : api.createSite(payloadToSave);
 
-    request
-      .then(function () {
-        closeModal();
-        return loadSites();
-      })
-      .catch(function (err) {
-        setFormError(err.message || "Failed to save site");
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = "Save";
-        }
-      });
+      return request
+        .then(function () {
+          closeModal();
+          return loadSites();
+        })
+        .catch(function (err) {
+          var message = err.message || "Failed to save site";
+          var isDuplicate =
+            mode === "create" &&
+            /already exists/i.test(message) &&
+            allowRetry;
+
+          if (isDuplicate) {
+            return Promise.resolve(loadSites())
+              .catch(function () {})
+              .then(function () {
+                var regenerated = nextSiteId();
+                setFieldValue("field-siteId", regenerated);
+                payloadToSave.SiteID = regenerated;
+                return submit(payloadToSave, false);
+              });
+          }
+
+          setFormError(message);
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Save";
+          }
+        });
+    }
+
+    submit(payload, true);
   }
 
   if (addBtn) {
     addBtn.addEventListener("click", function () {
-      openModal("create");
+      addBtn.disabled = true;
+      // Refresh NOVARASites so the next SITE### is based on current rows.
+      Promise.resolve(loadSites())
+        .catch(function () {
+          /* keep cached sitesById if refresh fails */
+        })
+        .then(function () {
+          openModal("create");
+        })
+        .finally(function () {
+          addBtn.disabled = false;
+        });
     });
   }
   if (closeBtn) {
