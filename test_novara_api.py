@@ -205,6 +205,56 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(mocked.call_args.kwargs["mode"], "create")
         self.assertIn("POST", response["headers"]["Access-Control-Allow-Methods"])
 
+    def test_lambda_event_update_site(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARASites",
+            "site": {"siteId": "SITE001", "name": "Vista Springs Updated"},
+        }
+        event = {
+            "version": "2.0",
+            "rawPath": "/api/sites",
+            "requestContext": {"http": {"method": "PUT", "path": "/api/sites"}},
+            "body": json.dumps(
+                {
+                    "SiteID": "SITE001",
+                    "SiteName": "Vista Springs Updated",
+                    "SystemType": "DHW",
+                    "Status": "Needs Review",
+                    "Systems": 2,
+                }
+            ),
+        }
+        with patch.object(novara_api, "save_site", return_value=fake) as mocked:
+            response = novara_api.handle_lambda_event(event)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+        self.assertIn("PUT", response["headers"]["Access-Control-Allow-Methods"])
+
+    def test_sites_js_keeps_edit_mode_after_form_reset(self):
+        """Regression: form.reset() must not leave Save stuck in create mode."""
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        open_modal = source.split("function openModal", 1)[1].split(
+            "function closeModal", 1
+        )[0]
+        reset_at = open_modal.find("form.reset()")
+        mode_at = open_modal.find("currentMode = mode")
+        self.assertNotEqual(reset_at, -1, "openModal should call form.reset()")
+        self.assertNotEqual(mode_at, -1, "openModal should set currentMode")
+        self.assertLess(
+            reset_at,
+            mode_at,
+            "currentMode must be set after form.reset() so Edit Save uses PUT",
+        )
+        save_site = source.split("function saveSite", 1)[1].split(
+            "if (addBtn)", 1
+        )[0]
+        self.assertIn("currentMode === \"edit\"", save_site)
+        self.assertIn("api.updateSite", save_site)
+        self.assertIn("api.createSite", save_site)
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)

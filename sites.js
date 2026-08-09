@@ -14,6 +14,8 @@
   var siteIdInput = document.getElementById("field-siteId");
 
   var sitesById = {};
+  /** Authoritative create|edit mode. Do not rely only on #site-mode — form.reset() restores its default. */
+  var currentMode = "create";
 
   if (!tbody) {
     return;
@@ -122,9 +124,14 @@
   function openModal(mode, site) {
     if (!modal || !form) return;
     mode = mode === "edit" ? "edit" : "create";
-    modeInput.value = mode;
     setFormError("");
     form.reset();
+
+    // Must set mode AFTER reset — #site-mode defaults to "create" in the HTML.
+    currentMode = mode;
+    if (modeInput) {
+      modeInput.value = mode;
+    }
 
     if (siteIdInput) {
       siteIdInput.readOnly = true;
@@ -268,7 +275,10 @@
       return;
     }
 
-    var mode = modeInput.value === "edit" ? "edit" : "create";
+    var mode = currentMode === "edit" ? "edit" : "create";
+    if (modeInput) {
+      modeInput.value = mode;
+    }
     var api = window.NovaraApi;
     if (!api) {
       setFormError("API client is unavailable.");
@@ -293,6 +303,7 @@
         })
         .catch(function (err) {
           var message = err.message || "Failed to save site";
+          // Never retry-as-create while editing — that would insert a new SiteID.
           var isDuplicate =
             mode === "create" &&
             /already exists/i.test(message) &&
