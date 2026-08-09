@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/sites/systems APIs."""
+"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners APIs."""
 
 from __future__ import annotations
 
@@ -41,6 +41,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_systems_request()
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/owners":
+            status, payload = novara_api.handle_owners_request()
+            self._send_json(status, payload)
+            return
         if parsed.path == "/api/health":
             status, payload = novara_api.handle_health_request()
             self._send_json(status, payload)
@@ -67,6 +71,13 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             if body is None:
                 return
             status, payload = novara_api.handle_system_write_request(body, mode=mode)
+            self._send_json(status, payload)
+            return
+        if parsed.path == "/api/owners":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_owner_write_request(body, mode=mode)
             self._send_json(status, payload)
             return
         self.send_error(404)
@@ -102,12 +113,13 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
-        "NOVARA server on http://0.0.0.0:%s (readings=%s sites=%s systems=%s)"
+        "NOVARA server on http://0.0.0.0:%s (readings=%s sites=%s systems=%s owners=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
             novara_api.SITES_TABLE_NAME,
             novara_api.SYSTEMS_TABLE_NAME,
+            novara_api.OWNERS_TABLE_NAME,
         )
     )
     try:

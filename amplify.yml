@@ -26,7 +26,15 @@ frontend:
             echo "ERROR systems.html is missing system-modal"
             exit 1
           fi
-          echo "Sites/Systems Add buttons and modals present in build artifacts."
+          if ! grep -q 'id="add-owner-btn"' owners.html; then
+            echo "ERROR owners.html is missing add-owner-btn"
+            exit 1
+          fi
+          if ! grep -q 'id="owner-modal"' owners.html; then
+            echo "ERROR owners.html is missing owner-modal"
+            exit 1
+          fi
+          echo "Sites/Systems/Owners Add buttons and modals present in build artifacts."
   artifacts:
     baseDirectory: .
     files:

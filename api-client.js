@@ -1,4 +1,4 @@
-/* Shared NOVARA JSON API client for readings + sites + systems. */
+/* Shared NOVARA JSON API client for readings + sites + systems + owners. */
 (function (global) {
   function apiBase() {
     var base = global.NOVARA_API_BASE;
@@ -108,6 +108,15 @@
     },
     updateSystem: function (system) {
       return sendJson("/api/systems", "PUT", system);
+    },
+    getOwners: function () {
+      return fetchJson("/api/owners");
+    },
+    createOwner: function (owner) {
+      return sendJson("/api/owners", "POST", owner);
+    },
+    updateOwner: function (owner) {
+      return sendJson("/api/owners", "PUT", owner);
     },
   };
 })(window);

@@ -14,6 +14,7 @@ from urllib.parse import parse_qs
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
 SYSTEMS_TABLE_NAME = os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems")
+OWNERS_TABLE_NAME = os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners")
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
@@ -23,6 +24,7 @@ SYSTEM_RECORD_TYPES = ("DHW", "Pool", "HVAC", "Boiler")
 SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
 
 _systems_table_ready = False
+_owners_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -387,6 +389,220 @@ def save_system(item: dict, *, mode: str = "upsert") -> dict:
         "ok": True,
         "table": SYSTEMS_TABLE_NAME,
         "system": normalize_system(item, site_name=item.get("SiteName")),
+    }
+
+
+def ensure_owners_table() -> str:
+    """Create NOVARAOwners if missing (pay-per-request, OwnerID hash key)."""
+    global _owners_table_ready
+    if _owners_table_ready:
+        return OWNERS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=OWNERS_TABLE_NAME)
+        _owners_table_ready = True
+        return OWNERS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=OWNERS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "OwnerID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "OwnerID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=OWNERS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _owners_table_ready = True
+    return OWNERS_TABLE_NAME
+
+
+def normalize_owner(item: dict) -> dict:
+    owner_id = first_present(item, ("OwnerID", "ownerId", "owner_id", "id"))
+    name = first_present(
+        item,
+        ("Name", "name", "OwnerName", "ownerName"),
+        default=owner_id or "Unknown owner",
+    )
+    address = first_present(
+        item, ("Address", "address", "StreetAddress", "streetAddress"), default=""
+    )
+    city = first_present(item, ("City", "city"), default="")
+    state = first_present(item, ("State", "state"), default="")
+    zip_code = first_present(item, ("Zip", "zip", "ZipCode", "zipCode"), default="")
+    contact_name = first_present(
+        item, ("ContactName", "contactName", "contact_name"), default=""
+    )
+    contact_email = first_present(
+        item, ("ContactEmail", "contactEmail", "contact_email", "Email", "email"),
+        default="",
+    )
+    contact_phone = first_present(
+        item, ("ContactPhone", "contactPhone", "contact_phone", "Phone", "phone"),
+        default="",
+    )
+    notes = first_present(item, ("Notes", "notes"), default="")
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    location = format_location(
+        {"City": city, "State": state, "Address": address}
+    )
+    return {
+        "ownerId": "" if owner_id is None else str(owner_id),
+        "name": str(name),
+        "ownerName": str(name),
+        "address": str(address or ""),
+        "city": str(city or ""),
+        "state": str(state or ""),
+        "zip": str(zip_code or ""),
+        "location": location,
+        "contactName": str(contact_name or ""),
+        "contactEmail": str(contact_email or ""),
+        "contactPhone": str(contact_phone or ""),
+        "notes": str(notes or ""),
+        "updatedAt": str(updated_at or ""),
+    }
+
+
+def scan_owners() -> dict:
+    ensure_owners_table()
+    table = dynamodb_table(OWNERS_TABLE_NAME)
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    owners = [normalize_owner(json_safe(item)) for item in items]
+    owners.sort(
+        key=lambda row: (
+            (row.get("name") or "").lower(),
+            (row.get("ownerId") or "").lower(),
+        )
+    )
+    return {
+        "table": OWNERS_TABLE_NAME,
+        "count": len(owners),
+        "owners": owners,
+    }
+
+
+def parse_owner_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming owner create/update payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    owner_id = _as_text(
+        body.get("OwnerID") if "OwnerID" in body else body.get("ownerId")
+    )
+    name = _as_text(
+        body.get("Name")
+        if "Name" in body
+        else body.get("name")
+        if "name" in body
+        else body.get("OwnerName")
+        if "OwnerName" in body
+        else body.get("ownerName")
+    )
+    if not owner_id:
+        return None, "OwnerID is required"
+    if not name:
+        return None, "Name is required"
+    if len(owner_id) > 64:
+        return None, "OwnerID must be 64 characters or fewer"
+    if len(name) > 120:
+        return None, "Name must be 120 characters or fewer"
+
+    address = _as_text(
+        body.get("Address") if "Address" in body else body.get("address")
+    )
+    city = _as_text(body.get("City") if "City" in body else body.get("city"))
+    state = _as_text(body.get("State") if "State" in body else body.get("state"))
+    zip_code = _as_text(body.get("Zip") if "Zip" in body else body.get("zip"))
+    contact_name = _as_text(
+        body.get("ContactName") if "ContactName" in body else body.get("contactName")
+    )
+    contact_email = _as_text(
+        body.get("ContactEmail")
+        if "ContactEmail" in body
+        else body.get("contactEmail")
+    )
+    contact_phone = _as_text(
+        body.get("ContactPhone")
+        if "ContactPhone" in body
+        else body.get("contactPhone")
+    )
+    notes = _as_text(body.get("Notes") if "Notes" in body else body.get("notes"))
+
+    if contact_email and "@" not in contact_email:
+        return None, "ContactEmail must be a valid email address"
+
+    item = {
+        "OwnerID": owner_id,
+        "Name": name,
+        "Address": address,
+        "City": city,
+        "State": state,
+        "Zip": zip_code,
+        "ContactName": contact_name,
+        "ContactEmail": contact_email,
+        "ContactPhone": contact_phone,
+        "Notes": notes,
+        "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    return item, None
+
+
+def save_owner(item: dict, *, mode: str = "upsert") -> dict:
+    """Write an owner to DynamoDB. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    ensure_owners_table()
+    table = dynamodb_table(OWNERS_TABLE_NAME)
+    kwargs = {"Item": item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(OwnerID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(OwnerID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(f"OwnerID '{item['OwnerID']}' already exists") from exc
+            if mode == "update":
+                raise LookupError(f"OwnerID '{item['OwnerID']}' was not found") from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": OWNERS_TABLE_NAME,
+        "owner": normalize_owner(item),
     }
 
 
@@ -806,12 +1022,42 @@ def handle_system_write_request(body: dict | None, *, mode: str) -> tuple[int, d
         }
 
 
+def handle_owners_request() -> tuple[int, dict]:
+    try:
+        return 200, scan_owners()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load owners from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_owner_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
+    item, error = parse_owner_payload(body)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_owner(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save owner to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
         "table": TABLE_NAME,
         "sitesTable": SITES_TABLE_NAME,
         "systemsTable": SYSTEMS_TABLE_NAME,
+        "ownersTable": OWNERS_TABLE_NAME,
     }
 
 
@@ -845,6 +1091,14 @@ def route_request(
             return handle_system_write_request(body, mode="create")
         if method == "PUT":
             return handle_system_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    if normalized.endswith("/api/owners") or normalized == "/owners":
+        if method == "GET":
+            return handle_owners_request()
+        if method == "POST":
+            return handle_owner_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_owner_write_request(body, mode="update")
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
         if method != "GET":
