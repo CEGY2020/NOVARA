@@ -7,6 +7,7 @@
   var NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "sites", label: "Sites", href: "sites.html" },
+    { id: "owners", label: "Owners", href: "owners.html" },
     { id: "systems", label: "Systems", href: "systems.html" },
     { id: "alarms", label: "Active Alarms", href: "active-alarms.html" },
     { id: "savings", label: "Energy Savings", href: "energy-savings.html" },
