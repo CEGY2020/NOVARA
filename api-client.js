@@ -70,15 +70,19 @@
 
   function sendJson(path, method, payload) {
     var url = buildUrl(path);
-    return fetch(url, {
+    var options = {
       method: method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
       cache: "no-store",
-      body: JSON.stringify(payload || {}),
-    }).then(function (response) {
+    };
+    // Avoid DELETE/GET request bodies (some proxies reject them).
+    if (method !== "DELETE" && method !== "GET") {
+      options.body = JSON.stringify(payload || {});
+    }
+    return fetch(url, options).then(function (response) {
       return parseResponse(response, path);
     });
   }
