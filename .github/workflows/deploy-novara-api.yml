@@ -55,17 +55,9 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.NOVARA_AWS_REGION }}
 
-      - name: Deploy API + write api-config.js
-        run: python3 scripts/deploy_novara_api.py
-
-      - name: Commit api-config.js when it changes
+      - name: Deploy API + configure Amplify /api rewrite
         run: |
-          if git diff --quiet -- api-config.js; then
-            echo "api-config.js unchanged"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add api-config.js
-          git commit -m "Update api-config.js with deployed NOVARA API URL"
-          git push
+          python3 scripts/deploy_novara_api.py
+          # Prefer Amplify same-origin /api rewrite over committing region-specific
+          # API URLs into api-config.js.
+          git checkout -- api-config.js || true
