@@ -11,7 +11,7 @@ export AWS_REGION=us-west-2   # DynamoDB table region
 python3 server.py
 ```
 
-Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`. Pass `?siteId=SITE002` (or open a system from the Systems page) to chart another site.
+Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`. Pass `?siteId=SITE001&systemId=SYS001` (or open a system from the Systems page) to chart one system.
 
 Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html) → `GET /api/sites` from `NOVARASites`.
 
@@ -43,12 +43,13 @@ Use `scripts/import_readings.py` to load exported temperature data into DynamoDB
 | Column | Required | Description |
 | --- | --- | --- |
 | `SiteID` | Yes\* | Partition key, e.g. `SITE001`. Aliases: `Site Id`, `site_id`, `Site` |
+| `SystemID` | No\* | Stored on each reading for per-system charts, e.g. `SYS001`. Aliases: `System Id`, `system_id`, `System` |
 | `TimestampUTC` | Yes | Sort key, ISO-8601 UTC preferred (`2026-08-01T14:30:00Z`). Aliases: `Timestamp`, `DateTime`, `Time` |
 | `T1` | Yes | Supply temperature °F. Aliases: `Supply`, `SupplyTemp` |
 | `T2` | Yes | Return temperature °F. Aliases: `Return`, `ReturnTemp` |
 | `RelayState` | No | Numeric relay state. Aliases: `Relay`, `relay_state` |
 
-\*Or omit `SiteID` and pass `--default-site-id SITE001`.
+\*Or omit `SiteID` / `SystemID` and pass `--site-id SITE001` / `--system-id SYS001` (aliases: `--default-site-id`, `--default-system-id`).
 
 Example (`data/readings/sample_readings.csv`):
 
@@ -56,6 +57,13 @@ Example (`data/readings/sample_readings.csv`):
 SiteID,TimestampUTC,T1,T2,RelayState
 SITE001,2026-08-01T00:00:00Z,120.5,110.2,1
 SITE001,2026-08-01T01:00:00Z,121.0,110.8,1
+```
+
+Per-system file (IDs supplied on the command line):
+
+```csv
+TimestampUTC,T1,T2,RelayState
+2026-08-01T00:00:00Z,120.5,110.2,1
 ```
 
 ### Where to put files
@@ -77,6 +85,10 @@ export AWS_SECRET_ACCESS_KEY=...
 export AWS_REGION=[REDACTED]
 python3 scripts/import_readings.py data/readings/your_export.csv --execute
 
+# Per-system import (CSV may be TimestampUTC,T1,T2,RelayState only)
+python3 scripts/import_readings.py data/readings/vista_sys001.csv --execute \
+  --site-id SITE001 --system-id SYS001
+
 # Map a legacy / friendly site name, or set a default site
 python3 scripts/import_readings.py data/readings/vista.csv --execute \
   --site-map VS001=SITE001 --default-site-id SITE001
@@ -85,7 +97,13 @@ python3 scripts/import_readings.py data/readings/vista.csv --execute \
 python3 scripts/import_readings.py data/readings/your_export.csv --execute --overwrite
 ```
 
-After import, open Temperature Trends for that site (e.g. `system-detail.html?siteId=SITE001`). The chart reads `T1`/`T2` via `GET /api/readings`. Savings pages do not use `NOVARAReadings` today; only temperature trends do.
+Seed Vista Springs systems (`SYS001` / `SYS002` on `SITE001`) if needed:
+
+```bash
+python3 scripts/seed_vista_springs_systems.py --execute
+```
+
+After import, open Temperature Trends for that system (e.g. `system-detail.html?siteId=SITE001&systemId=SYS001`). The chart reads `T1`/`T2` via `GET /api/readings?siteId=…&systemId=…`. Savings pages do not use `NOVARAReadings` today; only temperature trends do.
 
 ### Sites response shape
 
@@ -115,7 +133,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 
 | Endpoint | DynamoDB table |
 | --- | --- |
-| `GET /api/readings?siteId=SITE001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
+| `GET /api/readings?siteId=SITE001&days=3\|7\|30[&systemId=SYS001]` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`, optional `SystemID` filter) |
 | `GET /api/sites` | `NOVARASites` (systems count from linked `NOVARASystems`) |
 | `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
 | `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |

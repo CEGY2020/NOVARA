@@ -1,16 +1,17 @@
 (function () {
-  function siteIdFromQuery() {
+  function queryParam(name, fallback) {
     try {
       var params = new URLSearchParams(window.location.search || "");
-      var fromQuery = (params.get("siteId") || "").trim();
+      var fromQuery = (params.get(name) || "").trim();
       if (fromQuery) return fromQuery;
     } catch (err) {
       /* ignore */
     }
-    return "SITE001";
+    return fallback || "";
   }
 
-  var SITE_ID = siteIdFromQuery();
+  var SITE_ID = queryParam("siteId", "SITE001");
+  var SYSTEM_ID = queryParam("systemId", "");
   var chart = null;
   var statusEl = document.getElementById("system-last-update");
   var chartStatusEl = document.getElementById("chart-status");
@@ -176,12 +177,15 @@
 
     var api = window.NovaraApi;
     var request = api
-      ? api.getReadings(SITE_ID, days)
+      ? api.getReadings(SITE_ID, days, SYSTEM_ID || undefined)
       : fetch(
           "/api/readings?siteId=" +
             encodeURIComponent(SITE_ID) +
             "&days=" +
-            encodeURIComponent(String(days))
+            encodeURIComponent(String(days)) +
+            (SYSTEM_ID
+              ? "&systemId=" + encodeURIComponent(SYSTEM_ID)
+              : "")
         ).then(function (response) {
           return response.json().then(function (body) {
             if (!response.ok) {
@@ -200,13 +204,18 @@
           statusEl.title = data.lastUpdate ? formatLastUpdate(data.lastUpdate) : "";
         }
         renderChart(points);
+        var scopeLabel =
+          "SiteID " + SITE_ID + (SYSTEM_ID ? " · SystemID " + SYSTEM_ID : "");
         if (!points.length) {
-          setChartStatus("No readings found for SiteID " + SITE_ID + " in this range.", false);
+          setChartStatus(
+            "No readings found for " + scopeLabel + " in this range.",
+            false
+          );
         } else {
           setChartStatus(
             points.length +
-              " points · SiteID " +
-              SITE_ID +
+              " points · " +
+              scopeLabel +
               " · last " +
               days +
               " day" +

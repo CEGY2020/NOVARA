@@ -53,7 +53,26 @@ class RouteTests(unittest.TestCase):
                     "GET", "/api/readings", {"siteId": ["SITE001"], "days": [str(days)]}
                 )
                 self.assertEqual(status, 200)
-                mocked.assert_called_with("SITE001", days)
+                mocked.assert_called_with("SITE001", days, None)
+
+    def test_readings_route_passes_system_id(self):
+        fake = {
+            "points": [],
+            "lastUpdate": None,
+            "siteId": "SITE001",
+            "systemId": "SYS001",
+            "days": 7,
+            "count": 0,
+        }
+        with patch.object(novara_api, "query_readings", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/readings",
+                {"siteId": ["SITE001"], "systemId": ["SYS001"], "days": ["7"]},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["systemId"], "SYS001")
+        mocked.assert_called_once_with("SITE001", 7, "SYS001")
 
     def test_sites_route(self):
         fake = {

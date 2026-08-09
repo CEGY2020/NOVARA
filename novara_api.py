@@ -1513,8 +1513,8 @@ def downsample(points: list[dict], max_points: int) -> list[dict]:
     return sampled
 
 
-def query_readings(site_id: str, days: int) -> dict:
-    from boto3.dynamodb.conditions import Key
+def query_readings(site_id: str, days: int, system_id: str | None = None) -> dict:
+    from boto3.dynamodb.conditions import Attr, Key
 
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
@@ -1523,11 +1523,15 @@ def query_readings(site_id: str, days: int) -> dict:
 
     table = dynamodb_table(TABLE_NAME)
     items = []
-    query_kwargs = {
+    query_kwargs: dict[str, Any] = {
         "KeyConditionExpression": Key("SiteID").eq(site_id)
         & Key("TimestampUTC").between(start_iso, end_iso),
         "ScanIndexForward": True,
     }
+    if system_id:
+        # Prefer exact SystemID match; also keep legacy rows that lack SystemID
+        # only when no system filter is requested.
+        query_kwargs["FilterExpression"] = Attr("SystemID").eq(system_id)
 
     while True:
         response = table.query(**query_kwargs)
@@ -1542,25 +1546,30 @@ def query_readings(site_id: str, days: int) -> dict:
         timestamp = item.get("TimestampUTC")
         if not timestamp:
             continue
-        points.append(
-            {
-                "t": timestamp,
-                "t1": to_float(item.get("T1")),
-                "t2": to_float(item.get("T2")),
-            }
-        )
+        point = {
+            "t": timestamp,
+            "t1": to_float(item.get("T1")),
+            "t2": to_float(item.get("T2")),
+        }
+        item_system = item.get("SystemID") or item.get("systemId")
+        if item_system:
+            point["systemId"] = str(item_system)
+        points.append(point)
 
     if len(points) > MAX_POINTS:
         points = downsample(points, MAX_POINTS)
 
     last_update = points[-1]["t"] if points else None
-    return {
+    result = {
         "points": points,
         "lastUpdate": last_update,
         "siteId": site_id,
         "days": days,
         "count": len(points),
     }
+    if system_id:
+        result["systemId"] = system_id
+    return result
 
 
 def _query_params(event: dict) -> dict[str, list[str]]:
@@ -1612,6 +1621,8 @@ def _request_body(event: dict) -> Any:
 
 def handle_readings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
     site_id = (params.get("siteId") or [DEFAULT_SITE_ID])[0] or DEFAULT_SITE_ID
+    system_id = (params.get("systemId") or params.get("SystemID") or [""])[0] or ""
+    system_id = str(system_id).strip()
     try:
         days = int((params.get("days") or ["7"])[0])
     except ValueError:
@@ -1620,7 +1631,7 @@ def handle_readings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
         return 400, {"error": "days must be one of 3, 7, or 30"}
 
     try:
-        return 200, query_readings(site_id, days)
+        return 200, query_readings(site_id, days, system_id or None)
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         return 500, {
