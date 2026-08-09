@@ -11,7 +11,7 @@ export AWS_REGION=us-west-2   # DynamoDB table region
 python3 server.py
 ```
 
-Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`.
+Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`. Pass `?siteId=SITE002` (or open a system from the Systems page) to chart another site.
 
 Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html) → `GET /api/sites` from `NOVARASites`.
 
@@ -33,6 +33,59 @@ Leads page: [http://localhost:8000/leads.html](http://localhost:8000/leads.html)
   "lastUpdate": "2026-08-02T20:00:00Z"
 }
 ```
+
+## Importing readings into NOVARAReadings
+
+Use `scripts/import_readings.py` to load exported temperature data into DynamoDB. Place files under `data/readings/` (recommended).
+
+### Exact CSV columns
+
+| Column | Required | Description |
+| --- | --- | --- |
+| `SiteID` | Yes\* | Partition key, e.g. `SITE001`. Aliases: `Site Id`, `site_id`, `Site` |
+| `TimestampUTC` | Yes | Sort key, ISO-8601 UTC preferred (`2026-08-01T14:30:00Z`). Aliases: `Timestamp`, `DateTime`, `Time` |
+| `T1` | Yes | Supply temperature °F. Aliases: `Supply`, `SupplyTemp` |
+| `T2` | Yes | Return temperature °F. Aliases: `Return`, `ReturnTemp` |
+| `RelayState` | No | Numeric relay state. Aliases: `Relay`, `relay_state` |
+
+\*Or omit `SiteID` and pass `--default-site-id SITE001`.
+
+Example (`data/readings/sample_readings.csv`):
+
+```csv
+SiteID,TimestampUTC,T1,T2,RelayState
+SITE001,2026-08-01T00:00:00Z,120.5,110.2,1
+SITE001,2026-08-01T01:00:00Z,121.0,110.8,1
+```
+
+### Where to put files
+
+```text
+data/readings/your_export.csv
+data/readings/your_export.xlsx   # optional; needs: pip install openpyxl
+```
+
+### Import commands
+
+```bash
+# Validate only
+python3 scripts/import_readings.py data/readings/your_export.csv --dry-run
+
+# Write to DynamoDB (skips existing SiteID+TimestampUTC keys)
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_REGION=[REDACTED]
+python3 scripts/import_readings.py data/readings/your_export.csv --execute
+
+# Map a legacy / friendly site name, or set a default site
+python3 scripts/import_readings.py data/readings/vista.csv --execute \
+  --site-map VS001=SITE001 --default-site-id SITE001
+
+# Replace values when the same key already exists
+python3 scripts/import_readings.py data/readings/your_export.csv --execute --overwrite
+```
+
+After import, open Temperature Trends for that site (e.g. `system-detail.html?siteId=SITE001`). The chart reads `T1`/`T2` via `GET /api/readings`. Savings pages do not use `NOVARAReadings` today; only temperature trends do.
 
 ### Sites response shape
 
