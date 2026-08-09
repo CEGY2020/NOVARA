@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Management Companies</title>
+  <link rel="stylesheet" href="dashboard.css?v=mgmt-companies-crud-1">
+</head>
+<body data-page="mgmt-companies">
+
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>Management Companies</h2>
+        <p>Property management companies and contacts</p>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" class="primary-btn" id="add-mgmt-company-btn" aria-haspopup="dialog">
+          + Add Management Company
+        </button>
+        <div id="user-profile-root"></div>
+      </div>
+    </header>
+
+    <p id="mgmt-companies-status" class="chart-status" aria-live="polite">Loading management companies…</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Mgmt Company ID</th>
+          <th>Name</th>
+          <th>Location</th>
+          <th>Contact</th>
+          <th>Phone</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="mgmt-companies-tbody">
+        <tr>
+          <td colspan="6">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="mgmt-company-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="mgmt-company-modal-title">
+    <div class="modal-header">
+      <div>
+        <h3 id="mgmt-company-modal-title">Add Management Company</h3>
+        <p id="mgmt-company-modal-subtitle">Create a new management company in NOVARAMgmtCompanies</p>
+      </div>
+      <button type="button" class="modal-close" id="mgmt-company-modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="mgmt-company-form" class="site-form" novalidate>
+      <input type="hidden" id="mgmt-company-mode" value="create">
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>MgmtCompanyID <em>*</em></span>
+          <input type="text" id="field-mgmtCompanyId" name="MgmtCompanyID" required maxlength="64" autocomplete="off" readonly aria-readonly="true">
+          <small class="field-hint" id="mgmt-company-id-hint">Auto-generated sequentially (MGT001…)</small>
+        </label>
+        <label class="form-field">
+          <span>Name <em>*</em></span>
+          <input type="text" id="field-name" name="Name" required maxlength="120" autocomplete="organization">
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Address</span>
+          <input type="text" id="field-address" name="Address" maxlength="200" autocomplete="street-address">
+        </label>
+        <label class="form-field">
+          <span>City</span>
+          <input type="text" id="field-city" name="City" maxlength="80" autocomplete="address-level2">
+        </label>
+        <label class="form-field">
+          <span>State</span>
+          <input type="text" id="field-state" name="State" maxlength="40" autocomplete="address-level1">
+        </label>
+        <label class="form-field">
+          <span>Zip</span>
+          <input type="text" id="field-zip" name="Zip" maxlength="20" autocomplete="postal-code">
+        </label>
+        <label class="form-field">
+          <span>ContactName</span>
+          <input type="text" id="field-contactName" name="ContactName" maxlength="120" autocomplete="name">
+        </label>
+        <label class="form-field">
+          <span>ContactEmail</span>
+          <input type="email" id="field-contactEmail" name="ContactEmail" maxlength="160" autocomplete="email">
+        </label>
+        <label class="form-field">
+          <span>ContactPhone</span>
+          <input type="tel" id="field-contactPhone" name="ContactPhone" maxlength="40" autocomplete="tel">
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Notes</span>
+          <textarea id="field-notes" name="Notes" rows="3" maxlength="2000" placeholder="Optional notes"></textarea>
+        </label>
+      </div>
+
+      <p id="mgmt-company-form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" id="mgmt-company-cancel-btn">Cancel</button>
+        <button type="submit" class="primary-btn" id="mgmt-company-save-btn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="api-config.js?v=mgmt-companies-crud-1"></script>
+<script src="api-client.js?v=mgmt-companies-crud-1"></script>
+<script src="nav.js?v=mgmt-companies-crud-1"></script>
+<script src="mgmt-companies.js?v=mgmt-companies-crud-1"></script>
+</body>
+</html>

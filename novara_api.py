@@ -15,6 +15,9 @@ TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
 SYSTEMS_TABLE_NAME = os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems")
 OWNERS_TABLE_NAME = os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners")
+MGMT_COMPANIES_TABLE_NAME = os.environ.get(
+    "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
+)
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
@@ -25,6 +28,7 @@ SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
 
 _systems_table_ready = False
 _owners_table_ready = False
+_mgmt_companies_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -606,6 +610,230 @@ def save_owner(item: dict, *, mode: str = "upsert") -> dict:
     }
 
 
+def ensure_mgmt_companies_table() -> str:
+    """Create NOVARAMgmtCompanies if missing (pay-per-request, MgmtCompanyID hash key)."""
+    global _mgmt_companies_table_ready
+    if _mgmt_companies_table_ready:
+        return MGMT_COMPANIES_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=MGMT_COMPANIES_TABLE_NAME)
+        _mgmt_companies_table_ready = True
+        return MGMT_COMPANIES_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=MGMT_COMPANIES_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "MgmtCompanyID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "MgmtCompanyID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=MGMT_COMPANIES_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _mgmt_companies_table_ready = True
+    return MGMT_COMPANIES_TABLE_NAME
+
+
+def normalize_mgmt_company(item: dict) -> dict:
+    company_id = first_present(
+        item, ("MgmtCompanyID", "mgmtCompanyId", "mgmt_company_id", "id")
+    )
+    name = first_present(
+        item,
+        ("Name", "name", "MgmtCompanyName", "mgmtCompanyName"),
+        default=company_id or "Unknown management company",
+    )
+    address = first_present(
+        item, ("Address", "address", "StreetAddress", "streetAddress"), default=""
+    )
+    city = first_present(item, ("City", "city"), default="")
+    state = first_present(item, ("State", "state"), default="")
+    zip_code = first_present(item, ("Zip", "zip", "ZipCode", "zipCode"), default="")
+    contact_name = first_present(
+        item, ("ContactName", "contactName", "contact_name"), default=""
+    )
+    contact_email = first_present(
+        item,
+        ("ContactEmail", "contactEmail", "contact_email", "Email", "email"),
+        default="",
+    )
+    contact_phone = first_present(
+        item,
+        ("ContactPhone", "contactPhone", "contact_phone", "Phone", "phone"),
+        default="",
+    )
+    notes = first_present(item, ("Notes", "notes"), default="")
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    location = format_location(
+        {"City": city, "State": state, "Address": address}
+    )
+    return {
+        "mgmtCompanyId": "" if company_id is None else str(company_id),
+        "name": str(name),
+        "mgmtCompanyName": str(name),
+        "address": str(address or ""),
+        "city": str(city or ""),
+        "state": str(state or ""),
+        "zip": str(zip_code or ""),
+        "location": location,
+        "contactName": str(contact_name or ""),
+        "contactEmail": str(contact_email or ""),
+        "contactPhone": str(contact_phone or ""),
+        "notes": str(notes or ""),
+        "updatedAt": str(updated_at or ""),
+    }
+
+
+def scan_mgmt_companies() -> dict:
+    ensure_mgmt_companies_table()
+    table = dynamodb_table(MGMT_COMPANIES_TABLE_NAME)
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    companies = [normalize_mgmt_company(json_safe(item)) for item in items]
+    companies.sort(
+        key=lambda row: (
+            (row.get("name") or "").lower(),
+            (row.get("mgmtCompanyId") or "").lower(),
+        )
+    )
+    return {
+        "table": MGMT_COMPANIES_TABLE_NAME,
+        "count": len(companies),
+        "mgmtCompanies": companies,
+    }
+
+
+def parse_mgmt_company_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming management company create/update payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    company_id = _as_text(
+        body.get("MgmtCompanyID")
+        if "MgmtCompanyID" in body
+        else body.get("mgmtCompanyId")
+    )
+    name = _as_text(
+        body.get("Name")
+        if "Name" in body
+        else body.get("name")
+        if "name" in body
+        else body.get("MgmtCompanyName")
+        if "MgmtCompanyName" in body
+        else body.get("mgmtCompanyName")
+    )
+    if not company_id:
+        return None, "MgmtCompanyID is required"
+    if not name:
+        return None, "Name is required"
+    if len(company_id) > 64:
+        return None, "MgmtCompanyID must be 64 characters or fewer"
+    if len(name) > 120:
+        return None, "Name must be 120 characters or fewer"
+
+    address = _as_text(
+        body.get("Address") if "Address" in body else body.get("address")
+    )
+    city = _as_text(body.get("City") if "City" in body else body.get("city"))
+    state = _as_text(body.get("State") if "State" in body else body.get("state"))
+    zip_code = _as_text(body.get("Zip") if "Zip" in body else body.get("zip"))
+    contact_name = _as_text(
+        body.get("ContactName") if "ContactName" in body else body.get("contactName")
+    )
+    contact_email = _as_text(
+        body.get("ContactEmail")
+        if "ContactEmail" in body
+        else body.get("contactEmail")
+    )
+    contact_phone = _as_text(
+        body.get("ContactPhone")
+        if "ContactPhone" in body
+        else body.get("contactPhone")
+    )
+    notes = _as_text(body.get("Notes") if "Notes" in body else body.get("notes"))
+
+    if contact_email and "@" not in contact_email:
+        return None, "ContactEmail must be a valid email address"
+
+    item = {
+        "MgmtCompanyID": company_id,
+        "Name": name,
+        "Address": address,
+        "City": city,
+        "State": state,
+        "Zip": zip_code,
+        "ContactName": contact_name,
+        "ContactEmail": contact_email,
+        "ContactPhone": contact_phone,
+        "Notes": notes,
+        "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    return item, None
+
+
+def save_mgmt_company(item: dict, *, mode: str = "upsert") -> dict:
+    """Write a management company to DynamoDB. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    ensure_mgmt_companies_table()
+    table = dynamodb_table(MGMT_COMPANIES_TABLE_NAME)
+    kwargs = {"Item": item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(MgmtCompanyID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(MgmtCompanyID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(
+                    f"MgmtCompanyID '{item['MgmtCompanyID']}' already exists"
+                ) from exc
+            if mode == "update":
+                raise LookupError(
+                    f"MgmtCompanyID '{item['MgmtCompanyID']}' was not found"
+                ) from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": MGMT_COMPANIES_TABLE_NAME,
+        "mgmtCompany": normalize_mgmt_company(item),
+    }
+
+
 def _sync_site_systems_count(site_id: str) -> None:
     """Update NOVARASites.Systems for site_id from live NOVARASystems rows."""
     if not site_id:
@@ -1081,6 +1309,67 @@ def handle_owner_write_request(
         }
 
 
+def handle_mgmt_companies_request() -> tuple[int, dict]:
+    try:
+        return 200, scan_mgmt_companies()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load management companies from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def _mgmt_company_id_from_path(path: str) -> str | None:
+    """Extract MgmtCompanyID from /api/mgmt-companies/{id} (or /mgmt-companies/{id})."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/mgmt-companies/", "/mgmt-companies/"):
+        if marker not in normalized:
+            continue
+        company_id = normalized.split(marker, 1)[1]
+        if company_id and "/" not in company_id:
+            return company_id
+    return None
+
+
+def handle_mgmt_company_write_request(
+    body: dict | None,
+    *,
+    mode: str,
+    company_id: str | None = None,
+) -> tuple[int, dict]:
+    payload = dict(body or {}) if isinstance(body, dict) else body
+    if company_id:
+        if not isinstance(payload, dict):
+            payload = {}
+        else:
+            payload = dict(payload)
+        body_id = _as_text(
+            payload.get("MgmtCompanyID")
+            if "MgmtCompanyID" in payload
+            else payload.get("mgmtCompanyId")
+        )
+        if body_id and body_id != company_id:
+            return 400, {"error": "MgmtCompanyID in path and body must match"}
+        payload["MgmtCompanyID"] = company_id
+
+    item, error = parse_mgmt_company_payload(payload)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_mgmt_company(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save management company to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -1088,6 +1377,7 @@ def handle_health_request() -> tuple[int, dict]:
         "sitesTable": SITES_TABLE_NAME,
         "systemsTable": SYSTEMS_TABLE_NAME,
         "ownersTable": OWNERS_TABLE_NAME,
+        "mgmtCompaniesTable": MGMT_COMPANIES_TABLE_NAME,
     }
 
 
@@ -1135,6 +1425,24 @@ def route_request(
         if method == "PUT":
             return handle_owner_write_request(
                 body, mode="update", owner_id=owner_path_id
+            )
+        return 405, {"error": "Method not allowed"}
+    if (
+        normalized.endswith("/api/mgmt-companies")
+        or normalized == "/mgmt-companies"
+    ):
+        if method == "GET":
+            return handle_mgmt_companies_request()
+        if method == "POST":
+            return handle_mgmt_company_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_mgmt_company_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    mgmt_company_path_id = _mgmt_company_id_from_path(normalized)
+    if mgmt_company_path_id is not None:
+        if method == "PUT":
+            return handle_mgmt_company_write_request(
+                body, mode="update", company_id=mgmt_company_path_id
             )
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":

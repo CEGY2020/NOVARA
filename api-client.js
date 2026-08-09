@@ -1,4 +1,4 @@
-/* Shared NOVARA JSON API client for readings + sites + systems + owners. */
+/* Shared NOVARA JSON API client for readings + sites + systems + owners + mgmt companies. */
 (function (global) {
   function apiBase() {
     var base = global.NOVARA_API_BASE;
@@ -124,6 +124,24 @@
         "/api/owners/" + encodeURIComponent(String(id)),
         "PUT",
         owner
+      );
+    },
+    getMgmtCompanies: function () {
+      return fetchJson("/api/mgmt-companies");
+    },
+    createMgmtCompany: function (company) {
+      return sendJson("/api/mgmt-companies", "POST", company);
+    },
+    updateMgmtCompany: function (company) {
+      var id =
+        company && (company.MgmtCompanyID || company.mgmtCompanyId);
+      if (!id) {
+        return Promise.reject(new Error("MgmtCompanyID is required"));
+      }
+      return sendJson(
+        "/api/mgmt-companies/" + encodeURIComponent(String(id)),
+        "PUT",
+        company
       );
     },
   };

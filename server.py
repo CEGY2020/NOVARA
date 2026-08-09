@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners APIs."""
+"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners/mgmt-companies APIs."""
 
 from __future__ import annotations
 
@@ -43,6 +43,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/owners":
             status, payload = novara_api.handle_owners_request()
+            self._send_json(status, payload)
+            return
+        if parsed.path == "/api/mgmt-companies":
+            status, payload = novara_api.handle_mgmt_companies_request()
             self._send_json(status, payload)
             return
         if parsed.path == "/api/health":
@@ -90,6 +94,25 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/mgmt-companies":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_mgmt_company_write_request(
+                body, mode=mode
+            )
+            self._send_json(status, payload)
+            return
+        mgmt_company_path_id = novara_api._mgmt_company_id_from_path(parsed.path)
+        if mgmt_company_path_id is not None and mode == "update":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_mgmt_company_write_request(
+                body, mode=mode, company_id=mgmt_company_path_id
+            )
+            self._send_json(status, payload)
+            return
         self.send_error(404)
 
     def _read_json_body(self):
@@ -123,13 +146,15 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
-        "NOVARA server on http://0.0.0.0:%s (readings=%s sites=%s systems=%s owners=%s)"
+        "NOVARA server on http://0.0.0.0:%s "
+        "(readings=%s sites=%s systems=%s owners=%s mgmtCompanies=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
             novara_api.SITES_TABLE_NAME,
             novara_api.SYSTEMS_TABLE_NAME,
             novara_api.OWNERS_TABLE_NAME,
+            novara_api.MGMT_COMPANIES_TABLE_NAME,
         )
     )
     try:
