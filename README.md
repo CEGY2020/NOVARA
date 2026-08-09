@@ -21,6 +21,8 @@ Owners page: [http://localhost:8000/owners.html](http://localhost:8000/owners.ht
 
 Management Companies page: [http://localhost:8000/mgmt-companies.html](http://localhost:8000/mgmt-companies.html) → `GET/POST/PUT /api/mgmt-companies` from `NOVARAMgmtCompanies` (table is created automatically if missing).
 
+Leads page: [http://localhost:8000/leads.html](http://localhost:8000/leads.html) → `GET/POST/PUT /api/leads` from `NOVARALeads` (table is created automatically if missing).
+
 ### Readings response shape
 
 ```json
@@ -75,6 +77,10 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `POST /api/mgmt-companies` | Create management company in `NOVARAMgmtCompanies` (JSON body) |
 | `PUT /api/mgmt-companies` | Update existing management company in `NOVARAMgmtCompanies` (JSON body) |
 | `PUT /api/mgmt-companies/{id}` | Update management company by `MgmtCompanyID` path (JSON body) |
+| `GET /api/leads` | `NOVARALeads` |
+| `POST /api/leads` | Create lead in `NOVARALeads` (JSON body) |
+| `PUT /api/leads` | Update existing lead in `NOVARALeads` (JSON body) |
+| `PUT /api/leads/{id}` | Update lead by `LeadID` path (JSON body) |
 | `GET /api/health` | health check |
 
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner` (`OwnerID` from `NOVARAOwners`), `MgmtCompany` (`MgmtCompanyID` from `NOVARAMgmtCompanies`), `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
@@ -84,6 +90,8 @@ Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (re
 Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 
 Management Companies create/update body fields: `MgmtCompanyID` (required, `MGT###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
+
+Leads create/update body fields: `LeadID` (required, `LD###`), `CompanyName` / `SiteName` (required), `ContactName`, `ContactEmail`, `ContactPhone`, `Source` (`Referral`/`Website`/`Rinnai`/`Trade Show`/`Other`), `SystemType` (`DHW`/`Pool`/`HVAC`/`Other`), `Stage` (`New Lead`/`Contacted`/`Qualified`/`Proposal Sent`/`Won`/`Lost`), `NextFollowUp` (`YYYY-MM-DD`), `AssignedTo`, `EstimatedSavings` (number, optional), `Notes` (optional).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 

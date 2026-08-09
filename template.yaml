@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/owners, /api/mgmt-companies)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/owners, /api/mgmt-companies, /api/leads)
 
 Parameters:
   ReadingsTableName:
@@ -18,6 +18,9 @@ Parameters:
   MgmtCompaniesTableName:
     Type: String
     Default: NOVARAMgmtCompanies
+  LeadsTableName:
+    Type: String
+    Default: NOVARALeads
   MaxChartPoints:
     Type: Number
     Default: 720
@@ -37,7 +40,7 @@ Resources:
       FunctionName: novara-api
       Handler: lambda_function.handler
       CodeUri: .
-      Description: NOVARA readings/sites/systems/owners/mgmt-companies JSON API backed by DynamoDB
+      Description: NOVARA readings/sites/systems/owners/mgmt-companies/leads JSON API backed by DynamoDB
       Environment:
         Variables:
           NOVARA_READINGS_TABLE: !Ref ReadingsTableName
@@ -45,6 +48,7 @@ Resources:
           NOVARA_SYSTEMS_TABLE: !Ref SystemsTableName
           NOVARA_OWNERS_TABLE: !Ref OwnersTableName
           NOVARA_MGMT_COMPANIES_TABLE: !Ref MgmtCompaniesTableName
+          NOVARA_LEADS_TABLE: !Ref LeadsTableName
           NOVARA_MAX_CHART_POINTS: !Ref MaxChartPoints
       Policies:
         - Statement:
@@ -64,11 +68,13 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}/index/*
       Events:
         Readings:
           Type: HttpApi
@@ -160,6 +166,30 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/mgmt-companies/{mgmtCompanyId}
             Method: PUT
+        LeadsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/leads
+            Method: GET
+        LeadsCreate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/leads
+            Method: POST
+        LeadsUpdate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/leads
+            Method: PUT
+        LeadsUpdateById:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/leads/{leadId}
+            Method: PUT
         Health:
           Type: HttpApi
           Properties:
@@ -226,3 +256,6 @@ Outputs:
   MgmtCompaniesEndpoint:
     Description: Management companies endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/mgmt-companies"
+  LeadsEndpoint:
+    Description: Leads endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/leads"

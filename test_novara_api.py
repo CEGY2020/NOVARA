@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
@@ -804,6 +805,214 @@ class RouteTests(unittest.TestCase):
         self.assertIn("mgmt-companies.html", source)
         self.assertIn("Management Companies", source)
 
+    def test_leads_route(self):
+        fake = {
+            "table": "NOVARALeads",
+            "count": 1,
+            "leads": [
+                {
+                    "leadId": "LD001",
+                    "companyName": "Vista Springs",
+                    "stage": "New Lead",
+                    "nextFollowUp": "2026-09-01",
+                    "contactName": "Alex Rivera",
+                }
+            ],
+        }
+        with patch.object(novara_api, "scan_leads", return_value=fake):
+            status, payload = novara_api.route_request("GET", "/api/leads", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["leads"][0]["leadId"], "LD001")
+
+    def test_create_lead_route(self):
+        body = {
+            "LeadID": "LD001",
+            "CompanyName": "Vista Springs",
+            "Stage": "New Lead",
+            "Source": "Website",
+        }
+        fake = {"ok": True, "table": "NOVARALeads", "lead": {"leadId": "LD001"}}
+        with patch.object(novara_api, "save_lead", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_lead_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "POST", "/api/leads", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+
+    def test_update_lead_route(self):
+        body = {
+            "LeadID": "LD001",
+            "CompanyName": "Vista Springs",
+            "Stage": "Contacted",
+        }
+        fake = {"ok": True, "table": "NOVARALeads", "lead": {"leadId": "LD001"}}
+        with patch.object(novara_api, "save_lead", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_lead_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "PUT", "/api/leads", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+
+    def test_update_lead_by_id_route(self):
+        body = {
+            "CompanyName": "Vista Springs",
+            "Stage": "Qualified",
+        }
+        fake = {"ok": True, "table": "NOVARALeads", "lead": {"leadId": "LD001"}}
+        with patch.object(novara_api, "save_lead", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "PUT", "/api/leads/LD001", {}, body
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+        self.assertEqual(mocked.call_args.args[0]["LeadID"], "LD001")
+
+    def test_update_lead_by_id_mismatch(self):
+        status, payload = novara_api.route_request(
+            "PUT",
+            "/api/leads/LD001",
+            {},
+            {"LeadID": "LD002", "CompanyName": "Mismatch"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("must match", payload["error"])
+
+    def test_create_lead_validation(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/leads", {}, {"Stage": "New Lead"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("LeadID", payload["error"])
+
+    def test_parse_lead_payload_requires_company_name(self):
+        item, error = novara_api.parse_lead_payload(
+            {"LeadID": "LD001", "ContactName": "Alex"}
+        )
+        self.assertIsNone(item)
+        self.assertIn("CompanyName", error)
+
+    def test_parse_lead_payload_accepts_fields(self):
+        item, error = novara_api.parse_lead_payload(
+            {
+                "leadId": "LD002",
+                "siteName": "Summit Residences",
+                "contactName": "Sam Lee",
+                "contactEmail": "sam@example.com",
+                "contactPhone": "303-555-0199",
+                "source": "Referral",
+                "systemType": "DHW",
+                "stage": "Qualified",
+                "nextFollowUp": "2026-10-15",
+                "assignedTo": "Steve Nold",
+                "estimatedSavings": 12500.5,
+                "notes": "Interested in pool retrofit",
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["LeadID"], "LD002")
+        self.assertEqual(item["CompanyName"], "Summit Residences")
+        self.assertEqual(item["Source"], "Referral")
+        self.assertEqual(item["SystemType"], "DHW")
+        self.assertEqual(item["Stage"], "Qualified")
+        self.assertEqual(item["NextFollowUp"], "2026-10-15")
+        self.assertEqual(item["AssignedTo"], "Steve Nold")
+        self.assertEqual(item["EstimatedSavings"], Decimal("12500.5"))
+        self.assertEqual(item["Notes"], "Interested in pool retrofit")
+
+    def test_parse_lead_payload_rejects_bad_source(self):
+        item, error = novara_api.parse_lead_payload(
+            {
+                "LeadID": "LD003",
+                "CompanyName": "Bad Source Co",
+                "Source": "Cold Call",
+            }
+        )
+        self.assertIsNone(item)
+        self.assertIn("Source", error)
+
+    def test_normalize_lead(self):
+        lead = novara_api.normalize_lead(
+            {
+                "LeadID": "LD001",
+                "CompanyName": "Vista Springs",
+                "Stage": "New Lead",
+                "NextFollowUp": "2026-09-01",
+                "ContactName": "Alex Rivera",
+                "EstimatedSavings": Decimal("1000"),
+            }
+        )
+        self.assertEqual(lead["leadId"], "LD001")
+        self.assertEqual(lead["companyName"], "Vista Springs")
+        self.assertEqual(lead["siteName"], "Vista Springs")
+        self.assertEqual(lead["stage"], "New Lead")
+        self.assertEqual(lead["nextFollowUp"], "2026-09-01")
+        self.assertEqual(lead["contactName"], "Alex Rivera")
+        self.assertEqual(lead["estimatedSavings"], 1000)
+
+    def test_leads_js_keeps_edit_mode_after_form_reset(self):
+        source = Path(__file__).resolve().parent.joinpath("leads.js").read_text(
+            encoding="utf-8"
+        )
+        open_modal = source.split("function openModal", 1)[1].split(
+            "function closeModal", 1
+        )[0]
+        reset_at = open_modal.find("form.reset()")
+        mode_at = open_modal.find("currentMode = mode")
+        self.assertNotEqual(reset_at, -1, "openModal should call form.reset()")
+        self.assertNotEqual(mode_at, -1, "openModal should set currentMode")
+        self.assertLess(
+            reset_at,
+            mode_at,
+            "currentMode must be set after form.reset() so Edit Save uses PUT",
+        )
+        save_lead = source.split("function saveLead", 1)[1].split(
+            "if (addBtn)", 1
+        )[0]
+        self.assertIn("currentMode === \"edit\"", save_lead)
+        self.assertIn("api.updateLead", save_lead)
+        self.assertIn("api.createLead", save_lead)
+
+    def test_api_client_update_lead_uses_path_id(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        update_lead = source.split("updateLead:", 1)[1][:500]
+        self.assertIn("/api/leads/", update_lead)
+        self.assertIn("encodeURIComponent", update_lead)
+
+    def test_nav_includes_leads(self):
+        source = Path(__file__).resolve().parent.joinpath("nav.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id: "leads"', source)
+        self.assertIn("leads.html", source)
+        self.assertIn("Leads", source)
+
+    def test_leads_html_has_add_button_and_modal(self):
+        source = Path(__file__).resolve().parent.joinpath("leads.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id="add-lead-btn"', source)
+        self.assertIn('id="lead-modal"', source)
+        self.assertIn("NextFollowUp", source)
+        self.assertIn("EstimatedSavings", source)
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)
@@ -813,6 +1022,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["systemsTable"], "NOVARASystems")
         self.assertEqual(payload["ownersTable"], "NOVARAOwners")
         self.assertEqual(payload["mgmtCompaniesTable"], "NOVARAMgmtCompanies")
+        self.assertEqual(payload["leadsTable"], "NOVARALeads")
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})

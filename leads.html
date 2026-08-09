@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Leads</title>
+  <link rel="stylesheet" href="dashboard.css?v=leads-crud-1">
+</head>
+<body data-page="leads">
+
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>Leads</h2>
+        <p>Sales pipeline and follow-ups</p>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" class="primary-btn" id="add-lead-btn" aria-haspopup="dialog">
+          + Add Lead
+        </button>
+        <div id="user-profile-root"></div>
+      </div>
+    </header>
+
+    <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Lead ID</th>
+          <th>Company / Site</th>
+          <th>Contact</th>
+          <th>Stage</th>
+          <th>Next Follow-up</th>
+          <th>Assigned To</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="leads-tbody">
+        <tr>
+          <td colspan="7">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="lead-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="lead-modal-title">
+    <div class="modal-header">
+      <div>
+        <h3 id="lead-modal-title">Add Lead</h3>
+        <p id="lead-modal-subtitle">Create a new lead in NOVARALeads</p>
+      </div>
+      <button type="button" class="modal-close" id="lead-modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="lead-form" class="site-form" novalidate>
+      <input type="hidden" id="lead-mode" value="create">
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>LeadID <em>*</em></span>
+          <input type="text" id="field-leadId" name="LeadID" required maxlength="64" autocomplete="off" readonly aria-readonly="true">
+          <small class="field-hint" id="lead-id-hint">Auto-generated sequentially (LD001…)</small>
+        </label>
+        <label class="form-field">
+          <span>CompanyName / SiteName <em>*</em></span>
+          <input type="text" id="field-companyName" name="CompanyName" required maxlength="160" autocomplete="organization">
+        </label>
+        <label class="form-field">
+          <span>ContactName</span>
+          <input type="text" id="field-contactName" name="ContactName" maxlength="120" autocomplete="name">
+        </label>
+        <label class="form-field">
+          <span>ContactEmail</span>
+          <input type="email" id="field-contactEmail" name="ContactEmail" maxlength="160" autocomplete="email">
+        </label>
+        <label class="form-field">
+          <span>ContactPhone</span>
+          <input type="tel" id="field-contactPhone" name="ContactPhone" maxlength="40" autocomplete="tel">
+        </label>
+        <label class="form-field">
+          <span>Source</span>
+          <select id="field-source" name="Source">
+            <option value="">Select…</option>
+            <option value="Referral">Referral</option>
+            <option value="Website">Website</option>
+            <option value="Rinnai">Rinnai</option>
+            <option value="Trade Show">Trade Show</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>SystemType</span>
+          <select id="field-systemType" name="SystemType">
+            <option value="">Select…</option>
+            <option value="DHW">DHW</option>
+            <option value="Pool">Pool</option>
+            <option value="HVAC">HVAC</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Stage</span>
+          <select id="field-stage" name="Stage">
+            <option value="New Lead">New Lead</option>
+            <option value="Contacted">Contacted</option>
+            <option value="Qualified">Qualified</option>
+            <option value="Proposal Sent">Proposal Sent</option>
+            <option value="Won">Won</option>
+            <option value="Lost">Lost</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>NextFollowUp</span>
+          <input type="date" id="field-nextFollowUp" name="NextFollowUp">
+        </label>
+        <label class="form-field">
+          <span>AssignedTo</span>
+          <input type="text" id="field-assignedTo" name="AssignedTo" maxlength="120" autocomplete="off">
+        </label>
+        <label class="form-field">
+          <span>EstimatedSavings</span>
+          <input type="number" id="field-estimatedSavings" name="EstimatedSavings" min="0" step="any" placeholder="Optional">
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Notes</span>
+          <textarea id="field-notes" name="Notes" rows="3" maxlength="2000" placeholder="Optional notes"></textarea>
+        </label>
+      </div>
+
+      <p id="lead-form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" id="lead-cancel-btn">Cancel</button>
+        <button type="submit" class="primary-btn" id="lead-save-btn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="api-config.js?v=leads-crud-1"></script>
+<script src="api-client.js?v=leads-crud-1"></script>
+<script src="nav.js?v=leads-crud-1"></script>
+<script src="leads.js?v=leads-crud-1"></script>
+</body>
+</html>
