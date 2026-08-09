@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners"),
     )
     parser.add_argument(
+        "--mgmt-companies-table",
+        default=os.environ.get(
+            "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
+        ),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -104,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
             f"SitesTableName={args.sites_table}",
             f"SystemsTableName={args.systems_table}",
             f"OwnersTableName={args.owners_table}",
+            f"MgmtCompaniesTableName={args.mgmt_companies_table}",
         ],
         env=env,
     )
@@ -209,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         "/api/sites",
         "/api/systems",
         "/api/owners",
+        "/api/mgmt-companies",
         "/api/readings?siteId=SITE001&days=7",
     ):
         url = f"{api_url}{path}"
@@ -272,6 +280,64 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  -> {resp.status} {updated}")
         if not updated.get("ok"):
             print("ERROR: PUT /api/owners/{id} did not return ok", file=sys.stderr)
+            return 1
+
+    # Verify Management Companies create + path update persist to NOVARAMgmtCompanies.
+    mgmt_smoke_id = "MGT_SMOKE_DEPLOY"
+    mgmt_create_url = f"{api_url}/api/mgmt-companies"
+    mgmt_create_body = json.dumps(
+        {
+            "MgmtCompanyID": mgmt_smoke_id,
+            "Name": "Deploy Smoke Mgmt Company",
+            "City": "Denver",
+            "State": "CO",
+        }
+    ).encode("utf-8")
+    print(f"POST {mgmt_create_url}")
+    mgmt_create_req = urllib.request.Request(
+        mgmt_create_url,
+        data=mgmt_create_body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(mgmt_create_req, timeout=30) as resp:
+            mgmt_created = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} {mgmt_created}")
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        if exc.code != 409:
+            print(
+                f"ERROR: POST /api/mgmt-companies failed: {exc.code} {err_body}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"  -> {exc.code} {err_body} (ok for redeploy)")
+
+    mgmt_update_url = f"{api_url}/api/mgmt-companies/{mgmt_smoke_id}"
+    mgmt_update_body = json.dumps(
+        {
+            "MgmtCompanyID": mgmt_smoke_id,
+            "Name": "Deploy Smoke Mgmt Company Updated",
+            "City": "Boulder",
+            "State": "CO",
+        }
+    ).encode("utf-8")
+    print(f"PUT {mgmt_update_url}")
+    mgmt_update_req = urllib.request.Request(
+        mgmt_update_url,
+        data=mgmt_update_body,
+        method="PUT",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(mgmt_update_req, timeout=30) as resp:
+        mgmt_updated = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {mgmt_updated}")
+        if not mgmt_updated.get("ok"):
+            print(
+                "ERROR: PUT /api/mgmt-companies/{id} did not return ok",
+                file=sys.stderr,
+            )
             return 1
 
     print("Deploy complete.")

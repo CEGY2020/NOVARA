@@ -586,6 +586,199 @@ class RouteTests(unittest.TestCase):
         self.assertIn("/api/owners/", update_owner)
         self.assertIn("encodeURIComponent", update_owner)
 
+    def test_mgmt_companies_route(self):
+        fake = {
+            "table": "NOVARAMgmtCompanies",
+            "count": 1,
+            "mgmtCompanies": [
+                {
+                    "mgmtCompanyId": "MGT001",
+                    "name": "Peak Property Management",
+                    "city": "Denver",
+                    "state": "CO",
+                    "contactName": "Alex Rivera",
+                    "contactPhone": "303-555-0200",
+                }
+            ],
+        }
+        with patch.object(novara_api, "scan_mgmt_companies", return_value=fake):
+            status, payload = novara_api.route_request(
+                "GET", "/api/mgmt-companies", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["mgmtCompanies"][0]["mgmtCompanyId"], "MGT001")
+
+    def test_create_mgmt_company_route(self):
+        body = {
+            "MgmtCompanyID": "MGT001",
+            "Name": "Peak Property Management",
+            "City": "Denver",
+            "State": "CO",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAMgmtCompanies",
+            "mgmtCompany": {"mgmtCompanyId": "MGT001"},
+        }
+        with patch.object(novara_api, "save_mgmt_company", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_mgmt_company_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "POST", "/api/mgmt-companies", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+
+    def test_update_mgmt_company_route(self):
+        body = {
+            "MgmtCompanyID": "MGT001",
+            "Name": "Peak Property Management",
+            "ContactName": "Alex Rivera",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAMgmtCompanies",
+            "mgmtCompany": {"mgmtCompanyId": "MGT001"},
+        }
+        with patch.object(novara_api, "save_mgmt_company", return_value=fake) as mocked:
+            with patch.object(
+                novara_api,
+                "parse_mgmt_company_payload",
+                return_value=(body, None),
+            ):
+                status, payload = novara_api.route_request(
+                    "PUT", "/api/mgmt-companies", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+
+    def test_update_mgmt_company_by_id_route(self):
+        body = {
+            "Name": "Peak Property Management",
+            "ContactName": "Alex Rivera",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAMgmtCompanies",
+            "mgmtCompany": {"mgmtCompanyId": "MGT001"},
+        }
+        with patch.object(novara_api, "save_mgmt_company", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "PUT", "/api/mgmt-companies/MGT001", {}, body
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+        self.assertEqual(mocked.call_args.args[0]["MgmtCompanyID"], "MGT001")
+
+    def test_update_mgmt_company_by_id_mismatch(self):
+        status, payload = novara_api.route_request(
+            "PUT",
+            "/api/mgmt-companies/MGT001",
+            {},
+            {"MgmtCompanyID": "MGT002", "Name": "Mismatch"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("must match", payload["error"])
+
+    def test_create_mgmt_company_validation(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/mgmt-companies", {}, {"City": "Denver"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("MgmtCompanyID", payload["error"])
+
+    def test_parse_mgmt_company_payload_requires_name(self):
+        item, error = novara_api.parse_mgmt_company_payload(
+            {"MgmtCompanyID": "MGT001", "Address": "123 Main"}
+        )
+        self.assertIsNone(item)
+        self.assertIn("Name", error)
+
+    def test_parse_mgmt_company_payload_accepts_fields(self):
+        item, error = novara_api.parse_mgmt_company_payload(
+            {
+                "mgmtCompanyId": "MGT002",
+                "name": "Summit Management",
+                "address": "100 Market St",
+                "city": "Boulder",
+                "state": "CO",
+                "zip": "80301",
+                "contactName": "Sam Lee",
+                "contactEmail": "sam@example.com",
+                "contactPhone": "303-555-0199",
+                "notes": "Preferred billing contact",
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["MgmtCompanyID"], "MGT002")
+        self.assertEqual(item["Name"], "Summit Management")
+        self.assertEqual(item["ContactEmail"], "sam@example.com")
+        self.assertEqual(item["Notes"], "Preferred billing contact")
+
+    def test_normalize_mgmt_company(self):
+        company = novara_api.normalize_mgmt_company(
+            {
+                "MgmtCompanyID": "MGT001",
+                "Name": "Peak Property Management",
+                "City": "Denver",
+                "State": "CO",
+                "ContactName": "Alex Rivera",
+                "ContactPhone": "303-555-0200",
+            }
+        )
+        self.assertEqual(company["mgmtCompanyId"], "MGT001")
+        self.assertEqual(company["name"], "Peak Property Management")
+        self.assertEqual(company["location"], "Denver, CO")
+        self.assertEqual(company["contactName"], "Alex Rivera")
+
+    def test_mgmt_companies_js_keeps_edit_mode_after_form_reset(self):
+        source = Path(__file__).resolve().parent.joinpath(
+            "mgmt-companies.js"
+        ).read_text(encoding="utf-8")
+        open_modal = source.split("function openModal", 1)[1].split(
+            "function closeModal", 1
+        )[0]
+        reset_at = open_modal.find("form.reset()")
+        mode_at = open_modal.find("currentMode = mode")
+        self.assertNotEqual(reset_at, -1, "openModal should call form.reset()")
+        self.assertNotEqual(mode_at, -1, "openModal should set currentMode")
+        self.assertLess(
+            reset_at,
+            mode_at,
+            "currentMode must be set after form.reset() so Edit Save uses PUT",
+        )
+        save_company = source.split("function saveMgmtCompany", 1)[1].split(
+            "if (addBtn)", 1
+        )[0]
+        self.assertIn("currentMode === \"edit\"", save_company)
+        self.assertIn("api.updateMgmtCompany", save_company)
+        self.assertIn("api.createMgmtCompany", save_company)
+
+    def test_api_client_update_mgmt_company_uses_path_id(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        update_company = source.split("updateMgmtCompany:", 1)[1][:500]
+        self.assertIn("/api/mgmt-companies/", update_company)
+        self.assertIn("encodeURIComponent", update_company)
+
+    def test_nav_includes_mgmt_companies(self):
+        source = Path(__file__).resolve().parent.joinpath("nav.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id: "mgmt-companies"', source)
+        self.assertIn("mgmt-companies.html", source)
+        self.assertIn("Management Companies", source)
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)
@@ -594,6 +787,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["sitesTable"], "NOVARASites")
         self.assertEqual(payload["systemsTable"], "NOVARASystems")
         self.assertEqual(payload["ownersTable"], "NOVARAOwners")
+        self.assertEqual(payload["mgmtCompaniesTable"], "NOVARAMgmtCompanies")
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})

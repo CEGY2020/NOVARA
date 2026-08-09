@@ -4,13 +4,14 @@
  * #sidebar-root and #user-profile-root mounts.
  */
 (function () {
-  // Entity pages (Sites, Systems, Owners) stay grouped so Management
-  // Companies and Leads can slot in here later without reshuffling ops links.
+  // Entity pages (Sites, Systems, Owners, Management Companies) stay grouped
+  // so Leads can slot in here later without reshuffling ops links.
   var NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "sites", label: "Sites", href: "sites.html" },
     { id: "systems", label: "Systems", href: "systems.html" },
     { id: "owners", label: "Owners", href: "owners.html" },
+    { id: "mgmt-companies", label: "Management Companies", href: "mgmt-companies.html" },
     { id: "alarms", label: "Active Alarms", href: "active-alarms.html" },
     { id: "savings", label: "Energy Savings", href: "energy-savings.html" },
     { id: "reports", label: "Reports", href: "reports.html" },
