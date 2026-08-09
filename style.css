@@ -32,21 +32,14 @@ body {
 .logo {
     display: block;
     width: 180px;
-    max-height: 95px;
+    max-width: 100%;
+    height: auto;
     object-fit: contain;
-    margin: 0 auto 20px;
-}
-
-h1 {
-    margin: 0;
-    text-align: center;
-    color: #174c70;
-    font-size: 34px;
-    letter-spacing: 1px;
+    margin: 0 auto 18px;
 }
 
 .subtitle {
-    margin: 10px 0 30px;
+    margin: 0 0 30px;
     text-align: center;
     color: #607080;
     font-size: 16px;
