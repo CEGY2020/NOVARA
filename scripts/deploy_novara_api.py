@@ -126,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"FunctionUrl={function_url}")
     print(f"Using api base={api_url}")
 
+    # Write api-config for local/build artifacts only. Do not rely on committing
+    # region-specific API URLs to git (Amplify same-origin rewrite is preferred).
     _run(
         [
             sys.executable,
@@ -136,6 +138,10 @@ def main(argv: list[str] | None = None) -> int:
             str(ROOT / "api-config.js"),
         ],
         env=env,
+    )
+    print(
+        "Note: api-config.js was updated locally/in-build. "
+        "Keep the committed copy empty when Amplify /api rewrite is configured."
     )
 
     app_id = args.app_id
