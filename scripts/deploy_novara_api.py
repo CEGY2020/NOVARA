@@ -201,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         print("AWS_APP_ID not set; skipped Amplify rewrite update.")
 
     # Smoke-test endpoints against the chosen base URL.
+    import urllib.error
     import urllib.request
 
     for path in (
@@ -219,6 +220,59 @@ def main(argv: list[str] | None = None) -> int:
             if "json" not in ctype.lower() and not body[:1] in (b"{", b"["):
                 print("ERROR: endpoint did not return JSON", file=sys.stderr)
                 return 1
+
+    # Verify Owners create + path update persist to NOVARAOwners.
+    smoke_id = "OWN_SMOKE_DEPLOY"
+    create_url = f"{api_url}/api/owners"
+    create_body = json.dumps(
+        {
+            "OwnerID": smoke_id,
+            "Name": "Deploy Smoke Owner",
+            "City": "Denver",
+            "State": "CO",
+        }
+    ).encode("utf-8")
+    print(f"POST {create_url}")
+    create_req = urllib.request.Request(
+        create_url,
+        data=create_body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(create_req, timeout=30) as resp:
+            created = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} {created}")
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        # Idempotent re-deploy: allow already-exists, then update.
+        if exc.code != 409:
+            print(f"ERROR: POST /api/owners failed: {exc.code} {err_body}", file=sys.stderr)
+            return 1
+        print(f"  -> {exc.code} {err_body} (ok for redeploy)")
+
+    update_url = f"{api_url}/api/owners/{smoke_id}"
+    update_body = json.dumps(
+        {
+            "OwnerID": smoke_id,
+            "Name": "Deploy Smoke Owner Updated",
+            "City": "Boulder",
+            "State": "CO",
+        }
+    ).encode("utf-8")
+    print(f"PUT {update_url}")
+    update_req = urllib.request.Request(
+        update_url,
+        data=update_body,
+        method="PUT",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(update_req, timeout=30) as resp:
+        updated = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {updated}")
+        if not updated.get("ok"):
+            print("ERROR: PUT /api/owners/{id} did not return ok", file=sys.stderr)
+            return 1
 
     print("Deploy complete.")
     return 0

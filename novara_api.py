@@ -1033,8 +1033,38 @@ def handle_owners_request() -> tuple[int, dict]:
         }
 
 
-def handle_owner_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
-    item, error = parse_owner_payload(body)
+def _owner_id_from_path(path: str) -> str | None:
+    """Extract OwnerID from /api/owners/{id} (or /owners/{id})."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/owners/", "/owners/"):
+        if marker not in normalized:
+            continue
+        owner_id = normalized.split(marker, 1)[1]
+        if owner_id and "/" not in owner_id:
+            return owner_id
+    return None
+
+
+def handle_owner_write_request(
+    body: dict | None,
+    *,
+    mode: str,
+    owner_id: str | None = None,
+) -> tuple[int, dict]:
+    payload = dict(body or {}) if isinstance(body, dict) else body
+    if owner_id:
+        if not isinstance(payload, dict):
+            payload = {}
+        else:
+            payload = dict(payload)
+        body_id = _as_text(
+            payload.get("OwnerID") if "OwnerID" in payload else payload.get("ownerId")
+        )
+        if body_id and body_id != owner_id:
+            return 400, {"error": "OwnerID in path and body must match"}
+        payload["OwnerID"] = owner_id
+
+    item, error = parse_owner_payload(payload)
     if error:
         return 400, {"error": error}
     try:
@@ -1099,6 +1129,13 @@ def route_request(
             return handle_owner_write_request(body, mode="create")
         if method == "PUT":
             return handle_owner_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    owner_path_id = _owner_id_from_path(normalized)
+    if owner_path_id is not None:
+        if method == "PUT":
+            return handle_owner_write_request(
+                body, mode="update", owner_id=owner_path_id
+            )
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
         if method != "GET":

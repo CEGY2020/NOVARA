@@ -124,6 +124,12 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/owners
             Method: PUT
+        OwnersUpdateById:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/owners/{ownerId}
+            Method: PUT
         Health:
           Type: HttpApi
           Properties:
