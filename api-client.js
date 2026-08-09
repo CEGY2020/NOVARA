@@ -116,7 +116,15 @@
       return sendJson("/api/owners", "POST", owner);
     },
     updateOwner: function (owner) {
-      return sendJson("/api/owners", "PUT", owner);
+      var id = owner && (owner.OwnerID || owner.ownerId);
+      if (!id) {
+        return Promise.reject(new Error("OwnerID is required"));
+      }
+      return sendJson(
+        "/api/owners/" + encodeURIComponent(String(id)),
+        "PUT",
+        owner
+      );
     },
   };
 })(window);
