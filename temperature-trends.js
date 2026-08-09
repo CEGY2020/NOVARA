@@ -1,5 +1,16 @@
 (function () {
-  var SITE_ID = "SITE001";
+  function siteIdFromQuery() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var fromQuery = (params.get("siteId") || "").trim();
+      if (fromQuery) return fromQuery;
+    } catch (err) {
+      /* ignore */
+    }
+    return "SITE001";
+  }
+
+  var SITE_ID = siteIdFromQuery();
   var chart = null;
   var statusEl = document.getElementById("system-last-update");
   var chartStatusEl = document.getElementById("chart-status");
