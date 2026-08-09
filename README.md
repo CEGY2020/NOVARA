@@ -17,6 +17,8 @@ Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html)
 
 Systems page: [http://localhost:8000/systems.html](http://localhost:8000/systems.html) → `GET/POST/PUT /api/systems` from `NOVARASystems` (table is created automatically if missing).
 
+Owners page: [http://localhost:8000/owners.html](http://localhost:8000/owners.html) → `GET/POST/PUT /api/owners` from `NOVARAOwners` (table is created automatically if missing).
+
 ### Readings response shape
 
 ```json
@@ -63,11 +65,16 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `GET /api/systems` | `NOVARASystems` |
 | `POST /api/systems` | Create system in `NOVARASystems` (JSON body) |
 | `PUT /api/systems` | Update existing system in `NOVARASystems` (JSON body) |
+| `GET /api/owners` | `NOVARAOwners` |
+| `POST /api/owners` | Create owner in `NOVARAOwners` (JSON body) |
+| `PUT /api/owners` | Update existing owner in `NOVARAOwners` (JSON body) |
 | `GET /api/health` | health check |
 
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner`, `MgmtCompany`, `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
 
 Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional).
+
+Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 

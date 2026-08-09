@@ -47,6 +47,10 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems"),
     )
     parser.add_argument(
+        "--owners-table",
+        default=os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners"),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -99,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
             f"ReadingsTableName={args.readings_table}",
             f"SitesTableName={args.sites_table}",
             f"SystemsTableName={args.systems_table}",
+            f"OwnersTableName={args.owners_table}",
         ],
         env=env,
     )
@@ -202,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         "/api/health",
         "/api/sites",
         "/api/systems",
+        "/api/owners",
         "/api/readings?siteId=SITE001&days=7",
     ):
         url = f"{api_url}{path}"
