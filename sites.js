@@ -12,8 +12,12 @@
   var closeBtn = document.getElementById("site-modal-close");
   var cancelBtn = document.getElementById("site-cancel-btn");
   var siteIdInput = document.getElementById("field-siteId");
+  var ownerSelect = document.getElementById("field-owner");
+  var mgmtCompanySelect = document.getElementById("field-mgmtCompany");
 
   var sitesById = {};
+  var ownersList = [];
+  var mgmtCompaniesList = [];
   /** Authoritative create|edit mode. Do not rely only on #site-mode — form.reset() restores its default. */
   var currentMode = "create";
 
@@ -121,6 +125,88 @@
     }
   }
 
+  function resolveLookupId(list, selectedValue, idKey, nameKeys) {
+    var value = String(selectedValue == null ? "" : selectedValue).trim();
+    if (!value) return "";
+    var matchById = list.find(function (row) {
+      return String(row[idKey] || "") === value;
+    });
+    if (matchById) {
+      return String(matchById[idKey] || "");
+    }
+    var matchByName = list.find(function (row) {
+      return nameKeys.some(function (key) {
+        return String(row[key] || "").trim() === value;
+      });
+    });
+    if (matchByName) {
+      return String(matchByName[idKey] || "");
+    }
+    return value;
+  }
+
+  function populateOwnerOptions(selectedOwner) {
+    if (!ownerSelect) return;
+    var selectedId = resolveLookupId(ownersList, selectedOwner, "ownerId", [
+      "name",
+      "ownerName",
+    ]);
+    var options =
+      '<option value="">Select owner…</option>' +
+      ownersList
+        .map(function (owner) {
+          var id = owner.ownerId || "";
+          var label = owner.name || owner.ownerName || id;
+          var selected = selectedId && selectedId === id ? " selected" : "";
+          return (
+            '<option value="' +
+            escapeHtml(id) +
+            '"' +
+            selected +
+            ">" +
+            escapeHtml(label) +
+            "</option>"
+          );
+        })
+        .join("");
+    ownerSelect.innerHTML = options;
+    if (selectedId) {
+      ownerSelect.value = selectedId;
+    }
+  }
+
+  function populateMgmtCompanyOptions(selectedCompany) {
+    if (!mgmtCompanySelect) return;
+    var selectedId = resolveLookupId(
+      mgmtCompaniesList,
+      selectedCompany,
+      "mgmtCompanyId",
+      ["name", "mgmtCompanyName"]
+    );
+    var options =
+      '<option value="">Select company…</option>' +
+      mgmtCompaniesList
+        .map(function (company) {
+          var id = company.mgmtCompanyId || "";
+          var label = company.name || company.mgmtCompanyName || id;
+          var selected = selectedId && selectedId === id ? " selected" : "";
+          return (
+            '<option value="' +
+            escapeHtml(id) +
+            '"' +
+            selected +
+            ">" +
+            escapeHtml(label) +
+            "</option>"
+          );
+        })
+        .join("");
+    mgmtCompanySelect.innerHTML = options;
+    if (selectedId) {
+      mgmtCompanySelect.value = selectedId;
+    }
+  }
+
   function openModal(mode, site) {
     if (!modal || !form) return;
     mode = mode === "edit" ? "edit" : "create";
@@ -143,8 +229,8 @@
       modalSubtitle.textContent = "Update " + (site.siteId || "site") + " in NOVARASites";
       setFieldValue("field-siteId", site.siteId);
       setFieldValue("field-siteName", site.siteName || site.name);
-      setFieldValue("field-owner", site.owner);
-      setFieldValue("field-mgmtCompany", site.mgmtCompany);
+      populateOwnerOptions(site.owner);
+      populateMgmtCompanyOptions(site.mgmtCompany);
       setFieldValue("field-address", site.address);
       setFieldValue("field-city", site.city);
       setFieldValue("field-state", site.state);
@@ -159,6 +245,8 @@
       modalTitle.textContent = "Add Site";
       modalSubtitle.textContent = "Create a new site in NOVARASites";
       setFieldValue("field-siteId", nextSiteId());
+      populateOwnerOptions("");
+      populateMgmtCompanyOptions("");
       setFieldValue("field-status", "Online");
       setFieldValue("field-systems", 0);
     }
@@ -220,6 +308,57 @@
         );
       })
       .join("");
+  }
+
+  function loadOwners() {
+    var api = window.NovaraApi;
+    var request = api
+      ? api.getOwners()
+      : fetch("/api/owners").then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              var detail = body && (body.detail || body.error);
+              throw new Error(detail || "Request failed (" + response.status + ")");
+            }
+            return body;
+          });
+        });
+
+    return request.then(function (data) {
+      ownersList = (data && data.owners) || [];
+      return ownersList;
+    });
+  }
+
+  function loadMgmtCompanies() {
+    var api = window.NovaraApi;
+    var request = api
+      ? api.getMgmtCompanies()
+      : fetch("/api/mgmt-companies").then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              var detail = body && (body.detail || body.error);
+              throw new Error(detail || "Request failed (" + response.status + ")");
+            }
+            return body;
+          });
+        });
+
+    return request.then(function (data) {
+      mgmtCompaniesList = (data && data.mgmtCompanies) || [];
+      return mgmtCompaniesList;
+    });
+  }
+
+  function loadLookups() {
+    return Promise.all([
+      Promise.resolve(loadOwners()).catch(function () {
+        ownersList = ownersList || [];
+      }),
+      Promise.resolve(loadMgmtCompanies()).catch(function () {
+        mgmtCompaniesList = mgmtCompaniesList || [];
+      }),
+    ]);
   }
 
   function loadSites() {
@@ -331,14 +470,22 @@
     submit(payload, true);
   }
 
+  function openSiteModal(mode, site) {
+    return loadLookups().then(function () {
+      openModal(mode, site);
+    });
+  }
+
   if (addBtn) {
     addBtn.addEventListener("click", function () {
       addBtn.disabled = true;
       // Refresh NOVARASites so the next SITE### is based on current rows.
-      Promise.resolve(loadSites())
-        .catch(function () {
+      Promise.all([
+        Promise.resolve(loadSites()).catch(function () {
           /* keep cached sitesById if refresh fails */
-        })
+        }),
+        loadLookups(),
+      ])
         .then(function () {
           openModal("create");
         })
@@ -370,7 +517,7 @@
       event.stopPropagation();
       var editId = editBtn.getAttribute("data-site-id");
       if (editId && sitesById[editId]) {
-        openModal("edit", sitesById[editId]);
+        openSiteModal("edit", sitesById[editId]);
       }
       return;
     }
@@ -378,7 +525,7 @@
     if (!row) return;
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openModal("edit", sitesById[siteId]);
+      openSiteModal("edit", sitesById[siteId]);
     }
   });
 
@@ -389,7 +536,7 @@
     event.preventDefault();
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openModal("edit", sitesById[siteId]);
+      openSiteModal("edit", sitesById[siteId]);
     }
   });
 
@@ -399,5 +546,11 @@
     }
   });
 
-  loadSites();
+  Promise.all([
+    Promise.resolve(loadLookups()).catch(function () {
+      ownersList = [];
+      mgmtCompaniesList = [];
+    }),
+    loadSites(),
+  ]);
 })();

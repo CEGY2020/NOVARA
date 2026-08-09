@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Sites</title>
-  <link rel="stylesheet" href="dashboard.css?v=sites-edit-1">
+  <link rel="stylesheet" href="dashboard.css?v=sites-owner-mgmt-1">
 </head>
 <body data-page="sites">
 
@@ -71,11 +71,15 @@
         </label>
         <label class="form-field">
           <span>Owner</span>
-          <input type="text" id="field-owner" name="Owner" maxlength="120">
+          <select id="field-owner" name="Owner">
+            <option value="">Select owner…</option>
+          </select>
         </label>
         <label class="form-field">
           <span>MgmtCompany</span>
-          <input type="text" id="field-mgmtCompany" name="MgmtCompany" maxlength="120">
+          <select id="field-mgmtCompany" name="MgmtCompany">
+            <option value="">Select company…</option>
+          </select>
         </label>
         <label class="form-field form-field-wide">
           <span>Address</span>
@@ -127,9 +131,9 @@
   </div>
 </div>
 
-<script src="api-config.js?v=sites-edit-1"></script>
-<script src="api-client.js?v=sites-edit-1"></script>
-<script src="nav.js?v=sites-edit-1"></script>
-<script src="sites.js?v=sites-edit-1"></script>
+<script src="api-config.js?v=sites-owner-mgmt-1"></script>
+<script src="api-client.js?v=sites-owner-mgmt-1"></script>
+<script src="nav.js?v=sites-owner-mgmt-1"></script>
+<script src="sites.js?v=sites-owner-mgmt-1"></script>
 </body>
 </html>

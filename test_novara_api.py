@@ -255,6 +255,31 @@ class RouteTests(unittest.TestCase):
         self.assertIn("api.updateSite", save_site)
         self.assertIn("api.createSite", save_site)
 
+    def test_sites_form_uses_owner_and_mgmt_company_dropdowns(self):
+        """Owner/MgmtCompany are lookup selects that store IDs, not free text."""
+        html = Path(__file__).resolve().parent.joinpath("sites.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('<select id="field-owner" name="Owner">', html)
+        self.assertIn('<select id="field-mgmtCompany" name="MgmtCompany">', html)
+        self.assertNotIn(
+            '<input type="text" id="field-owner" name="Owner"', html
+        )
+        self.assertNotIn(
+            '<input type="text" id="field-mgmtCompany" name="MgmtCompany"', html
+        )
+        self.assertIn("api.getOwners()", source)
+        self.assertIn("api.getMgmtCompanies()", source)
+        self.assertIn("populateOwnerOptions", source)
+        self.assertIn("populateMgmtCompanyOptions", source)
+        self.assertIn("owner.ownerId", source)
+        self.assertIn("company.mgmtCompanyId", source)
+        self.assertIn("populateOwnerOptions(site.owner)", source)
+        self.assertIn("populateMgmtCompanyOptions(site.mgmtCompany)", source)
+
     def test_systems_route(self):
         fake = {
             "table": "NOVARASystems",
