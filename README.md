@@ -60,22 +60,25 @@ SITE001,2026-08-01T01:00:00Z,121.0,110.8,1
 
 ### Where to put files
 
-```text
-data/readings/your_export.csv
-data/readings/your_export.xlsx   # optional; needs: pip install openpyxl
+From the repo root on your machine:
+
+```bash
+cp ~/Desktop/YOUR_FILE.csv data/readings/
 ```
+
+Also supported: `data/readings/your_export.xlsx` (needs `pip install openpyxl`).
 
 ### Import commands
 
 ```bash
 # Validate only
-python3 scripts/import_readings.py data/readings/your_export.csv --dry-run
+python3 scripts/import_readings.py data/readings/YOUR_FILE.csv --dry-run
 
 # Write to DynamoDB (skips existing SiteID+TimestampUTC keys)
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_REGION=[REDACTED]
-python3 scripts/import_readings.py data/readings/your_export.csv --execute
+python3 scripts/import_readings.py data/readings/YOUR_FILE.csv --execute
 
 # Map a legacy / friendly site name, or set a default site
 python3 scripts/import_readings.py data/readings/vista.csv --execute \
