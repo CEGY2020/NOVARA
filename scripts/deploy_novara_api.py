@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""Deploy NOVARA Lambda + HTTP API and wire frontend/Amplify to it."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run(cmd: list[str], *, env: dict | None = None) -> None:
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+
+
+def _aws_json(cmd: list[str], *, env: dict) -> dict:
+    out = subprocess.check_output(cmd, cwd=ROOT, env=env, text=True)
+    return json.loads(out)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stack-name", default=os.environ.get("NOVARA_API_STACK", "novara-api"))
+    parser.add_argument(
+        "--region",
+        default=os.environ.get("NOVARA_AWS_REGION")
+        or os.environ.get("AWS_REGION")
+        or os.environ.get("AWS_DEFAULT_REGION")
+        or "us-west-2",
+    )
+    parser.add_argument(
+        "--readings-table",
+        default=os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings"),
+    )
+    parser.add_argument(
+        "--sites-table",
+        default=os.environ.get("NOVARA_SITES_TABLE", "NOVARASites"),
+    )
+    parser.add_argument(
+        "--app-id",
+        default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
+    )
+    parser.add_argument(
+        "--skip-amplify-rewrite",
+        action="store_true",
+        help="Do not update Amplify customRules",
+    )
+    parser.add_argument(
+        "--prefer-function-url",
+        action="store_true",
+        help="Prefer Lambda Function URL over HTTP API URL in api-config.js",
+    )
+    args = parser.parse_args(argv)
+
+    env = os.environ.copy()
+    env["AWS_REGION"] = args.region
+    env["AWS_DEFAULT_REGION"] = args.region
+    # Drop invalid session tokens that break long-term IAM user keys.
+    access = (env.get("AWS_ACCESS_KEY_ID") or "").strip()
+    token = (env.get("AWS_SESSION_TOKEN") or "").strip()
+    if token and (access.startswith("AKIA") or len(token) < 100):
+        env.pop("AWS_SESSION_TOKEN", None)
+
+    if not shutil.which("sam"):
+        print("ERROR: AWS SAM CLI (sam) is required on PATH", file=sys.stderr)
+        return 2
+    if not shutil.which("aws"):
+        print("ERROR: AWS CLI (aws) is required on PATH", file=sys.stderr)
+        return 2
+
+    identity = _aws_json(["aws", "sts", "get-caller-identity", "--output", "json"], env=env)
+    print(f"Deploying as {identity.get('Arn')} in {args.region}")
+
+    _run(["sam", "build", "--template-file", "template.yaml"], env=env)
+    _run(
+        [
+            "sam",
+            "deploy",
+            "--stack-name",
+            args.stack_name,
+            "--resolve-s3",
+            "--capabilities",
+            "CAPABILITY_IAM",
+            "--no-confirm-changeset",
+            "--no-fail-on-empty-changeset",
+            "--region",
+            args.region,
+            "--parameter-overrides",
+            f"ReadingsTableName={args.readings_table}",
+            f"SitesTableName={args.sites_table}",
+        ],
+        env=env,
+    )
+
+    outputs = _aws_json(
+        [
+            "aws",
+            "cloudformation",
+            "describe-stacks",
+            "--stack-name",
+            args.stack_name,
+            "--region",
+            args.region,
+            "--query",
+            "Stacks[0].Outputs",
+            "--output",
+            "json",
+        ],
+        env=env,
+    )
+    by_key = {item["OutputKey"]: item["OutputValue"] for item in outputs or []}
+    http_api = by_key.get("HttpApiUrl", "").rstrip("/")
+    function_url = by_key.get("FunctionUrl", "").rstrip("/")
+    api_url = function_url if args.prefer_function_url and function_url else http_api or function_url
+    if not api_url:
+        print("ERROR: No HttpApiUrl/FunctionUrl stack output", file=sys.stderr)
+        return 1
+
+    print(f"HttpApiUrl={http_api}")
+    print(f"FunctionUrl={function_url}")
+    print(f"Using api base={api_url}")
+
+    _run(
+        [
+            sys.executable,
+            "scripts/write_api_config.py",
+            "--api-url",
+            api_url,
+            "--output",
+            str(ROOT / "api-config.js"),
+        ],
+        env=env,
+    )
+
+    app_id = args.app_id
+    if not app_id and not args.skip_amplify_rewrite:
+        try:
+            apps = _aws_json(
+                ["aws", "amplify", "list-apps", "--region", args.region, "--output", "json"],
+                env=env,
+            ).get("apps", [])
+            matches = [
+                app
+                for app in apps
+                if "novara" in (app.get("name") or "").lower()
+                or "novara" in (app.get("repository") or "").lower()
+            ]
+            if len(matches) == 1:
+                app_id = matches[0]["appId"]
+                print(f"Discovered Amplify app id {app_id} ({matches[0].get('name')})")
+            elif matches:
+                print(
+                    "Multiple Amplify apps matched NOVARA; set AWS_APP_ID explicitly: "
+                    + ", ".join(f"{a.get('name')}={a.get('appId')}" for a in matches)
+                )
+            elif apps:
+                print(
+                    "No Amplify app name matched NOVARA; available: "
+                    + ", ".join(f"{a.get('name')}={a.get('appId')}" for a in apps[:10])
+                )
+        except Exception as exc:  # noqa: BLE001
+            print(f"Amplify list-apps skipped: {exc}")
+
+    if app_id and not args.skip_amplify_rewrite and http_api:
+        _run(
+            [
+                sys.executable,
+                "scripts/configure_amplify_api_rewrites.py",
+                "--app-id",
+                app_id,
+                "--api-url",
+                http_api,
+                "--region",
+                args.region,
+            ],
+            env=env,
+        )
+    elif not app_id:
+        print("AWS_APP_ID not set; skipped Amplify rewrite update.")
+
+    # Smoke-test endpoints against the chosen base URL.
+    import urllib.request
+
+    for path in ("/api/health", "/api/sites", "/api/readings?siteId=VS001&days=7"):
+        url = f"{api_url}{path}"
+        print(f"GET {url}")
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            body = resp.read()[:300]
+            ctype = resp.headers.get("Content-Type", "")
+            print(f"  -> {resp.status} {ctype} {body!r}")
+            if "json" not in ctype.lower() and not body[:1] in (b"{", b"["):
+                print("ERROR: endpoint did not return JSON", file=sys.stderr)
+                return 1
+
+    print("Deploy complete.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
