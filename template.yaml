@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/owners)
 
 Parameters:
   ReadingsTableName:
@@ -12,6 +12,9 @@ Parameters:
   SystemsTableName:
     Type: String
     Default: NOVARASystems
+  OwnersTableName:
+    Type: String
+    Default: NOVARAOwners
   MaxChartPoints:
     Type: Number
     Default: 720
@@ -31,12 +34,13 @@ Resources:
       FunctionName: novara-api
       Handler: lambda_function.handler
       CodeUri: .
-      Description: NOVARA readings/sites/systems JSON API backed by DynamoDB
+      Description: NOVARA readings/sites/systems/owners JSON API backed by DynamoDB
       Environment:
         Variables:
           NOVARA_READINGS_TABLE: !Ref ReadingsTableName
           NOVARA_SITES_TABLE: !Ref SitesTableName
           NOVARA_SYSTEMS_TABLE: !Ref SystemsTableName
+          NOVARA_OWNERS_TABLE: !Ref OwnersTableName
           NOVARA_MAX_CHART_POINTS: !Ref MaxChartPoints
       Policies:
         - Statement:
@@ -54,9 +58,11 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}/index/*
       Events:
         Readings:
           Type: HttpApi
@@ -99,6 +105,24 @@ Resources:
           Properties:
             ApiId: !Ref NovaraHttpApi
             Path: /api/systems
+            Method: PUT
+        OwnersGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/owners
+            Method: GET
+        OwnersCreate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/owners
+            Method: POST
+        OwnersUpdate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/owners
             Method: PUT
         Health:
           Type: HttpApi
@@ -160,3 +184,6 @@ Outputs:
   SystemsEndpoint:
     Description: Systems endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/systems"
+  OwnersEndpoint:
+    Description: Owners endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/owners"

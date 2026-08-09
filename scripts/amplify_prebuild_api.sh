@@ -89,7 +89,8 @@ if ! sam deploy \
   --parameter-overrides \
     "ReadingsTableName=${NOVARA_READINGS_TABLE:-NOVARAReadings}" \
     "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}" \
-    "SystemsTableName=${NOVARA_SYSTEMS_TABLE:-NOVARASystems}"; then
+    "SystemsTableName=${NOVARA_SYSTEMS_TABLE:-NOVARASystems}" \
+    "OwnersTableName=${NOVARA_OWNERS_TABLE:-NOVARAOwners}"; then
   echo "WARN: sam deploy failed; continuing so the static Sites UI still publishes."
   restore_template
   exit 0
