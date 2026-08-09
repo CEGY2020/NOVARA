@@ -20,7 +20,9 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
-            self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS"
+            )
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -65,6 +67,15 @@ class NovaraHandler(SimpleHTTPRequestHandler):
     def do_PUT(self):
         self._handle_json_write("update")
 
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        system_path_id = novara_api._system_id_from_path(parsed.path)
+        if system_path_id is not None:
+            status, payload = novara_api.handle_system_delete_request(system_path_id)
+            self._send_json(status, payload)
+            return
+        self.send_error(404)
+
     def _handle_json_write(self, mode: str):
         parsed = urlparse(self.path)
         if parsed.path == "/api/sites":
@@ -78,6 +89,18 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             body = self._read_json_body()
             if body is None:
                 return
+            status, payload = novara_api.handle_system_write_request(body, mode=mode)
+            self._send_json(status, payload)
+            return
+        system_path_id = novara_api._system_id_from_path(parsed.path)
+        if system_path_id is not None and mode == "update":
+            body = self._read_json_body()
+            if body is None:
+                return
+            if not isinstance(body, dict):
+                body = {}
+            body = dict(body)
+            body["SystemID"] = system_path_id
             status, payload = novara_api.handle_system_write_request(body, mode=mode)
             self._send_json(status, payload)
             return

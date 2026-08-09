@@ -260,11 +260,40 @@
           '<button type="button" class="link-btn edit-system-btn" data-system-id="' +
           escapeHtml(system.systemId) +
           '">Edit</button>' +
+          ' <button type="button" class="link-btn danger-link-btn delete-system-btn" data-system-id="' +
+          escapeHtml(system.systemId) +
+          '">Delete</button>' +
           "</td>" +
           "</tr>"
         );
       })
       .join("");
+  }
+
+  function deleteSystem(systemId) {
+    var system = systemsById[systemId];
+    if (!system) return;
+    var label = system.systemName || system.name || systemId;
+    var confirmed = window.confirm(
+      "Delete system " + systemId + " (" + label + ")?\n\nThis removes it from NOVARASystems and updates the linked site count."
+    );
+    if (!confirmed) return;
+
+    var api = window.NovaraApi;
+    if (!api || !api.deleteSystem) {
+      setStatus("API client is unavailable.", true);
+      return;
+    }
+
+    setStatus("Deleting " + systemId + "…", false);
+    api
+      .deleteSystem(systemId)
+      .then(function () {
+        return loadSystems();
+      })
+      .catch(function (err) {
+        setStatus(err.message || "Failed to delete system", true);
+      });
   }
 
   function loadSites() {
@@ -453,6 +482,15 @@
   }
 
   tbody.addEventListener("click", function (event) {
+    var deleteBtn = event.target.closest(".delete-system-btn");
+    if (deleteBtn) {
+      event.stopPropagation();
+      var deleteId = deleteBtn.getAttribute("data-system-id");
+      if (deleteId) {
+        deleteSystem(deleteId);
+      }
+      return;
+    }
     var editBtn = event.target.closest(".edit-system-btn");
     if (editBtn) {
       event.stopPropagation();
@@ -466,6 +504,20 @@
         });
       return;
     }
+    // Ignore clicks on the detail link; otherwise open Edit like Sites rows.
+    if (event.target.closest("a")) {
+      return;
+    }
+    var row = event.target.closest("tr.system-row");
+    if (!row) return;
+    var rowId = row.getAttribute("data-system-id");
+    Promise.resolve(loadSites())
+      .catch(function () {})
+      .then(function () {
+        if (rowId && systemsById[rowId]) {
+          openModal("edit", systemsById[rowId]);
+        }
+      });
   });
 
   tbody.addEventListener("keydown", function (event) {

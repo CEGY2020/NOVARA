@@ -118,6 +118,18 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/systems
             Method: PUT
+        SystemsUpdateById:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/systems/{systemId}
+            Method: PUT
+        SystemsDeleteById:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/systems/{systemId}
+            Method: DELETE
         OwnersGet:
           Type: HttpApi
           Properties:
@@ -212,6 +224,7 @@ Resources:
             - GET
             - POST
             - PUT
+            - DELETE
           AllowHeaders:
             - content-type
           MaxAge: 86400
@@ -229,6 +242,7 @@ Resources:
           - GET
           - POST
           - PUT
+          - DELETE
           - OPTIONS
         MaxAge: 86400
 

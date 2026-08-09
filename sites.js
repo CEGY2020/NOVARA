@@ -48,7 +48,8 @@
     if (
       text.indexOf("warn") !== -1 ||
       text.indexOf("review") !== -1 ||
-      text.indexOf("alarm") !== -1
+      text.indexOf("alarm") !== -1 ||
+      text.indexOf("maintenance") !== -1
     ) {
       return "status-warning";
     }
@@ -56,6 +57,34 @@
       return "status-online";
     }
     return "";
+  }
+
+  function updateDerivedFieldHints(site) {
+    var systemsHint = document.getElementById("systems-count-hint");
+    var statusHint = document.getElementById("site-status-hint");
+    var statusSelect = document.getElementById("field-status");
+    var count =
+      site && site.systems != null && site.systems !== "—"
+        ? Number(site.systems)
+        : 0;
+    if (!Number.isFinite(count)) count = 0;
+
+    if (systemsHint) {
+      systemsHint.textContent =
+        "Live count of systems linked by SiteID in NOVARASystems";
+    }
+    if (statusHint) {
+      if (count > 0) {
+        statusHint.textContent =
+          "Derived from linked systems (Offline > Needs Review > Online)";
+      } else {
+        statusHint.textContent =
+          "No linked systems yet — set status manually, or it stays Online";
+      }
+    }
+    if (statusSelect) {
+      statusSelect.disabled = count > 0;
+    }
   }
 
   function setFormError(message) {
@@ -241,6 +270,7 @@
         "field-systems",
         site.systems == null || site.systems === "—" ? 0 : site.systems
       );
+      updateDerivedFieldHints(site);
     } else {
       modalTitle.textContent = "Add Site";
       modalSubtitle.textContent = "Create a new site in NOVARASites";
@@ -249,6 +279,7 @@
       populateMgmtCompanyOptions("");
       setFieldValue("field-status", "Online");
       setFieldValue("field-systems", 0);
+      updateDerivedFieldHints({ systems: 0 });
     }
 
     modal.hidden = false;
@@ -264,6 +295,10 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     setFormError("");
+    var statusSelect = document.getElementById("field-status");
+    if (statusSelect) {
+      statusSelect.disabled = false;
+    }
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.textContent = "Save";

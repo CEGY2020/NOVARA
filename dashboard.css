@@ -447,12 +447,22 @@ body {
     text-decoration: underline;
 }
 
-.data-table tr.site-row {
+.data-table tr.site-row,
+.data-table tr.system-row {
     cursor: pointer;
 }
 
-.data-table tr.site-row:hover td {
+.data-table tr.site-row:hover td,
+.data-table tr.system-row:hover td {
     background: #f7fafc;
+}
+
+.link-btn.danger-link-btn {
+    color: var(--danger);
+}
+
+.link-btn.danger-link-btn:hover {
+    color: var(--danger-hover);
 }
 
 body.modal-open {

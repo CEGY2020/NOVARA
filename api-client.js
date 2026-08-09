@@ -107,7 +107,29 @@
       return sendJson("/api/systems", "POST", system);
     },
     updateSystem: function (system) {
+      var id = system && (system.SystemID || system.systemId);
+      if (id) {
+        return sendJson(
+          "/api/systems/" + encodeURIComponent(String(id)),
+          "PUT",
+          system
+        );
+      }
       return sendJson("/api/systems", "PUT", system);
+    },
+    deleteSystem: function (systemId) {
+      var id =
+        typeof systemId === "string" || typeof systemId === "number"
+          ? systemId
+          : systemId && (systemId.SystemID || systemId.systemId);
+      if (!id) {
+        return Promise.reject(new Error("SystemID is required"));
+      }
+      return sendJson(
+        "/api/systems/" + encodeURIComponent(String(id)),
+        "DELETE",
+        null
+      );
     },
     getOwners: function () {
       return fetchJson("/api/owners");
