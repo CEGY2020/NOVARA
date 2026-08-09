@@ -163,22 +163,25 @@
       btn.disabled = true;
     });
 
-    var url =
-      "/api/readings?siteId=" +
-      encodeURIComponent(SITE_ID) +
-      "&days=" +
-      encodeURIComponent(String(days));
-
-    return fetch(url)
-      .then(function (response) {
-        return response.json().then(function (body) {
-          if (!response.ok) {
-            var detail = body && (body.detail || body.error);
-            throw new Error(detail || "Request failed (" + response.status + ")");
-          }
-          return body;
+    var api = window.NovaraApi;
+    var request = api
+      ? api.getReadings(SITE_ID, days)
+      : fetch(
+          "/api/readings?siteId=" +
+            encodeURIComponent(SITE_ID) +
+            "&days=" +
+            encodeURIComponent(String(days))
+        ).then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              var detail = body && (body.detail || body.error);
+              throw new Error(detail || "Request failed (" + response.status + ")");
+            }
+            return body;
+          });
         });
-      })
+
+    return request
       .then(function (data) {
         var points = (data && data.points) || [];
         if (statusEl) {

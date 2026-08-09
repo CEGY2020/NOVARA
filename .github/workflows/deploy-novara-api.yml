@@ -1,0 +1,63 @@
+name: Deploy NOVARA API
+
+# Deploys Lambda + API Gateway for /api/readings and /api/sites, then updates
+# api-config.js so static hosts (Amplify / GitHub Pages) call real JSON APIs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "template.yaml"
+      - "lambda_function.py"
+      - "novara_api.py"
+      - "requirements.txt"
+      - "scripts/deploy_novara_api.py"
+      - "scripts/write_api_config.py"
+      - "scripts/configure_amplify_api_rewrites.py"
+      - ".github/workflows/deploy-novara-api.yml"
+      - "amplify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || secrets.AWS_ACCESS_KEY_ID != '' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      NOVARA_AWS_REGION: ${{ vars.NOVARA_AWS_REGION || vars.AWS_REGION || 'us-west-2' }}
+      NOVARA_API_STACK: ${{ vars.NOVARA_API_STACK || 'novara-api' }}
+      NOVARA_READINGS_TABLE: ${{ vars.NOVARA_READINGS_TABLE || 'NOVARAReadings' }}
+      NOVARA_SITES_TABLE: ${{ vars.NOVARA_SITES_TABLE || 'NOVARASites' }}
+      AWS_APP_ID: ${{ vars.AWS_APP_ID || secrets.AWS_APP_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt awscli aws-sam-cli
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.NOVARA_AWS_REGION }}
+
+      - name: Deploy API + configure Amplify /api rewrite
+        run: |
+          python3 scripts/deploy_novara_api.py
+          # Prefer Amplify same-origin /api rewrite over committing region-specific
+          # API URLs into api-config.js.
+          git checkout -- api-config.js || true

@@ -103,5 +103,14 @@ Outputs:
   HttpApiUrl:
     Description: API Gateway HTTP API base URL (use with Amplify /api rewrite)
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  FunctionUrl:
+    Description: Lambda Function URL (CORS-enabled fallback when Amplify rewrite is unavailable)
+    Value: !GetAtt NovaraApiFunctionUrl.FunctionUrl
   FunctionName:
     Value: !Ref NovaraApiFunction
+  ReadingsEndpoint:
+    Description: Example readings endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/readings?siteId=VS001&days=7"
+  SitesEndpoint:
+    Description: Sites endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/sites"

@@ -15,27 +15,29 @@ def _api_rewrite_rule(api_base_url: str) -> dict:
         "source": "/api/<*>",
         "target": f"{base}/api/<*>",
         "status": "200",
-        "condition": None,
     }
 
 
+def _normalize_rule(rule: dict) -> dict:
+    """Normalize Amplify customRules for UpdateApp (omit null condition)."""
+    normalized = {
+        "source": (rule.get("source") or rule.get("Source") or "").strip(),
+        "target": rule.get("target") or rule.get("Target"),
+        "status": str(rule.get("status") or rule.get("Status") or "200"),
+    }
+    condition = rule.get("condition") if "condition" in rule else rule.get("Condition")
+    if condition:
+        normalized["condition"] = condition
+    return normalized
+
+
 def _merge_rules(existing: list[dict], api_rule: dict) -> list[dict]:
-    merged = [api_rule]
+    merged = [_normalize_rule(api_rule)]
     for rule in existing or []:
         source = (rule.get("source") or rule.get("Source") or "").strip()
         if source == "/api/<*>":
             continue
-        # Normalize keys to Amplify UpdateApp shape.
-        merged.append(
-            {
-                "source": source,
-                "target": rule.get("target") or rule.get("Target"),
-                "status": str(rule.get("status") or rule.get("Status") or "200"),
-                "condition": rule.get("condition")
-                if "condition" in rule
-                else rule.get("Condition"),
-            }
-        )
+        merged.append(_normalize_rule(rule))
     return merged
 
 

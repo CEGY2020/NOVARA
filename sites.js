@@ -72,16 +72,20 @@
 
   function loadSites() {
     setStatus("Loading sites…", false);
-    return fetch("/api/sites")
-      .then(function (response) {
-        return response.json().then(function (body) {
-          if (!response.ok) {
-            var detail = body && (body.detail || body.error);
-            throw new Error(detail || "Request failed (" + response.status + ")");
-          }
-          return body;
+    var api = window.NovaraApi;
+    var request = api
+      ? api.getSites()
+      : fetch("/api/sites").then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              var detail = body && (body.detail || body.error);
+              throw new Error(detail || "Request failed (" + response.status + ")");
+            }
+            return body;
+          });
         });
-      })
+
+    return request
       .then(function (data) {
         var sites = (data && data.sites) || [];
         renderSites(sites);
