@@ -13,7 +13,7 @@ from urllib.parse import parse_qs
 
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
-DEFAULT_SITE_ID = "VS001"
+DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
 SYSTEM_TYPES = ("DHW", "Pool", "HVAC")

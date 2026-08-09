@@ -11,7 +11,7 @@ export AWS_REGION=us-west-2   # DynamoDB table region
 python3 server.py
 ```
 
-Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `VS001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=VS001&days=7`.
+Open [http://localhost:8000/system-detail.html](http://localhost:8000/system-detail.html). The Temperature Trends chart loads SiteID `SITE001` from DynamoDB table `NOVARAReadings` via `GET /api/readings?siteId=SITE001&days=7`.
 
 Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html) → `GET /api/sites` from `NOVARASites`.
 
@@ -34,7 +34,7 @@ Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html)
   "count": 1,
   "sites": [
     {
-      "siteId": "VS001",
+      "siteId": "SITE001",
       "name": "Vista Springs",
       "location": "—",
       "systems": 1,
@@ -54,7 +54,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 
 | Endpoint | DynamoDB table |
 | --- | --- |
-| `GET /api/readings?siteId=VS001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
+| `GET /api/readings?siteId=SITE001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
 | `GET /api/sites` | `NOVARASites` |
 | `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
 | `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |

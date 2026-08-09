@@ -18,13 +18,13 @@ class RouteTests(unittest.TestCase):
         fake = {
             "points": [{"t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1}],
             "lastUpdate": "2026-08-02T20:00:00Z",
-            "siteId": "VS001",
+            "siteId": "SITE001",
             "days": 7,
             "count": 1,
         }
         with patch.object(novara_api, "query_readings", return_value=fake):
             status, payload = novara_api.route_request(
-                "GET", "/api/readings", {"siteId": ["VS001"], "days": ["7"]}
+                "GET", "/api/readings", {"siteId": ["SITE001"], "days": ["7"]}
             )
         self.assertEqual(status, 200)
         self.assertEqual(payload["lastUpdate"], "2026-08-02T20:00:00Z")
@@ -42,17 +42,17 @@ class RouteTests(unittest.TestCase):
         fake = {
             "points": [],
             "lastUpdate": None,
-            "siteId": "VS001",
+            "siteId": "SITE001",
             "days": 3,
             "count": 0,
         }
         with patch.object(novara_api, "query_readings", return_value=fake) as mocked:
             for days in (3, 30):
                 status, payload = novara_api.route_request(
-                    "GET", "/api/readings", {"siteId": ["VS001"], "days": [str(days)]}
+                    "GET", "/api/readings", {"siteId": ["SITE001"], "days": [str(days)]}
                 )
                 self.assertEqual(status, 200)
-                mocked.assert_called_with("VS001", days)
+                mocked.assert_called_with("SITE001", days)
 
     def test_sites_route(self):
         fake = {
@@ -60,7 +60,7 @@ class RouteTests(unittest.TestCase):
             "count": 1,
             "sites": [
                 {
-                    "siteId": "VS001",
+                    "siteId": "SITE001",
                     "name": "Vista Springs",
                     "location": "AZ",
                     "systems": 1,
@@ -71,7 +71,7 @@ class RouteTests(unittest.TestCase):
         with patch.object(novara_api, "scan_sites", return_value=fake):
             status, payload = novara_api.route_request("GET", "/api/sites", {})
         self.assertEqual(status, 200)
-        self.assertEqual(payload["sites"][0]["siteId"], "VS001")
+        self.assertEqual(payload["sites"][0]["siteId"], "SITE001")
 
     def test_create_site_route(self):
         body = {
@@ -91,12 +91,12 @@ class RouteTests(unittest.TestCase):
 
     def test_update_site_route(self):
         body = {
-            "SiteID": "VS001",
+            "SiteID": "SITE001",
             "SiteName": "Vista Springs",
             "Status": "Needs Review",
             "Systems": 1,
         }
-        fake = {"ok": True, "table": "NOVARASites", "site": {"siteId": "VS001"}}
+        fake = {"ok": True, "table": "NOVARASites", "site": {"siteId": "SITE001"}}
         with patch.object(novara_api, "save_site", return_value=fake) as mocked:
             status, payload = novara_api.route_request("PUT", "/api/sites", {}, body)
         self.assertEqual(status, 200)
@@ -129,7 +129,7 @@ class RouteTests(unittest.TestCase):
     def test_normalize_site_location_and_address(self):
         site = novara_api.normalize_site(
             {
-                "SiteID": "VS001",
+                "SiteID": "SITE001",
                 "SiteName": "Vista Springs",
                 "StreetAddress": "21550 Box Springs Rd",
                 "City": "Moreno Valley",
@@ -148,7 +148,7 @@ class RouteTests(unittest.TestCase):
         fake = {
             "points": [{"t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1}],
             "lastUpdate": "2026-08-02T20:00:00Z",
-            "siteId": "VS001",
+            "siteId": "SITE001",
             "days": 7,
             "count": 1,
         }
@@ -156,9 +156,9 @@ class RouteTests(unittest.TestCase):
             "version": "2.0",
             "routeKey": "GET /api/readings",
             "rawPath": "/api/readings",
-            "rawQueryString": "siteId=VS001&days=7",
+            "rawQueryString": "siteId=SITE001&days=7",
             "requestContext": {"http": {"method": "GET", "path": "/api/readings"}},
-            "queryStringParameters": {"siteId": "VS001", "days": "7"},
+            "queryStringParameters": {"siteId": "SITE001", "days": "7"},
         }
         with patch.object(novara_api, "query_readings", return_value=fake):
             response = novara_api.handle_lambda_event(event)
