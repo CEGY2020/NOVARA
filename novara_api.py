@@ -18,6 +18,7 @@ OWNERS_TABLE_NAME = os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners")
 MGMT_COMPANIES_TABLE_NAME = os.environ.get(
     "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
 )
+LEADS_TABLE_NAME = os.environ.get("NOVARA_LEADS_TABLE", "NOVARALeads")
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
@@ -25,10 +26,21 @@ SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
 SITE_STATUSES = ("Online", "Offline", "Needs Review")
 SYSTEM_RECORD_TYPES = ("DHW", "Pool", "HVAC", "Boiler")
 SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
+LEAD_SOURCES = ("Referral", "Website", "Rinnai", "Trade Show", "Other")
+LEAD_SYSTEM_TYPES = ("DHW", "Pool", "HVAC", "Other")
+LEAD_STAGES = (
+    "New Lead",
+    "Contacted",
+    "Qualified",
+    "Proposal Sent",
+    "Won",
+    "Lost",
+)
 
 _systems_table_ready = False
 _owners_table_ready = False
 _mgmt_companies_table_ready = False
+_leads_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -834,6 +846,287 @@ def save_mgmt_company(item: dict, *, mode: str = "upsert") -> dict:
     }
 
 
+def ensure_leads_table() -> str:
+    """Create NOVARALeads if missing (pay-per-request, LeadID hash key)."""
+    global _leads_table_ready
+    if _leads_table_ready:
+        return LEADS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=LEADS_TABLE_NAME)
+        _leads_table_ready = True
+        return LEADS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=LEADS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "LeadID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "LeadID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=LEADS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _leads_table_ready = True
+    return LEADS_TABLE_NAME
+
+
+def normalize_lead(item: dict) -> dict:
+    lead_id = first_present(item, ("LeadID", "leadId", "lead_id", "id"))
+    company_name = first_present(
+        item,
+        (
+            "CompanyName",
+            "companyName",
+            "SiteName",
+            "siteName",
+            "Name",
+            "name",
+        ),
+        default=lead_id or "Unknown lead",
+    )
+    contact_name = first_present(
+        item, ("ContactName", "contactName", "contact_name"), default=""
+    )
+    contact_email = first_present(
+        item,
+        ("ContactEmail", "contactEmail", "contact_email", "Email", "email"),
+        default="",
+    )
+    contact_phone = first_present(
+        item,
+        ("ContactPhone", "contactPhone", "contact_phone", "Phone", "phone"),
+        default="",
+    )
+    source = first_present(item, ("Source", "source"), default="")
+    system_type = first_present(
+        item, ("SystemType", "systemType", "system_type"), default=""
+    )
+    stage = first_present(item, ("Stage", "stage"), default="")
+    next_follow_up = first_present(
+        item,
+        ("NextFollowUp", "nextFollowUp", "next_follow_up", "NextFollowup"),
+        default="",
+    )
+    assigned_to = first_present(
+        item, ("AssignedTo", "assignedTo", "assigned_to"), default=""
+    )
+    estimated_savings = first_present(
+        item,
+        ("EstimatedSavings", "estimatedSavings", "estimated_savings"),
+        default=None,
+    )
+    if estimated_savings is not None and estimated_savings != "":
+        estimated_savings = json_safe(estimated_savings)
+    else:
+        estimated_savings = None
+    notes = first_present(item, ("Notes", "notes"), default="")
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    return {
+        "leadId": "" if lead_id is None else str(lead_id),
+        "companyName": str(company_name),
+        "siteName": str(company_name),
+        "contactName": str(contact_name or ""),
+        "contactEmail": str(contact_email or ""),
+        "contactPhone": str(contact_phone or ""),
+        "source": str(source or ""),
+        "systemType": str(system_type or ""),
+        "stage": str(stage or ""),
+        "nextFollowUp": str(next_follow_up or ""),
+        "assignedTo": str(assigned_to or ""),
+        "estimatedSavings": estimated_savings,
+        "notes": str(notes or ""),
+        "updatedAt": str(updated_at or ""),
+    }
+
+
+def scan_leads() -> dict:
+    ensure_leads_table()
+    table = dynamodb_table(LEADS_TABLE_NAME)
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    leads = [normalize_lead(json_safe(item)) for item in items]
+    leads.sort(
+        key=lambda row: (
+            (row.get("nextFollowUp") or "9999-99-99"),
+            (row.get("companyName") or "").lower(),
+            (row.get("leadId") or "").lower(),
+        )
+    )
+    return {
+        "table": LEADS_TABLE_NAME,
+        "count": len(leads),
+        "leads": leads,
+    }
+
+
+def parse_lead_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming lead create/update payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    lead_id = _as_text(
+        body.get("LeadID") if "LeadID" in body else body.get("leadId")
+    )
+    company_name = _as_text(
+        body.get("CompanyName")
+        if "CompanyName" in body
+        else body.get("companyName")
+        if "companyName" in body
+        else body.get("SiteName")
+        if "SiteName" in body
+        else body.get("siteName")
+        if "siteName" in body
+        else body.get("Name")
+        if "Name" in body
+        else body.get("name")
+    )
+    if not lead_id:
+        return None, "LeadID is required"
+    if not company_name:
+        return None, "CompanyName is required"
+    if len(lead_id) > 64:
+        return None, "LeadID must be 64 characters or fewer"
+    if len(company_name) > 160:
+        return None, "CompanyName must be 160 characters or fewer"
+
+    contact_name = _as_text(
+        body.get("ContactName") if "ContactName" in body else body.get("contactName")
+    )
+    contact_email = _as_text(
+        body.get("ContactEmail")
+        if "ContactEmail" in body
+        else body.get("contactEmail")
+    )
+    contact_phone = _as_text(
+        body.get("ContactPhone")
+        if "ContactPhone" in body
+        else body.get("contactPhone")
+    )
+    source = _as_text(body.get("Source") if "Source" in body else body.get("source"))
+    system_type = _as_text(
+        body.get("SystemType") if "SystemType" in body else body.get("systemType")
+    )
+    stage = _as_text(body.get("Stage") if "Stage" in body else body.get("stage"))
+    next_follow_up = _as_text(
+        body.get("NextFollowUp")
+        if "NextFollowUp" in body
+        else body.get("nextFollowUp")
+    )
+    assigned_to = _as_text(
+        body.get("AssignedTo") if "AssignedTo" in body else body.get("assignedTo")
+    )
+    notes = _as_text(body.get("Notes") if "Notes" in body else body.get("notes"))
+
+    if contact_email and "@" not in contact_email:
+        return None, "ContactEmail must be a valid email address"
+    if source and source not in LEAD_SOURCES:
+        return None, "Source must be one of: " + ", ".join(LEAD_SOURCES)
+    if system_type and system_type not in LEAD_SYSTEM_TYPES:
+        return None, "SystemType must be one of: " + ", ".join(LEAD_SYSTEM_TYPES)
+    if stage and stage not in LEAD_STAGES:
+        return None, "Stage must be one of: " + ", ".join(LEAD_STAGES)
+    if next_follow_up:
+        try:
+            datetime.strptime(next_follow_up, "%Y-%m-%d")
+        except ValueError:
+            return None, "NextFollowUp must be a date in YYYY-MM-DD format"
+
+    estimated_raw = (
+        body.get("EstimatedSavings")
+        if "EstimatedSavings" in body
+        else body.get("estimatedSavings")
+    )
+    estimated_savings = None
+    if estimated_raw is not None and estimated_raw != "":
+        try:
+            estimated_savings = Decimal(str(estimated_raw).strip())
+        except (TypeError, ValueError, ArithmeticError):
+            return None, "EstimatedSavings must be a number"
+        if estimated_savings < 0:
+            return None, "EstimatedSavings must be zero or greater"
+
+    item = {
+        "LeadID": lead_id,
+        "CompanyName": company_name,
+        "ContactName": contact_name,
+        "ContactEmail": contact_email,
+        "ContactPhone": contact_phone,
+        "Source": source,
+        "SystemType": system_type,
+        "Stage": stage or "New Lead",
+        "NextFollowUp": next_follow_up,
+        "AssignedTo": assigned_to,
+        "Notes": notes,
+        "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if estimated_savings is not None:
+        item["EstimatedSavings"] = estimated_savings
+    else:
+        item["EstimatedSavings"] = None
+    return item, None
+
+
+def save_lead(item: dict, *, mode: str = "upsert") -> dict:
+    """Write a lead to DynamoDB. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    ensure_leads_table()
+    table = dynamodb_table(LEADS_TABLE_NAME)
+    # DynamoDB rejects Python None / float; omit empty optional numeric.
+    write_item = {k: v for k, v in item.items() if v is not None}
+    kwargs = {"Item": write_item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(LeadID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(LeadID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(f"LeadID '{item['LeadID']}' already exists") from exc
+            if mode == "update":
+                raise LookupError(f"LeadID '{item['LeadID']}' was not found") from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": LEADS_TABLE_NAME,
+        "lead": normalize_lead(write_item),
+    }
+
+
 def _sync_site_systems_count(site_id: str) -> None:
     """Update NOVARASites.Systems for site_id from live NOVARASystems rows."""
     if not site_id:
@@ -1370,6 +1663,65 @@ def handle_mgmt_company_write_request(
         }
 
 
+def handle_leads_request() -> tuple[int, dict]:
+    try:
+        return 200, scan_leads()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load leads from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def _lead_id_from_path(path: str) -> str | None:
+    """Extract LeadID from /api/leads/{id} (or /leads/{id})."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/leads/", "/leads/"):
+        if marker not in normalized:
+            continue
+        lead_id = normalized.split(marker, 1)[1]
+        if lead_id and "/" not in lead_id:
+            return lead_id
+    return None
+
+
+def handle_lead_write_request(
+    body: dict | None,
+    *,
+    mode: str,
+    lead_id: str | None = None,
+) -> tuple[int, dict]:
+    payload = dict(body or {}) if isinstance(body, dict) else body
+    if lead_id:
+        if not isinstance(payload, dict):
+            payload = {}
+        else:
+            payload = dict(payload)
+        body_id = _as_text(
+            payload.get("LeadID") if "LeadID" in payload else payload.get("leadId")
+        )
+        if body_id and body_id != lead_id:
+            return 400, {"error": "LeadID in path and body must match"}
+        payload["LeadID"] = lead_id
+
+    item, error = parse_lead_payload(payload)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_lead(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save lead to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -1378,6 +1730,7 @@ def handle_health_request() -> tuple[int, dict]:
         "systemsTable": SYSTEMS_TABLE_NAME,
         "ownersTable": OWNERS_TABLE_NAME,
         "mgmtCompaniesTable": MGMT_COMPANIES_TABLE_NAME,
+        "leadsTable": LEADS_TABLE_NAME,
     }
 
 
@@ -1443,6 +1796,21 @@ def route_request(
         if method == "PUT":
             return handle_mgmt_company_write_request(
                 body, mode="update", company_id=mgmt_company_path_id
+            )
+        return 405, {"error": "Method not allowed"}
+    if normalized.endswith("/api/leads") or normalized == "/leads":
+        if method == "GET":
+            return handle_leads_request()
+        if method == "POST":
+            return handle_lead_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_lead_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    lead_path_id = _lead_id_from_path(normalized)
+    if lead_path_id is not None:
+        if method == "PUT":
+            return handle_lead_write_request(
+                body, mode="update", lead_id=lead_path_id
             )
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":

@@ -91,7 +91,8 @@ if ! sam deploy \
     "SitesTableName=${NOVARA_SITES_TABLE:-NOVARASites}" \
     "SystemsTableName=${NOVARA_SYSTEMS_TABLE:-NOVARASystems}" \
     "OwnersTableName=${NOVARA_OWNERS_TABLE:-NOVARAOwners}" \
-    "MgmtCompaniesTableName=${NOVARA_MGMT_COMPANIES_TABLE:-NOVARAMgmtCompanies}"; then
+    "MgmtCompaniesTableName=${NOVARA_MGMT_COMPANIES_TABLE:-NOVARAMgmtCompanies}" \
+    "LeadsTableName=${NOVARA_LEADS_TABLE:-NOVARALeads}"; then
   echo "WARN: sam deploy failed; continuing so the static Sites UI still publishes."
   restore_template
   exit 0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners/mgmt-companies APIs."""
+"""NOVARA local server: static files + DynamoDB readings/sites/systems/owners/mgmt-companies/leads APIs."""
 
 from __future__ import annotations
 
@@ -47,6 +47,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/mgmt-companies":
             status, payload = novara_api.handle_mgmt_companies_request()
+            self._send_json(status, payload)
+            return
+        if parsed.path == "/api/leads":
+            status, payload = novara_api.handle_leads_request()
             self._send_json(status, payload)
             return
         if parsed.path == "/api/health":
@@ -113,6 +117,23 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/leads":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_lead_write_request(body, mode=mode)
+            self._send_json(status, payload)
+            return
+        lead_path_id = novara_api._lead_id_from_path(parsed.path)
+        if lead_path_id is not None and mode == "update":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_lead_write_request(
+                body, mode=mode, lead_id=lead_path_id
+            )
+            self._send_json(status, payload)
+            return
         self.send_error(404)
 
     def _read_json_body(self):
@@ -147,7 +168,7 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
         "NOVARA server on http://0.0.0.0:%s "
-        "(readings=%s sites=%s systems=%s owners=%s mgmtCompanies=%s)"
+        "(readings=%s sites=%s systems=%s owners=%s mgmtCompanies=%s leads=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
@@ -155,6 +176,7 @@ def main():
             novara_api.SYSTEMS_TABLE_NAME,
             novara_api.OWNERS_TABLE_NAME,
             novara_api.MGMT_COMPANIES_TABLE_NAME,
+            novara_api.LEADS_TABLE_NAME,
         )
     )
     try:

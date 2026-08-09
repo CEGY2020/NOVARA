@@ -57,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--leads-table",
+        default=os.environ.get("NOVARA_LEADS_TABLE", "NOVARALeads"),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -111,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
             f"SystemsTableName={args.systems_table}",
             f"OwnersTableName={args.owners_table}",
             f"MgmtCompaniesTableName={args.mgmt_companies_table}",
+            f"LeadsTableName={args.leads_table}",
         ],
         env=env,
     )
@@ -217,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         "/api/systems",
         "/api/owners",
         "/api/mgmt-companies",
+        "/api/leads",
         "/api/readings?siteId=SITE001&days=7",
     ):
         url = f"{api_url}{path}"
@@ -336,6 +342,65 @@ def main(argv: list[str] | None = None) -> int:
         if not mgmt_updated.get("ok"):
             print(
                 "ERROR: PUT /api/mgmt-companies/{id} did not return ok",
+                file=sys.stderr,
+            )
+            return 1
+
+    # Verify Leads create + path update persist to NOVARALeads.
+    lead_smoke_id = "LD_SMOKE_DEPLOY"
+    lead_create_url = f"{api_url}/api/leads"
+    lead_create_body = json.dumps(
+        {
+            "LeadID": lead_smoke_id,
+            "CompanyName": "Deploy Smoke Lead",
+            "Stage": "New Lead",
+            "Source": "Other",
+        }
+    ).encode("utf-8")
+    print(f"POST {lead_create_url}")
+    lead_create_req = urllib.request.Request(
+        lead_create_url,
+        data=lead_create_body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(lead_create_req, timeout=30) as resp:
+            lead_created = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} {lead_created}")
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        if exc.code != 409:
+            print(
+                f"ERROR: POST /api/leads failed: {exc.code} {err_body}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"  -> {exc.code} {err_body} (ok for redeploy)")
+
+    lead_update_url = f"{api_url}/api/leads/{lead_smoke_id}"
+    lead_update_body = json.dumps(
+        {
+            "LeadID": lead_smoke_id,
+            "CompanyName": "Deploy Smoke Lead Updated",
+            "Stage": "Contacted",
+            "Source": "Website",
+            "NextFollowUp": "2026-09-01",
+        }
+    ).encode("utf-8")
+    print(f"PUT {lead_update_url}")
+    lead_update_req = urllib.request.Request(
+        lead_update_url,
+        data=lead_update_body,
+        method="PUT",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(lead_update_req, timeout=30) as resp:
+        lead_updated = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {lead_updated}")
+        if not lead_updated.get("ok"):
+            print(
+                "ERROR: PUT /api/leads/{id} did not return ok",
                 file=sys.stderr,
             )
             return 1

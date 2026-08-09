@@ -42,7 +42,15 @@ frontend:
             echo "ERROR mgmt-companies.html is missing mgmt-company-modal"
             exit 1
           fi
-          echo "Sites/Systems/Owners/Mgmt Companies Add buttons and modals present in build artifacts."
+          if ! grep -q 'id="add-lead-btn"' leads.html; then
+            echo "ERROR leads.html is missing add-lead-btn"
+            exit 1
+          fi
+          if ! grep -q 'id="lead-modal"' leads.html; then
+            echo "ERROR leads.html is missing lead-modal"
+            exit 1
+          fi
+          echo "Sites/Systems/Owners/Mgmt Companies/Leads Add buttons and modals present in build artifacts."
   artifacts:
     baseDirectory: .
     files:
