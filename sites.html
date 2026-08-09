@@ -17,7 +17,10 @@
         <h2>Sites</h2>
         <p>Customer sites across the portfolio</p>
       </div>
-      <div id="user-profile-root"></div>
+      <div class="topbar-actions">
+        <button type="button" class="primary-btn" id="add-site-btn">+ Add Site</button>
+        <div id="user-profile-root"></div>
+      </div>
     </header>
 
     <p id="sites-status" class="chart-status" aria-live="polite">Loading sites…</p>
@@ -29,15 +32,95 @@
           <th>Location</th>
           <th>Systems</th>
           <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="sites-tbody">
         <tr>
-          <td colspan="4">Loading…</td>
+          <td colspan="5">Loading…</td>
         </tr>
       </tbody>
     </table>
   </main>
+</div>
+
+<div class="modal-backdrop" id="site-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="site-modal-title">
+    <div class="modal-header">
+      <div>
+        <h3 id="site-modal-title">Add Site</h3>
+        <p id="site-modal-subtitle">Create a new site in NOVARASites</p>
+      </div>
+      <button type="button" class="modal-close" id="site-modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="site-form" class="site-form" novalidate>
+      <input type="hidden" id="site-mode" value="create">
+
+      <div class="form-grid">
+        <label class="form-field">
+          <span>SiteID <em>*</em></span>
+          <input type="text" id="field-siteId" name="SiteID" required maxlength="64" autocomplete="off">
+        </label>
+        <label class="form-field">
+          <span>SiteName <em>*</em></span>
+          <input type="text" id="field-siteName" name="SiteName" required maxlength="120" autocomplete="organization">
+        </label>
+        <label class="form-field">
+          <span>Owner</span>
+          <input type="text" id="field-owner" name="Owner" maxlength="120">
+        </label>
+        <label class="form-field">
+          <span>MgmtCompany</span>
+          <input type="text" id="field-mgmtCompany" name="MgmtCompany" maxlength="120">
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Address</span>
+          <input type="text" id="field-address" name="Address" maxlength="200">
+        </label>
+        <label class="form-field">
+          <span>City</span>
+          <input type="text" id="field-city" name="City" maxlength="80">
+        </label>
+        <label class="form-field">
+          <span>State</span>
+          <input type="text" id="field-state" name="State" maxlength="40">
+        </label>
+        <label class="form-field">
+          <span>Zip</span>
+          <input type="text" id="field-zip" name="Zip" maxlength="20">
+        </label>
+        <label class="form-field">
+          <span>SystemType</span>
+          <select id="field-systemType" name="SystemType">
+            <option value="">Select…</option>
+            <option value="DHW">DHW</option>
+            <option value="Pool">Pool</option>
+            <option value="HVAC">HVAC</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Status</span>
+          <select id="field-status" name="Status">
+            <option value="Online">Online</option>
+            <option value="Offline">Offline</option>
+            <option value="Needs Review">Needs Review</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Systems</span>
+          <input type="number" id="field-systems" name="Systems" min="0" step="1" value="0">
+        </label>
+      </div>
+
+      <p id="site-form-error" class="form-error" role="alert" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" id="site-cancel-btn">Cancel</button>
+        <button type="submit" class="primary-btn" id="site-save-btn">Save</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="api-config.js"></script>

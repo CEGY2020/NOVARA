@@ -56,7 +56,11 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | --- | --- |
 | `GET /api/readings?siteId=VS001&days=3\|7\|30` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`) |
 | `GET /api/sites` | `NOVARASites` |
+| `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
+| `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |
 | `GET /api/health` | health check |
+
+Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner`, `MgmtCompany`, `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 

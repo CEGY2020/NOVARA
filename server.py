@@ -14,6 +14,18 @@ DEFAULT_PORT = int(os.environ.get("PORT", "8000"))
 
 
 class NovaraHandler(SimpleHTTPRequestHandler):
+    def do_OPTIONS(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/"):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_error(404)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/readings":
@@ -31,12 +43,37 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_POST(self):
+        self._handle_site_write("create")
+
+    def do_PUT(self):
+        self._handle_site_write("update")
+
+    def _handle_site_write(self, mode: str):
+        parsed = urlparse(self.path)
+        if parsed.path != "/api/sites":
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(length) if length > 0 else b""
+        try:
+            body = json.loads(raw.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            self._send_json(400, {"error": "Invalid JSON body"})
+            return
+        status, payload = novara_api.handle_site_write_request(body, mode=mode)
+        self._send_json(status, payload)
+
     def _send_json(self, status: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 

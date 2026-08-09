@@ -73,6 +73,77 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["sites"][0]["siteId"], "VS001")
 
+    def test_create_site_route(self):
+        body = {
+            "SiteID": "TST001",
+            "SiteName": "Test Site",
+            "SystemType": "DHW",
+            "Status": "Online",
+            "Systems": 2,
+        }
+        fake = {"ok": True, "table": "NOVARASites", "site": {"siteId": "TST001"}}
+        with patch.object(novara_api, "save_site", return_value=fake) as mocked:
+            status, payload = novara_api.route_request("POST", "/api/sites", {}, body)
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+
+    def test_update_site_route(self):
+        body = {
+            "SiteID": "VS001",
+            "SiteName": "Vista Springs",
+            "Status": "Needs Review",
+            "Systems": 1,
+        }
+        fake = {"ok": True, "table": "NOVARASites", "site": {"siteId": "VS001"}}
+        with patch.object(novara_api, "save_site", return_value=fake) as mocked:
+            status, payload = novara_api.route_request("PUT", "/api/sites", {}, body)
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+
+    def test_create_site_validation(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/sites", {}, {"SiteName": "Missing ID"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("SiteID", payload["error"])
+
+    def test_parse_site_payload_normalizes_system_type(self):
+        item, error = novara_api.parse_site_payload(
+            {
+                "siteId": "HP002",
+                "siteName": "Highlander Two",
+                "systemType": "Common Area DHW",
+                "status": "Online",
+                "systems": "3",
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["SiteID"], "HP002")
+        self.assertEqual(item["SystemType"], "DHW")
+        self.assertEqual(item["Systems"], 3)
+
+    def test_normalize_site_location_and_address(self):
+        site = novara_api.normalize_site(
+            {
+                "SiteID": "VS001",
+                "SiteName": "Vista Springs",
+                "StreetAddress": "21550 Box Springs Rd",
+                "City": "Moreno Valley",
+                "State": "CA",
+                "SystemType": "Common Area DHW",
+                "Owner": "Crystal Asset Management",
+            }
+        )
+        self.assertEqual(site["location"], "Moreno Valley, CA")
+        self.assertEqual(site["address"], "21550 Box Springs Rd")
+        self.assertEqual(site["systemType"], "DHW")
+        self.assertEqual(site["owner"], "Crystal Asset Management")
+        self.assertEqual(site["status"], "Online")
+
     def test_lambda_event_readings(self):
         fake = {
             "points": [{"t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1}],
@@ -108,6 +179,32 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         self.assertEqual(json.loads(response["body"])["table"], "NOVARASites")
 
+    def test_lambda_event_create_site(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARASites",
+            "site": {"siteId": "TST001", "name": "Test Site"},
+        }
+        event = {
+            "version": "2.0",
+            "rawPath": "/api/sites",
+            "requestContext": {"http": {"method": "POST", "path": "/api/sites"}},
+            "body": json.dumps(
+                {
+                    "SiteID": "TST001",
+                    "SiteName": "Test Site",
+                    "SystemType": "Pool",
+                    "Status": "Offline",
+                    "Systems": 1,
+                }
+            ),
+        }
+        with patch.object(novara_api, "save_site", return_value=fake) as mocked:
+            response = novara_api.handle_lambda_event(event)
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+        self.assertIn("POST", response["headers"]["Access-Control-Allow-Methods"])
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)
@@ -124,12 +221,12 @@ class RouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "api-config.js"
             rc = write_api_config.main(
-                ["--api-url", "https://example.execute-api.us-west-2.amazonaws.com/", "--output", str(out)]
+                ["--api-url", "https://example.execute-api.[REDACTED].amazonaws.com/", "--output", str(out)]
             )
             self.assertEqual(rc, 0)
             text = out.read_text(encoding="utf-8")
             self.assertIn(
-                "window.NOVARA_API_BASE = 'https://example.execute-api.us-west-2.amazonaws.com'",
+                "window.NOVARA_API_BASE = 'https://example.execute-api.[REDACTED].amazonaws.com'",
                 text,
             )
 
