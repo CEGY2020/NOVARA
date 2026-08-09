@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import traceback
@@ -14,6 +15,9 @@ TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
 DEFAULT_SITE_ID = "VS001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
+
+SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
+SITE_STATUSES = ("Online", "Offline", "Needs Review")
 
 
 def sanitize_aws_env() -> None:
@@ -88,6 +92,38 @@ def systems_count(value) -> int | None:
     return None
 
 
+def normalize_system_type(value) -> str:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+    lower = text.lower()
+    if text in SYSTEM_TYPES:
+        return text
+    if "pool" in lower:
+        return "Pool"
+    if "hvac" in lower:
+        return "HVAC"
+    if "dhw" in lower or "domestic" in lower or "hot water" in lower:
+        return "DHW"
+    return text
+
+
+def format_location(item: dict) -> str:
+    city = first_present(item, ("City", "city"))
+    state = first_present(item, ("State", "state"))
+    if city and state:
+        return f"{city}, {state}"
+    if city:
+        return str(city)
+    if state:
+        return str(state)
+    location = first_present(
+        item,
+        ("Location", "location", "Address", "address", "StreetAddress", "streetAddress"),
+    )
+    return str(location) if location is not None else "—"
+
+
 def normalize_site(item: dict) -> dict:
     site_id = first_present(item, ("SiteID", "siteId", "site_id", "id", "PK"))
     name = first_present(
@@ -95,10 +131,10 @@ def normalize_site(item: dict) -> dict:
         ("SiteName", "siteName", "Name", "name", "site", "Site"),
         default=site_id or "Unknown site",
     )
-    location = first_present(
+    address = first_present(
         item,
-        ("Location", "location", "City", "city", "Address", "address"),
-        default="—",
+        ("Address", "address", "StreetAddress", "streetAddress"),
+        default="",
     )
     systems_raw = first_present(
         item,
@@ -113,18 +149,32 @@ def normalize_site(item: dict) -> dict:
     )
     systems = systems_count(systems_raw)
     if systems is None:
-        systems = "—"
+        systems = 0
     status = first_present(
         item,
         ("Status", "status", "SiteStatus", "siteStatus"),
-        default="Unknown",
+        default="Online",
+    )
+    system_type = normalize_system_type(
+        first_present(item, ("SystemType", "systemType", "system_type"), default="")
     )
     return {
         "siteId": "" if site_id is None else str(site_id),
         "name": str(name),
-        "location": str(location),
-        "systems": systems,
+        "siteName": str(name),
+        "owner": str(first_present(item, ("Owner", "owner"), default="") or ""),
+        "mgmtCompany": str(
+            first_present(item, ("MgmtCompany", "mgmtCompany", "mgmt_company"), default="")
+            or ""
+        ),
+        "address": str(address or ""),
+        "city": str(first_present(item, ("City", "city"), default="") or ""),
+        "state": str(first_present(item, ("State", "state"), default="") or ""),
+        "zip": str(first_present(item, ("Zip", "zip", "ZIP"), default="") or ""),
+        "systemType": system_type,
         "status": str(status),
+        "systems": systems,
+        "location": format_location(item),
     }
 
 
@@ -146,6 +196,110 @@ def scan_sites() -> dict:
         "table": SITES_TABLE_NAME,
         "count": len(sites),
         "sites": sites,
+    }
+
+
+def get_site_item(site_id: str) -> dict | None:
+    table = dynamodb_table(SITES_TABLE_NAME)
+    response = table.get_item(Key={"SiteID": site_id})
+    item = response.get("Item")
+    if not item:
+        return None
+    return normalize_site(json_safe(item))
+
+
+def _as_text(value) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def parse_site_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming site create/update payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    site_id = _as_text(body.get("SiteID") if "SiteID" in body else body.get("siteId"))
+    site_name = _as_text(
+        body.get("SiteName") if "SiteName" in body else body.get("siteName")
+    )
+    if not site_id:
+        return None, "SiteID is required"
+    if not site_name:
+        return None, "SiteName is required"
+    if len(site_id) > 64:
+        return None, "SiteID must be 64 characters or fewer"
+
+    system_type = _as_text(
+        body.get("SystemType") if "SystemType" in body else body.get("systemType")
+    )
+    if system_type:
+        system_type = normalize_system_type(system_type)
+        if system_type not in SYSTEM_TYPES:
+            return None, "SystemType must be one of: " + ", ".join(SYSTEM_TYPES)
+
+    status = _as_text(body.get("Status") if "Status" in body else body.get("status"))
+    if status and status not in SITE_STATUSES:
+        return None, "Status must be one of: " + ", ".join(SITE_STATUSES)
+
+    systems_raw = body.get("Systems") if "Systems" in body else body.get("systems")
+    systems = 0
+    if systems_raw is not None and systems_raw != "":
+        try:
+            systems = int(systems_raw)
+        except (TypeError, ValueError):
+            return None, "Systems must be a number"
+        if systems < 0:
+            return None, "Systems must be zero or greater"
+
+    item = {
+        "SiteID": site_id,
+        "SiteName": site_name,
+        "Owner": _as_text(body.get("Owner") if "Owner" in body else body.get("owner")),
+        "MgmtCompany": _as_text(
+            body.get("MgmtCompany")
+            if "MgmtCompany" in body
+            else body.get("mgmtCompany")
+        ),
+        "Address": _as_text(
+            body.get("Address") if "Address" in body else body.get("address")
+        ),
+        "City": _as_text(body.get("City") if "City" in body else body.get("city")),
+        "State": _as_text(body.get("State") if "State" in body else body.get("state")),
+        "Zip": _as_text(body.get("Zip") if "Zip" in body else body.get("zip")),
+        "SystemType": system_type,
+        "Status": status or "Online",
+        "Systems": systems,
+    }
+    return item, None
+
+
+def save_site(item: dict, *, mode: str = "upsert") -> dict:
+    """Write a site to DynamoDB. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    table = dynamodb_table(SITES_TABLE_NAME)
+    kwargs = {"Item": item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(SiteID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(SiteID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(f"SiteID '{item['SiteID']}' already exists") from exc
+            if mode == "update":
+                raise LookupError(f"SiteID '{item['SiteID']}' was not found") from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": SITES_TABLE_NAME,
+        "site": normalize_site(item),
     }
 
 
@@ -244,10 +398,28 @@ def _request_path(event: dict) -> str:
         or (event.get("requestContext") or {}).get("http", {}).get("path")
         or ""
     )
-    # Strip stage prefixes such as /prod/api/readings
+    # Strip stage prefixes such as /prod/api/sites
     if path.startswith("/prod/") or path.startswith("/Stage/"):
         path = "/" + path.split("/", 2)[-1]
     return path.rstrip("/") or "/"
+
+
+def _request_body(event: dict) -> Any:
+    body = event.get("body")
+    if body is None or body == "":
+        return {}
+    if event.get("isBase64Encoded"):
+        body = base64.b64decode(body).decode("utf-8")
+    if isinstance(body, (bytes, bytearray)):
+        body = body.decode("utf-8")
+    if isinstance(body, dict):
+        return body
+    if isinstance(body, str):
+        trimmed = body.strip()
+        if not trimmed:
+            return {}
+        return json.loads(trimmed)
+    return {}
 
 
 def handle_readings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
@@ -280,6 +452,24 @@ def handle_sites_request() -> tuple[int, dict]:
         }
 
 
+def handle_site_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
+    item, error = parse_site_payload(body)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_site(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save site to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -288,19 +478,32 @@ def handle_health_request() -> tuple[int, dict]:
     }
 
 
-def route_request(method: str, path: str, params: dict[str, list[str]]) -> tuple[int, dict]:
+def route_request(
+    method: str,
+    path: str,
+    params: dict[str, list[str]],
+    body: dict | None = None,
+) -> tuple[int, dict]:
     method = (method or "GET").upper()
     if method == "OPTIONS":
         return 204, {}
-    if method != "GET":
-        return 405, {"error": "Method not allowed"}
 
     normalized = path if path.startswith("/") else f"/{path}"
     if normalized.endswith("/api/readings") or normalized == "/readings":
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
         return handle_readings_request(params)
     if normalized.endswith("/api/sites") or normalized == "/sites":
-        return handle_sites_request()
+        if method == "GET":
+            return handle_sites_request()
+        if method == "POST":
+            return handle_site_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_site_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
         return handle_health_request()
     return 404, {"error": "Not found", "path": path}
 
@@ -313,7 +516,7 @@ def api_response(status: int, payload: dict, *, cors: bool = True) -> dict:
     if cors:
         headers["Access-Control-Allow-Origin"] = "*"
         headers["Access-Control-Allow-Headers"] = "Content-Type"
-        headers["Access-Control-Allow-Methods"] = "GET,OPTIONS"
+        headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,OPTIONS"
     body = "" if status == 204 else json.dumps(payload)
     return {
         "statusCode": status,
@@ -335,5 +538,9 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
     )
     path = _request_path(event)
     params = _query_params(event)
-    status, payload = route_request(method, path, params)
+    try:
+        body = _request_body(event)
+    except json.JSONDecodeError:
+        return api_response(400, {"error": "Invalid JSON body"})
+    status, payload = route_request(method, path, params, body)
     return api_response(status, payload)

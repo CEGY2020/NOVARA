@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites create/update)
 
 Parameters:
   ReadingsTableName:
@@ -41,6 +41,8 @@ Resources:
                 - dynamodb:Query
                 - dynamodb:Scan
                 - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
                 - dynamodb:BatchGetItem
                 - dynamodb:DescribeTable
               Resource:
@@ -55,12 +57,24 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/readings
             Method: GET
-        Sites:
+        SitesGet:
           Type: HttpApi
           Properties:
             ApiId: !Ref NovaraHttpApi
             Path: /api/sites
             Method: GET
+        SitesCreate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/sites
+            Method: POST
+        SitesUpdate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/sites
+            Method: PUT
         Health:
           Type: HttpApi
           Properties:
@@ -81,6 +95,8 @@ Resources:
             - "*"
           AllowMethods:
             - GET
+            - POST
+            - PUT
           AllowHeaders:
             - content-type
           MaxAge: 86400
@@ -96,6 +112,8 @@ Resources:
           - "*"
         AllowMethods:
           - GET
+          - POST
+          - PUT
           - OPTIONS
         MaxAge: 86400
 
