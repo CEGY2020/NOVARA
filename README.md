@@ -69,6 +69,8 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `GET /api/systems` | `NOVARASystems` |
 | `POST /api/systems` | Create system in `NOVARASystems` (JSON body) |
 | `PUT /api/systems` | Update existing system in `NOVARASystems` (JSON body) |
+| `PUT /api/systems/{id}` | Update system by `SystemID` path (JSON body) |
+| `DELETE /api/systems/{id}` | Delete system; refreshes linked site `Systems` count + status |
 | `GET /api/owners` | `NOVARAOwners` |
 | `POST /api/owners` | Create owner in `NOVARAOwners` (JSON body) |
 | `PUT /api/owners` | Update existing owner in `NOVARAOwners` (JSON body) |
@@ -85,7 +87,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner` (`OwnerID` from `NOVARAOwners`), `MgmtCompany` (`MgmtCompanyID` from `NOVARAMgmtCompanies`), `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
 
-Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional).
+Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional). Creating, updating, or deleting a system refreshes the linked site’s `Systems` count and derives site `Status` from linked systems (`Offline` > `Needs Review`/`Maintenance` > `Online`).
 
 Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 

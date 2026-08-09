@@ -435,6 +435,62 @@ class RouteTests(unittest.TestCase):
         self.assertIn("currentMode === \"edit\"", save_system)
         self.assertIn("api.updateSystem", save_system)
         self.assertIn("api.createSystem", save_system)
+        self.assertIn("api.deleteSystem", source)
+        self.assertIn("nextSystemId", source)
+        self.assertIn("SYS", source)
+
+    def test_derive_site_status_from_systems(self):
+        self.assertIsNone(novara_api.derive_site_status_from_systems([]))
+        self.assertEqual(
+            novara_api.derive_site_status_from_systems(["Online", "Online"]),
+            "Online",
+        )
+        self.assertEqual(
+            novara_api.derive_site_status_from_systems(["Online", "Maintenance"]),
+            "Needs Review",
+        )
+        self.assertEqual(
+            novara_api.derive_site_status_from_systems(
+                ["Online", "Needs Review", "Offline"]
+            ),
+            "Offline",
+        )
+
+    def test_delete_system_route(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARASystems",
+            "deleted": True,
+            "systemId": "SYS001",
+            "siteId": "SITE001",
+        }
+        with patch.object(novara_api, "delete_system", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/systems/SYS001", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["deleted"])
+        mocked.assert_called_once_with("SYS001")
+
+    def test_api_client_exposes_delete_system(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("deleteSystem:", source)
+        self.assertIn('"/api/systems/"', source)
+        self.assertIn('"DELETE"', source)
+
+    def test_sites_js_uses_derived_status_hints(self):
+        html = Path(__file__).resolve().parent.joinpath("sites.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id="site-status-hint"', html)
+        self.assertIn('id="systems-count-hint"', html)
+        self.assertIn("updateDerivedFieldHints", source)
+        self.assertIn("Derived from linked systems", source)
 
     def test_owners_route(self):
         fake = {

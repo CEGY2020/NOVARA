@@ -70,15 +70,19 @@
 
   function sendJson(path, method, payload) {
     var url = buildUrl(path);
-    return fetch(url, {
+    var options = {
       method: method,
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
       cache: "no-store",
-      body: JSON.stringify(payload || {}),
-    }).then(function (response) {
+    };
+    // Avoid DELETE/GET request bodies (some proxies reject them).
+    if (method !== "DELETE" && method !== "GET") {
+      options.body = JSON.stringify(payload || {});
+    }
+    return fetch(url, options).then(function (response) {
       return parseResponse(response, path);
     });
   }
@@ -107,7 +111,29 @@
       return sendJson("/api/systems", "POST", system);
     },
     updateSystem: function (system) {
+      var id = system && (system.SystemID || system.systemId);
+      if (id) {
+        return sendJson(
+          "/api/systems/" + encodeURIComponent(String(id)),
+          "PUT",
+          system
+        );
+      }
       return sendJson("/api/systems", "PUT", system);
+    },
+    deleteSystem: function (systemId) {
+      var id =
+        typeof systemId === "string" || typeof systemId === "number"
+          ? systemId
+          : systemId && (systemId.SystemID || systemId.systemId);
+      if (!id) {
+        return Promise.reject(new Error("SystemID is required"));
+      }
+      return sendJson(
+        "/api/systems/" + encodeURIComponent(String(id)),
+        "DELETE",
+        null
+      );
     },
     getOwners: function () {
       return fetchJson("/api/owners");

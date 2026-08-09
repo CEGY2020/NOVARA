@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Sites</title>
-  <link rel="stylesheet" href="dashboard.css?v=sites-owner-mgmt-1">
+  <link rel="stylesheet" href="dashboard.css?v=systems-sites-sync-1">
 </head>
 <body data-page="sites">
 
@@ -113,11 +113,12 @@
             <option value="Offline">Offline</option>
             <option value="Needs Review">Needs Review</option>
           </select>
+          <small class="field-hint" id="site-status-hint">Derived from linked systems when present</small>
         </label>
         <label class="form-field">
           <span>Systems</span>
           <input type="number" id="field-systems" name="Systems" min="0" step="1" value="0" readonly aria-readonly="true">
-          <small class="field-hint">Count of systems linked in NOVARASystems</small>
+          <small class="field-hint" id="systems-count-hint">Live count of systems linked by SiteID in NOVARASystems</small>
         </label>
       </div>
 
@@ -131,9 +132,9 @@
   </div>
 </div>
 
-<script src="api-config.js?v=sites-owner-mgmt-1"></script>
-<script src="api-client.js?v=sites-owner-mgmt-1"></script>
-<script src="nav.js?v=sites-owner-mgmt-1"></script>
-<script src="sites.js?v=sites-owner-mgmt-1"></script>
+<script src="api-config.js?v=systems-sites-sync-1"></script>
+<script src="api-client.js?v=systems-sites-sync-1"></script>
+<script src="nav.js?v=systems-sites-sync-1"></script>
+<script src="sites.js?v=systems-sites-sync-1"></script>
 </body>
 </html>

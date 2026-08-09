@@ -229,13 +229,44 @@ def normalize_system(item: dict, *, site_name: str | None = None) -> dict:
     }
 
 
-def count_systems_by_site() -> dict[str, int]:
-    """Return {SiteID: count} from NOVARASystems."""
+def derive_site_status_from_systems(statuses: list[str] | tuple[str, ...]) -> str | None:
+    """
+    Roll up linked system statuses into a site Status (SITE_STATUSES).
+
+    Priority: Offline > Needs Review (incl. Maintenance) > Online.
+    Returns None when there are no systems to derive from.
+    """
+    if not statuses:
+        return None
+    normalized = [str(status or "").strip() for status in statuses if str(status or "").strip()]
+    if not normalized:
+        return None
+    lowered = [status.lower() for status in normalized]
+    if any("offline" in status or "critical" in status for status in lowered):
+        return "Offline"
+    if any(
+        "review" in status
+        or "maintenance" in status
+        or "warn" in status
+        or "alarm" in status
+        for status in lowered
+    ):
+        return "Needs Review"
+    if any(
+        "online" in status or status in ("ok", "normal") for status in lowered
+    ):
+        return "Online"
+    return "Needs Review"
+
+
+def summarize_systems_by_site() -> dict[str, dict]:
+    """Return {SiteID: {"count": int, "statuses": [str, ...]}} from NOVARASystems."""
     ensure_systems_table()
     table = dynamodb_table(SYSTEMS_TABLE_NAME)
-    counts: dict[str, int] = {}
+    summary: dict[str, dict] = {}
     scan_kwargs = {
-        "ProjectionExpression": "SiteID",
+        "ProjectionExpression": "SiteID, #status",
+        "ExpressionAttributeNames": {"#status": "Status"},
     }
     while True:
         response = table.scan(**scan_kwargs)
@@ -244,12 +275,24 @@ def count_systems_by_site() -> dict[str, int]:
             if not site_id:
                 continue
             key = str(site_id)
-            counts[key] = counts.get(key, 0) + 1
+            bucket = summary.setdefault(key, {"count": 0, "statuses": []})
+            bucket["count"] += 1
+            status = item.get("Status")
+            if status is not None and str(status).strip():
+                bucket["statuses"].append(str(status).strip())
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
         scan_kwargs["ExclusiveStartKey"] = last_key
-    return counts
+    return summary
+
+
+def count_systems_by_site() -> dict[str, int]:
+    """Return {SiteID: count} from NOVARASystems."""
+    return {
+        site_id: int(info.get("count") or 0)
+        for site_id, info in summarize_systems_by_site().items()
+    }
 
 
 def scan_systems() -> dict:
@@ -372,12 +415,34 @@ def parse_system_payload(body: dict | None) -> tuple[dict | None, str | None]:
     return item, None
 
 
+def get_system_item(system_id: str) -> dict | None:
+    """Fetch one system by SystemID, or None if missing."""
+    if not system_id:
+        return None
+    ensure_systems_table()
+    table = dynamodb_table(SYSTEMS_TABLE_NAME)
+    response = table.get_item(Key={"SystemID": system_id})
+    item = response.get("Item")
+    if not item:
+        return None
+    return normalize_system(json_safe(item))
+
+
 def save_system(item: dict, *, mode: str = "upsert") -> dict:
     """Write a system to DynamoDB. mode: create | update | upsert."""
     from botocore.exceptions import ClientError
 
     ensure_systems_table()
     table = dynamodb_table(SYSTEMS_TABLE_NAME)
+
+    previous_site_id = ""
+    if mode in ("update", "upsert"):
+        try:
+            existing = table.get_item(Key={"SystemID": item["SystemID"]}).get("Item") or {}
+            previous_site_id = str(existing.get("SiteID") or "")
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+
     kwargs = {"Item": item}
     if mode == "create":
         kwargs["ConditionExpression"] = "attribute_not_exists(SystemID)"
@@ -395,16 +460,63 @@ def save_system(item: dict, *, mode: str = "upsert") -> dict:
                 raise LookupError(f"SystemID '{item['SystemID']}' was not found") from exc
         raise
 
-    # Keep the linked site's Systems count in sync with NOVARASystems.
-    try:
-        _sync_site_systems_count(item["SiteID"])
-    except Exception:  # noqa: BLE001
-        traceback.print_exc()
+    # Keep linked site Systems count + Status in sync with NOVARASystems.
+    site_ids = {str(item.get("SiteID") or "")}
+    if previous_site_id:
+        site_ids.add(previous_site_id)
+    for site_id in site_ids:
+        if not site_id:
+            continue
+        try:
+            _sync_site_from_systems(site_id)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
 
     return {
         "ok": True,
         "table": SYSTEMS_TABLE_NAME,
         "system": normalize_system(item, site_name=item.get("SiteName")),
+    }
+
+
+def delete_system(system_id: str) -> dict:
+    """Delete a system from NOVARASystems and refresh the linked site."""
+    from botocore.exceptions import ClientError
+
+    system_id = _as_text(system_id)
+    if not system_id:
+        raise ValueError("SystemID is required")
+
+    ensure_systems_table()
+    table = dynamodb_table(SYSTEMS_TABLE_NAME)
+    existing = table.get_item(Key={"SystemID": system_id}).get("Item")
+    if not existing:
+        raise LookupError(f"SystemID '{system_id}' was not found")
+
+    site_id = str(existing.get("SiteID") or "")
+    try:
+        table.delete_item(
+            Key={"SystemID": system_id},
+            ConditionExpression="attribute_exists(SystemID)",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            raise LookupError(f"SystemID '{system_id}' was not found") from exc
+        raise
+
+    if site_id:
+        try:
+            _sync_site_from_systems(site_id)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+
+    return {
+        "ok": True,
+        "table": SYSTEMS_TABLE_NAME,
+        "deleted": True,
+        "systemId": system_id,
+        "siteId": site_id,
     }
 
 
@@ -1127,20 +1239,34 @@ def save_lead(item: dict, *, mode: str = "upsert") -> dict:
     }
 
 
-def _sync_site_systems_count(site_id: str) -> None:
-    """Update NOVARASites.Systems for site_id from live NOVARASystems rows."""
+def _sync_site_from_systems(site_id: str) -> None:
+    """Update NOVARASites.Systems (+ Status when derivable) from live NOVARASystems."""
     if not site_id:
         return
-    counts = count_systems_by_site()
-    count = int(counts.get(str(site_id), 0))
+    summary = summarize_systems_by_site().get(str(site_id), {"count": 0, "statuses": []})
+    count = int(summary.get("count") or 0)
+    derived_status = derive_site_status_from_systems(summary.get("statuses") or [])
+
     table = dynamodb_table(SITES_TABLE_NAME)
+    update_expression = "SET #systems = :count"
+    names = {"#systems": "Systems"}
+    values: dict[str, Any] = {":count": count}
+    if derived_status:
+        update_expression += ", #status = :status"
+        names["#status"] = "Status"
+        values[":status"] = derived_status
+
     table.update_item(
         Key={"SiteID": site_id},
-        UpdateExpression="SET #systems = :count",
-        ExpressionAttributeNames={"#systems": "Systems"},
-        ExpressionAttributeValues={":count": count},
+        UpdateExpression=update_expression,
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
         ConditionExpression="attribute_exists(SiteID)",
     )
+
+
+# Back-compat alias used by older call sites / tests.
+_sync_site_systems_count = _sync_site_from_systems
 
 
 def format_location(item: dict) -> str:
@@ -1228,12 +1354,18 @@ def scan_sites(*, include_system_counts: bool = True) -> dict:
     sites = [normalize_site(json_safe(item)) for item in items]
     if include_system_counts:
         try:
-            counts = count_systems_by_site()
+            summary = summarize_systems_by_site()
             for site in sites:
                 site_id = site.get("siteId") or ""
-                site["systems"] = int(counts.get(site_id, 0))
+                info = summary.get(site_id) or {"count": 0, "statuses": []}
+                site["systems"] = int(info.get("count") or 0)
+                derived = derive_site_status_from_systems(info.get("statuses") or [])
+                if derived:
+                    site["status"] = derived
+                elif site["systems"] == 0 and not site.get("status"):
+                    site["status"] = "Online"
         except Exception:  # noqa: BLE001
-            # Keep stored Systems values if NOVARASystems is unavailable.
+            # Keep stored Systems/Status values if NOVARASystems is unavailable.
             traceback.print_exc()
     sites.sort(key=lambda site: (site.get("name") or "").lower())
     return {
@@ -1321,6 +1453,18 @@ def parse_site_payload(body: dict | None) -> tuple[dict | None, str | None]:
 def save_site(item: dict, *, mode: str = "upsert") -> dict:
     """Write a site to DynamoDB. mode: create | update | upsert."""
     from botocore.exceptions import ClientError
+
+    # Prefer live NOVARASystems count/status over any client-supplied Systems value.
+    try:
+        summary = summarize_systems_by_site().get(
+            str(item.get("SiteID") or ""), {"count": 0, "statuses": []}
+        )
+        item["Systems"] = int(summary.get("count") or 0)
+        derived = derive_site_status_from_systems(summary.get("statuses") or [])
+        if derived:
+            item["Status"] = derived
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
 
     table = dynamodb_table(SITES_TABLE_NAME)
     kwargs = {"Item": item}
@@ -1539,6 +1683,36 @@ def handle_system_write_request(body: dict | None, *, mode: str) -> tuple[int, d
         traceback.print_exc()
         return 500, {
             "error": "Failed to save system to DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def _system_id_from_path(path: str) -> str | None:
+    """Extract SystemID from /api/systems/{id} (or /systems/{id})."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/systems/", "/systems/"):
+        if marker not in normalized:
+            continue
+        system_id = normalized.split(marker, 1)[1]
+        if system_id and "/" not in system_id:
+            return system_id
+    return None
+
+
+def handle_system_delete_request(system_id: str | None) -> tuple[int, dict]:
+    system_id = _as_text(system_id)
+    if not system_id:
+        return 400, {"error": "SystemID is required"}
+    try:
+        return 200, delete_system(system_id)
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to delete system from DynamoDB",
             "detail": str(exc),
         }
 
@@ -1765,6 +1939,15 @@ def route_request(
         if method == "PUT":
             return handle_system_write_request(body, mode="update")
         return 405, {"error": "Method not allowed"}
+    system_path_id = _system_id_from_path(normalized)
+    if system_path_id is not None:
+        if method == "DELETE":
+            return handle_system_delete_request(system_path_id)
+        if method == "PUT":
+            payload = dict(body or {}) if isinstance(body, dict) else {}
+            payload["SystemID"] = system_path_id
+            return handle_system_write_request(payload, mode="update")
+        return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/owners") or normalized == "/owners":
         if method == "GET":
             return handle_owners_request()
@@ -1828,7 +2011,7 @@ def api_response(status: int, payload: dict, *, cors: bool = True) -> dict:
     if cors:
         headers["Access-Control-Allow-Origin"] = "*"
         headers["Access-Control-Allow-Headers"] = "Content-Type"
-        headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,OPTIONS"
+        headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
     body = "" if status == 204 else json.dumps(payload)
     return {
         "statusCode": status,
