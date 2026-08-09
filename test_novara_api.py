@@ -473,6 +473,32 @@ class RouteTests(unittest.TestCase):
         mocked.assert_called_once()
         self.assertEqual(mocked.call_args.kwargs["mode"], "update")
 
+    def test_update_owner_by_id_route(self):
+        body = {
+            "Name": "Crystal Asset Management",
+            "ContactName": "Jane Doe",
+        }
+        fake = {"ok": True, "table": "NOVARAOwners", "owner": {"ownerId": "OWN001"}}
+        with patch.object(novara_api, "save_owner", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "PUT", "/api/owners/OWN001", {}, body
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "update")
+        self.assertEqual(mocked.call_args.args[0]["OwnerID"], "OWN001")
+
+    def test_update_owner_by_id_mismatch(self):
+        status, payload = novara_api.route_request(
+            "PUT",
+            "/api/owners/OWN001",
+            {},
+            {"OwnerID": "OWN002", "Name": "Mismatch"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("must match", payload["error"])
+
     def test_create_owner_validation(self):
         status, payload = novara_api.route_request(
             "POST", "/api/owners", {}, {"City": "Denver"}
@@ -546,6 +572,19 @@ class RouteTests(unittest.TestCase):
         self.assertIn("currentMode === \"edit\"", save_owner)
         self.assertIn("api.updateOwner", save_owner)
         self.assertIn("api.createOwner", save_owner)
+
+    def test_api_client_update_owner_uses_path_id(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        update_owner = source.split("updateOwner:", 1)[1].split(
+            "getOwners:", 1
+        )[0]
+        # Fall back if method order changes: take a generous slice.
+        if "encodeURIComponent" not in update_owner:
+            update_owner = source.split("updateOwner:", 1)[1][:400]
+        self.assertIn("/api/owners/", update_owner)
+        self.assertIn("encodeURIComponent", update_owner)
 
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
