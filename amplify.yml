@@ -18,7 +18,15 @@ frontend:
             echo "ERROR sites.html is missing site-modal"
             exit 1
           fi
-          echo "Sites Add Site button and modal present in build artifacts."
+          if ! grep -q 'id="add-system-btn"' systems.html; then
+            echo "ERROR systems.html is missing add-system-btn"
+            exit 1
+          fi
+          if ! grep -q 'id="system-modal"' systems.html; then
+            echo "ERROR systems.html is missing system-modal"
+            exit 1
+          fi
+          echo "Sites/Systems Add buttons and modals present in build artifacts."
   artifacts:
     baseDirectory: .
     files:

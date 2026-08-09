@@ -43,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_SITES_TABLE", "NOVARASites"),
     )
     parser.add_argument(
+        "--systems-table",
+        default=os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems"),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -94,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             "--parameter-overrides",
             f"ReadingsTableName={args.readings_table}",
             f"SitesTableName={args.sites_table}",
+            f"SystemsTableName={args.systems_table}",
         ],
         env=env,
     )
@@ -193,7 +198,12 @@ def main(argv: list[str] | None = None) -> int:
     # Smoke-test endpoints against the chosen base URL.
     import urllib.request
 
-    for path in ("/api/health", "/api/sites", "/api/readings?siteId=SITE001&days=7"):
+    for path in (
+        "/api/health",
+        "/api/sites",
+        "/api/systems",
+        "/api/readings?siteId=SITE001&days=7",
+    ):
         url = f"{api_url}{path}"
         print(f"GET {url}")
         with urllib.request.urlopen(url, timeout=30) as resp:

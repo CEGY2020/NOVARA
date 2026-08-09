@@ -13,11 +13,16 @@ from urllib.parse import parse_qs
 
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
+SYSTEMS_TABLE_NAME = os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems")
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
 SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
 SITE_STATUSES = ("Online", "Offline", "Needs Review")
+SYSTEM_RECORD_TYPES = ("DHW", "Pool", "HVAC", "Boiler")
+SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
+
+_systems_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -97,15 +102,308 @@ def normalize_system_type(value) -> str:
     if not text:
         return ""
     lower = text.lower()
-    if text in SYSTEM_TYPES:
+    if text in SYSTEM_RECORD_TYPES or text in SYSTEM_TYPES:
         return text
     if "pool" in lower:
         return "Pool"
     if "hvac" in lower:
         return "HVAC"
+    if "boiler" in lower:
+        return "Boiler"
     if "dhw" in lower or "domestic" in lower or "hot water" in lower:
         return "DHW"
     return text
+
+
+def ensure_systems_table() -> str:
+    """Create NOVARASystems if missing (pay-per-request, SystemID hash key)."""
+    global _systems_table_ready
+    if _systems_table_ready:
+        return SYSTEMS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=SYSTEMS_TABLE_NAME)
+        _systems_table_ready = True
+        return SYSTEMS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=SYSTEMS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "SystemID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "SystemID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=SYSTEMS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _systems_table_ready = True
+    return SYSTEMS_TABLE_NAME
+
+
+def normalize_system(item: dict, *, site_name: str | None = None) -> dict:
+    system_id = first_present(item, ("SystemID", "systemId", "system_id", "id"))
+    site_id = first_present(item, ("SiteID", "siteId", "site_id"), default="")
+    name = first_present(
+        item,
+        ("SystemName", "systemName", "Name", "name"),
+        default=system_id or "Unknown system",
+    )
+    system_type = normalize_system_type(
+        first_present(item, ("SystemType", "systemType", "system_type"), default="")
+    )
+    status = first_present(
+        item,
+        ("Status", "status", "SystemStatus", "systemStatus"),
+        default="Online",
+    )
+    equipment_raw = first_present(
+        item,
+        ("EquipmentCount", "equipmentCount", "equipment_count", "Equipment"),
+        default=0,
+    )
+    equipment = systems_count(equipment_raw)
+    if equipment is None:
+        equipment = 0
+    install_date = first_present(
+        item, ("InstallDate", "installDate", "install_date"), default=""
+    )
+    notes = first_present(item, ("Notes", "notes"), default="")
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at", "LastUpdate", "lastUpdate"),
+        default="",
+    )
+    resolved_site_name = site_name
+    if resolved_site_name is None:
+        resolved_site_name = first_present(
+            item, ("SiteName", "siteName", "site_name"), default=""
+        )
+    return {
+        "systemId": "" if system_id is None else str(system_id),
+        "siteId": "" if site_id is None else str(site_id),
+        "siteName": str(resolved_site_name or ""),
+        "systemName": str(name),
+        "name": str(name),
+        "systemType": system_type,
+        "status": str(status),
+        "equipmentCount": equipment,
+        "installDate": str(install_date or ""),
+        "notes": str(notes or ""),
+        "updatedAt": str(updated_at or ""),
+        "lastUpdate": str(updated_at or ""),
+    }
+
+
+def count_systems_by_site() -> dict[str, int]:
+    """Return {SiteID: count} from NOVARASystems."""
+    ensure_systems_table()
+    table = dynamodb_table(SYSTEMS_TABLE_NAME)
+    counts: dict[str, int] = {}
+    scan_kwargs = {
+        "ProjectionExpression": "SiteID",
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get("Items", []):
+            site_id = item.get("SiteID")
+            if not site_id:
+                continue
+            key = str(site_id)
+            counts[key] = counts.get(key, 0) + 1
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return counts
+
+
+def scan_systems() -> dict:
+    ensure_systems_table()
+    table = dynamodb_table(SYSTEMS_TABLE_NAME)
+    items = []
+    scan_kwargs = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    site_names: dict[str, str] = {}
+    try:
+        sites_payload = scan_sites(include_system_counts=False)
+        for site in sites_payload.get("sites") or []:
+            site_id = site.get("siteId")
+            if site_id:
+                site_names[str(site_id)] = site.get("name") or site.get("siteName") or ""
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+
+    systems = [
+        normalize_system(
+            json_safe(item),
+            site_name=site_names.get(str(first_present(item, ("SiteID", "siteId"), default=""))),
+        )
+        for item in items
+    ]
+    systems.sort(
+        key=lambda row: (
+            (row.get("siteName") or "").lower(),
+            (row.get("systemName") or "").lower(),
+            (row.get("systemId") or "").lower(),
+        )
+    )
+    return {
+        "table": SYSTEMS_TABLE_NAME,
+        "count": len(systems),
+        "systems": systems,
+    }
+
+
+def parse_system_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming system create/update payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    system_id = _as_text(
+        body.get("SystemID") if "SystemID" in body else body.get("systemId")
+    )
+    site_id = _as_text(body.get("SiteID") if "SiteID" in body else body.get("siteId"))
+    system_name = _as_text(
+        body.get("SystemName") if "SystemName" in body else body.get("systemName")
+    )
+    if not system_id:
+        return None, "SystemID is required"
+    if not site_id:
+        return None, "SiteID is required"
+    if not system_name:
+        return None, "SystemName is required"
+    if len(system_id) > 64:
+        return None, "SystemID must be 64 characters or fewer"
+    if len(site_id) > 64:
+        return None, "SiteID must be 64 characters or fewer"
+
+    system_type = _as_text(
+        body.get("SystemType") if "SystemType" in body else body.get("systemType")
+    )
+    if system_type:
+        system_type = normalize_system_type(system_type)
+        if system_type not in SYSTEM_RECORD_TYPES:
+            return None, "SystemType must be one of: " + ", ".join(SYSTEM_RECORD_TYPES)
+    else:
+        return None, "SystemType is required"
+
+    status = _as_text(body.get("Status") if "Status" in body else body.get("status"))
+    if status and status not in SYSTEM_RECORD_STATUSES:
+        return None, "Status must be one of: " + ", ".join(SYSTEM_RECORD_STATUSES)
+
+    equipment_raw = (
+        body.get("EquipmentCount")
+        if "EquipmentCount" in body
+        else body.get("equipmentCount")
+    )
+    equipment = 0
+    if equipment_raw is not None and equipment_raw != "":
+        try:
+            equipment = int(equipment_raw)
+        except (TypeError, ValueError):
+            return None, "EquipmentCount must be a number"
+        if equipment < 0:
+            return None, "EquipmentCount must be zero or greater"
+
+    install_date = _as_text(
+        body.get("InstallDate") if "InstallDate" in body else body.get("installDate")
+    )
+    notes = _as_text(body.get("Notes") if "Notes" in body else body.get("notes"))
+
+    # Confirm the linked site exists in NOVARASites.
+    linked = get_site_item(site_id)
+    if linked is None:
+        return None, f"SiteID '{site_id}' was not found in {SITES_TABLE_NAME}"
+
+    item = {
+        "SystemID": system_id,
+        "SiteID": site_id,
+        "SystemName": system_name,
+        "SystemType": system_type,
+        "Status": status or "Online",
+        "EquipmentCount": equipment,
+        "InstallDate": install_date,
+        "Notes": notes,
+        "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "SiteName": linked.get("name") or linked.get("siteName") or "",
+    }
+    return item, None
+
+
+def save_system(item: dict, *, mode: str = "upsert") -> dict:
+    """Write a system to DynamoDB. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    ensure_systems_table()
+    table = dynamodb_table(SYSTEMS_TABLE_NAME)
+    kwargs = {"Item": item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(SystemID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(SystemID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(f"SystemID '{item['SystemID']}' already exists") from exc
+            if mode == "update":
+                raise LookupError(f"SystemID '{item['SystemID']}' was not found") from exc
+        raise
+
+    # Keep the linked site's Systems count in sync with NOVARASystems.
+    try:
+        _sync_site_systems_count(item["SiteID"])
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+
+    return {
+        "ok": True,
+        "table": SYSTEMS_TABLE_NAME,
+        "system": normalize_system(item, site_name=item.get("SiteName")),
+    }
+
+
+def _sync_site_systems_count(site_id: str) -> None:
+    """Update NOVARASites.Systems for site_id from live NOVARASystems rows."""
+    if not site_id:
+        return
+    counts = count_systems_by_site()
+    count = int(counts.get(str(site_id), 0))
+    table = dynamodb_table(SITES_TABLE_NAME)
+    table.update_item(
+        Key={"SiteID": site_id},
+        UpdateExpression="SET #systems = :count",
+        ExpressionAttributeNames={"#systems": "Systems"},
+        ExpressionAttributeValues={":count": count},
+        ConditionExpression="attribute_exists(SiteID)",
+    )
 
 
 def format_location(item: dict) -> str:
@@ -178,7 +476,7 @@ def normalize_site(item: dict) -> dict:
     }
 
 
-def scan_sites() -> dict:
+def scan_sites(*, include_system_counts: bool = True) -> dict:
     table = dynamodb_table(SITES_TABLE_NAME)
     items = []
     scan_kwargs = {}
@@ -191,6 +489,15 @@ def scan_sites() -> dict:
         scan_kwargs["ExclusiveStartKey"] = last_key
 
     sites = [normalize_site(json_safe(item)) for item in items]
+    if include_system_counts:
+        try:
+            counts = count_systems_by_site()
+            for site in sites:
+                site_id = site.get("siteId") or ""
+                site["systems"] = int(counts.get(site_id, 0))
+        except Exception:  # noqa: BLE001
+            # Keep stored Systems values if NOVARASystems is unavailable.
+            traceback.print_exc()
     sites.sort(key=lambda site: (site.get("name") or "").lower())
     return {
         "table": SITES_TABLE_NAME,
@@ -470,11 +777,41 @@ def handle_site_write_request(body: dict | None, *, mode: str) -> tuple[int, dic
         }
 
 
+def handle_systems_request() -> tuple[int, dict]:
+    try:
+        return 200, scan_systems()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load systems from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_system_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
+    item, error = parse_system_payload(body)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_system(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save system to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
         "table": TABLE_NAME,
         "sitesTable": SITES_TABLE_NAME,
+        "systemsTable": SYSTEMS_TABLE_NAME,
     }
 
 
@@ -500,6 +837,14 @@ def route_request(
             return handle_site_write_request(body, mode="create")
         if method == "PUT":
             return handle_site_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    if normalized.endswith("/api/systems") or normalized == "/systems":
+        if method == "GET":
+            return handle_systems_request()
+        if method == "POST":
+            return handle_system_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_system_write_request(body, mode="update")
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
         if method != "GET":

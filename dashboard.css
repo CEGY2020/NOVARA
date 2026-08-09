@@ -546,7 +546,8 @@ body.modal-open {
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid #cfd8de;
@@ -555,10 +556,17 @@ body.modal-open {
     color: var(--text);
     background: #fff;
     outline: none;
+    font-family: inherit;
+}
+
+.form-field textarea {
+    resize: vertical;
+    min-height: 84px;
 }
 
 .form-field input:focus,
-.form-field select:focus {
+.form-field select:focus,
+.form-field textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(39, 167, 216, 0.15);
 }
