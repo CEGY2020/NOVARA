@@ -24,7 +24,6 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || secrets.AWS_ACCESS_KEY_ID != '' }}
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
@@ -58,6 +57,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.NOVARA_AWS_REGION }}
+
+      # Long-term IAM access keys (AKIA...) reject session tokens. Drop placeholder
+      # or short AWS_SESSION_TOKEN values before sam/aws calls.
+      - name: Sanitize AWS session token for IAM user keys
+        run: |
+          python3 - <<'PY'
+          import os
+          access = (os.environ.get("AWS_ACCESS_KEY_ID") or "").strip()
+          token = (os.environ.get("AWS_SESSION_TOKEN") or "").strip()
+          if token and (access.startswith("AKIA") or len(token) < 100):
+              github_env = os.environ["GITHUB_ENV"]
+              with open(github_env, "a", encoding="utf-8") as fh:
+                  fh.write("AWS_SESSION_TOKEN=\n")
+              print("Cleared AWS_SESSION_TOKEN for IAM user key deploy")
+          else:
+              print("Kept AWS_SESSION_TOKEN as provided")
+          PY
 
       - name: Deploy API + configure Amplify /api rewrite
         run: |

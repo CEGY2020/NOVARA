@@ -354,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
             "LeadID": lead_smoke_id,
             "CompanyName": "Deploy Smoke Lead",
             "Stage": "New Lead",
-            "Source": "Other",
+            "Source": "Carlos",
         }
     ).encode("utf-8")
     print(f"POST {lead_create_url}")
