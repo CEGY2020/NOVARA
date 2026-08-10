@@ -1,105 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>NOVARA Sign In</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA | Smarter Thermal Systems</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing.css">
 </head>
+<body class="landing-page">
 
-<body>
+<main class="hero" id="top" aria-label="NOVARA introduction">
+  <div class="hero-media" aria-hidden="true">
+    <img
+      src="images/ocean-waves.jpg"
+      alt=""
+      class="hero-image"
+      fetchpriority="high"
+    >
+    <div class="hero-veil"></div>
+  </div>
 
-<main class="login-page">
-
-    <section class="login-card">
-
-        <img
-            src="images/novara-logo.png"
-            alt="NOVARA"
-            class="logo"
-        >
-
-        <p class="subtitle">
-            Operational Intelligence Platform
-        </p>
-
-        <p id="selectedRoleLabel" class="role-context" hidden></p>
-
-        <p class="role-switch">
-            <a href="directory.html">Change role</a>
-        </p>
-
-        <form id="loginForm">
-
-            <label for="email">Email address</label>
-
-            <input
-                type="email"
-                id="email"
-                name="email"
-                placeholder="name@company.com"
-                autocomplete="email"
-                required
-            >
-
-            <label for="password">Password</label>
-
-            <div class="password-field">
-
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                    required
-                >
-
-                <button
-                    type="button"
-                    id="togglePassword"
-                    class="show-password"
-                >
-                    Show
-                </button>
-
-            </div>
-
-            <div class="login-options">
-
-                <label class="remember-me">
-                    <input type="checkbox" id="rememberMe">
-                    Remember me
-                </label>
-
-                <a href="#" id="forgotPassword">
-                    Forgot password?
-                </a>
-
-            </div>
-
-            <button type="submit" class="sign-in-button">
-                Sign In
-            </button>
-
-            <p id="loginMessage" class="login-message"></p>
-
-        </form>
-
-        <footer>
-            <p>Powered by Advanced Energy Management</p>
-            <p>© 2026 AEM. All rights reserved.</p>
-        </footer>
-
-    </section>
-
+  <div class="hero-content">
+    <img
+      class="hero-brand-logo"
+      src="images/novara-logo.png"
+      alt="NOVARA"
+    >
+    <h1>SMARTER THERMAL SYSTEMS START HERE</h1>
+    <p class="hero-lead">
+      Real-time monitoring and optimization for commercial and multifamily thermal systems.
+    </p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="directory.html">GET STARTED</a>
+      <a class="btn btn-ghost" href="login.html">LOG IN</a>
+    </div>
+  </div>
 </main>
-
-<script src="role.js"></script>
-<script src="app.js"></script>
 
 </body>
 </html>
-
