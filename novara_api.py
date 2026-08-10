@@ -26,7 +26,19 @@ SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
 SITE_STATUSES = ("Online", "Offline", "Needs Review")
 SYSTEM_RECORD_TYPES = ("DHW", "Pool", "HVAC", "Boiler")
 SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
-LEAD_SOURCES = ("Referral", "Website", "Rinnai", "Trade Show", "Other")
+LEAD_SOURCES = (
+    "Carlos",
+    "Cam",
+    "Cold Call",
+    "Katia",
+    "PHEEP",
+    "Steve",
+    "Referral",
+    "Website",
+    "Rinnai",
+    "Trade Show",
+    "Other",
+)
 LEAD_SYSTEM_TYPES = ("DHW", "Pool", "HVAC", "Other")
 LEAD_STAGES = (
     "New Lead",
