@@ -39,10 +39,33 @@ body {
 }
 
 .subtitle {
-    margin: 0 0 30px;
+    margin: 0 0 12px;
     text-align: center;
     color: #607080;
     font-size: 16px;
+}
+
+.role-context {
+    margin: 0 0 8px;
+    text-align: center;
+    color: #163f63;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.role-switch {
+    margin: 0 0 24px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.role-switch a {
+    color: #1596ae;
+    text-decoration: none;
+}
+
+.role-switch a:hover {
+    text-decoration: underline;
 }
 
 form label {
