@@ -35,8 +35,8 @@
 
   var SALES_NAV_ITEMS = [
     { id: "sales-home", label: "Home", href: "sales-home.html" },
-    { id: "sales-leads", label: "Leads", href: "sales-home.html#leads" },
-    { id: "sales-pipeline", label: "Pipeline", href: "sales-home.html#pipeline" }
+    { id: "sales-leads", label: "Leads", href: "leads.html" },
+    { id: "sales-pipeline", label: "Pipeline", href: "leads.html#pipeline" }
   ];
 
   var ROLE_NAV = {
@@ -81,9 +81,49 @@
 
   var NAV_ITEMS = ROLE_NAV[role] || AEM_NAV_ITEMS;
 
+  function currentHash() {
+    return String(window.location.hash || "")
+      .replace(/^#/, "")
+      .toLowerCase();
+  }
+
+  function pageFileName() {
+    return window.location.pathname.split("/").pop() || "";
+  }
+
+  function isItemActive(item) {
+    // Sales Leads vs Pipeline share leads.html; hash selects the active item.
+    if (role === "sales" && currentPage === "leads") {
+      var onPipeline = currentHash() === "pipeline";
+      if (item.id === "sales-pipeline") {
+        return onPipeline;
+      }
+      if (item.id === "sales-leads") {
+        return !onPipeline;
+      }
+      return false;
+    }
+
+    if (item.id === currentPage) {
+      return true;
+    }
+
+    if (!item.href || item.href.indexOf("#") === -1) {
+      return false;
+    }
+
+    var parts = item.href.split("#");
+    var path = parts[0];
+    var hash = (parts[1] || "").toLowerCase();
+    if (path && pageFileName() !== path) {
+      return false;
+    }
+    return currentHash() === hash;
+  }
+
   function renderSidebar(root) {
     var links = NAV_ITEMS.map(function (item) {
-      var active = item.id === currentPage ? ' class="active"' : "";
+      var active = isItemActive(item) ? ' class="active"' : "";
       return '<a href="' + item.href + '"' + active + ">" + item.label + "</a>";
     }).join("\n");
 
@@ -112,6 +152,25 @@
       '<a href="login.html" class="logout-btn">Logout</a>';
   }
 
+  function refreshActive() {
+    var root = document.getElementById("sidebar-root");
+    if (!root) return;
+    var nav = root.querySelector("nav");
+    if (!nav) {
+      renderSidebar(root);
+      return;
+    }
+    var links = nav.querySelectorAll("a");
+    NAV_ITEMS.forEach(function (item, index) {
+      if (!links[index]) return;
+      if (isItemActive(item)) {
+        links[index].classList.add("active");
+      } else {
+        links[index].classList.remove("active");
+      }
+    });
+  }
+
   var sidebarRoot = document.getElementById("sidebar-root");
   var profileRoot = document.getElementById("user-profile-root");
 
@@ -122,4 +181,12 @@
   if (profileRoot) {
     renderUserProfile(profileRoot);
   }
+
+  window.addEventListener("hashchange", refreshActive);
+
+  window.NovaraNav = {
+    refreshActive: refreshActive,
+    role: role,
+    items: NAV_ITEMS
+  };
 })();

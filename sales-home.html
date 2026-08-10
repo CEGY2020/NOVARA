@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Sales Home</title>
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=leads-pipeline-1">
 </head>
 <body data-page="sales-home" data-role="sales">
 
@@ -20,19 +20,21 @@
       <div id="user-profile-root"></div>
     </header>
 
-    <section id="leads" class="page-panel">
-      <h3>Leads</h3>
-      <p>Placeholder for sales leads and follow-ups.</p>
-    </section>
-
-    <section id="pipeline" class="page-panel">
-      <h3>Pipeline</h3>
-      <p>Placeholder for opportunity stages and pipeline status.</p>
+    <section class="page-panel">
+      <h3>Leads &amp; Pipeline</h3>
+      <p>
+        Track prospects in the Leads list, or work the full stage board in Pipeline.
+        Both views share the same NOVARALeads records — add, edit, and move stages from either place.
+      </p>
+      <div class="sales-home-actions">
+        <a class="primary-btn sales-home-link" href="leads.html">Open Leads</a>
+        <a class="secondary-btn sales-home-link" href="leads.html#pipeline">Open Pipeline</a>
+      </div>
     </section>
   </main>
 </div>
 
-<script src="role.js"></script>
-<script src="nav.js"></script>
+<script src="role.js?v=leads-pipeline-1"></script>
+<script src="nav.js?v=leads-pipeline-1"></script>
 </body>
 </html>

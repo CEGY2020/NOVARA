@@ -1,6 +1,20 @@
 (function () {
+  var STAGES = [
+    "New Lead",
+    "Contacted",
+    "Qualified",
+    "Proposal Sent",
+    "Won",
+    "Lost",
+  ];
+
   var statusEl = document.getElementById("leads-status");
   var tbody = document.getElementById("leads-tbody");
+  var pipelineBoard = document.getElementById("pipeline-board");
+  var listView = document.getElementById("leads-list-view");
+  var pipelineView = document.getElementById("leads-pipeline-view");
+  var filterStage = document.getElementById("filter-stage");
+  var filterAssigned = document.getElementById("filter-assigned");
   var addBtn = document.getElementById("add-lead-btn");
   var modal = document.getElementById("lead-modal");
   var form = document.getElementById("lead-form");
@@ -12,12 +26,16 @@
   var closeBtn = document.getElementById("lead-modal-close");
   var cancelBtn = document.getElementById("lead-cancel-btn");
   var leadIdInput = document.getElementById("field-leadId");
+  var viewTabs = document.querySelectorAll(".view-tab");
 
+  var allLeads = [];
   var leadsById = {};
   /** Authoritative create|edit mode. Do not rely only on #lead-mode — form.reset() restores its default. */
   var currentMode = "create";
+  var currentView = "list";
+  var stageChangeInFlight = null;
 
-  if (!tbody) {
+  if (!tbody && !pipelineBoard) {
     return;
   }
 
@@ -61,6 +79,42 @@
   function formatFollowUp(value) {
     if (!value) return "—";
     return String(value);
+  }
+
+  function formatSavings(value) {
+    if (value == null || value === "") return "";
+    var num = Number(value);
+    if (!Number.isFinite(num)) return String(value);
+    return (
+      "$" +
+      num.toLocaleString(undefined, {
+        maximumFractionDigits: 0,
+      })
+    );
+  }
+
+  function companyName(lead) {
+    return (lead && (lead.companyName || lead.siteName)) || "—";
+  }
+
+  function leadToWritePayload(lead, stageOverride) {
+    var payload = {
+      LeadID: lead.leadId,
+      CompanyName: lead.companyName || lead.siteName || "",
+      ContactName: lead.contactName || "",
+      ContactEmail: lead.contactEmail || "",
+      ContactPhone: lead.contactPhone || "",
+      Source: lead.source || "",
+      SystemType: lead.systemType || "",
+      Stage: stageOverride != null ? stageOverride : lead.stage || "New Lead",
+      NextFollowUp: lead.nextFollowUp || "",
+      AssignedTo: lead.assignedTo || "",
+      Notes: lead.notes || "",
+    };
+    if (lead.estimatedSavings != null && lead.estimatedSavings !== "") {
+      payload.EstimatedSavings = Number(lead.estimatedSavings);
+    }
+    return payload;
   }
 
   function collectPayload() {
@@ -176,17 +230,99 @@
     }
   }
 
-  function renderLeads(leads) {
-    leadsById = {};
+  function getFilters() {
+    return {
+      stage: filterStage ? String(filterStage.value || "").trim() : "",
+      assignedTo: filterAssigned
+        ? String(filterAssigned.value || "").trim()
+        : "",
+    };
+  }
+
+  function filteredLeads() {
+    var filters = getFilters();
+    return allLeads.filter(function (lead) {
+      if (filters.stage && (lead.stage || "") !== filters.stage) {
+        return false;
+      }
+      if (filters.assignedTo) {
+        var assigned = String(lead.assignedTo || "").trim();
+        if (assigned !== filters.assignedTo) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function rebuildAssignedFilterOptions() {
+    if (!filterAssigned) return;
+    var previous = filterAssigned.value;
+    var names = {};
+    allLeads.forEach(function (lead) {
+      var name = String(lead.assignedTo || "").trim();
+      if (name) {
+        names[name] = true;
+      }
+    });
+    var sorted = Object.keys(names).sort(function (a, b) {
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
+    filterAssigned.innerHTML =
+      '<option value="">Anyone</option>' +
+      sorted
+        .map(function (name) {
+          return (
+            '<option value="' +
+            escapeHtml(name) +
+            '">' +
+            escapeHtml(name) +
+            "</option>"
+          );
+        })
+        .join("");
+    if (previous && names[previous]) {
+      filterAssigned.value = previous;
+    }
+  }
+
+  function stageSelectHtml(lead) {
+    var current = lead.stage || "New Lead";
+    var options = STAGES.map(function (stage) {
+      return (
+        '<option value="' +
+        escapeHtml(stage) +
+        '"' +
+        (stage === current ? " selected" : "") +
+        ">" +
+        escapeHtml(stage) +
+        "</option>"
+      );
+    }).join("");
+    return (
+      '<label class="pipeline-stage-label">' +
+      "<span>Move to</span>" +
+      '<select class="pipeline-stage-select" data-lead-id="' +
+      escapeHtml(lead.leadId) +
+      '" aria-label="Move ' +
+      escapeHtml(companyName(lead)) +
+      ' to another stage">' +
+      options +
+      "</select>" +
+      "</label>"
+    );
+  }
+
+  function renderList(leads) {
+    if (!tbody) return;
     if (!leads.length) {
       tbody.innerHTML =
-        '<tr><td colspan="7">No leads found in NOVARALeads.</td></tr>';
+        '<tr><td colspan="7">No leads match the current filters.</td></tr>';
       return;
     }
 
     tbody.innerHTML = leads
       .map(function (lead) {
-        leadsById[lead.leadId] = lead;
         var contact = lead.contactName || lead.contactEmail || "—";
         return (
           '<tr class="lead-row" data-lead-id="' +
@@ -196,7 +332,7 @@
           escapeHtml(lead.leadId) +
           "</td>" +
           "<td>" +
-          escapeHtml(lead.companyName || lead.siteName || "—") +
+          escapeHtml(companyName(lead)) +
           "</td>" +
           "<td>" +
           escapeHtml(contact) +
@@ -221,6 +357,186 @@
       .join("");
   }
 
+  function renderPipeline(leads) {
+    if (!pipelineBoard) return;
+
+    var filters = getFilters();
+    var stagesToShow = filters.stage ? [filters.stage] : STAGES.slice();
+    var byStage = {};
+    STAGES.forEach(function (stage) {
+      byStage[stage] = [];
+    });
+    leads.forEach(function (lead) {
+      var stage = lead.stage || "New Lead";
+      if (!byStage[stage]) {
+        byStage[stage] = [];
+      }
+      byStage[stage].push(lead);
+    });
+
+    pipelineBoard.innerHTML = stagesToShow
+      .map(function (stage) {
+        var columnLeads = byStage[stage] || [];
+        var cards = columnLeads.length
+          ? columnLeads
+              .map(function (lead) {
+                var savings = formatSavings(lead.estimatedSavings);
+                return (
+                  '<article class="pipeline-card" data-lead-id="' +
+                  escapeHtml(lead.leadId) +
+                  '">' +
+                  '<div class="pipeline-card-header">' +
+                  "<strong>" +
+                  escapeHtml(companyName(lead)) +
+                  "</strong>" +
+                  '<button type="button" class="link-btn edit-lead-btn" data-lead-id="' +
+                  escapeHtml(lead.leadId) +
+                  '">Edit</button>' +
+                  "</div>" +
+                  '<p class="pipeline-card-contact">' +
+                  escapeHtml(lead.contactName || "—") +
+                  "</p>" +
+                  '<dl class="pipeline-card-meta">' +
+                  "<div><dt>Follow-up</dt><dd>" +
+                  escapeHtml(formatFollowUp(lead.nextFollowUp)) +
+                  "</dd></div>" +
+                  (savings
+                    ? "<div><dt>Est. savings</dt><dd class=\"savings-value\">" +
+                      escapeHtml(savings) +
+                      "</dd></div>"
+                    : "") +
+                  (lead.assignedTo
+                    ? "<div><dt>Assigned</dt><dd>" +
+                      escapeHtml(lead.assignedTo) +
+                      "</dd></div>"
+                    : "") +
+                  "</dl>" +
+                  stageSelectHtml(lead) +
+                  "</article>"
+                );
+              })
+              .join("")
+          : '<p class="pipeline-column-empty">No leads</p>';
+
+        return (
+          '<section class="pipeline-column" data-stage="' +
+          escapeHtml(stage) +
+          '">' +
+          '<header class="pipeline-column-header">' +
+          "<h3>" +
+          escapeHtml(stage) +
+          "</h3>" +
+          '<span class="pipeline-count">' +
+          columnLeads.length +
+          "</span>" +
+          "</header>" +
+          '<div class="pipeline-column-body">' +
+          cards +
+          "</div>" +
+          "</section>"
+        );
+      })
+      .join("");
+  }
+
+  function updateStatusFromFilters(visibleCount) {
+    var filters = getFilters();
+    var parts = [];
+    if (filters.stage) {
+      parts.push(filters.stage);
+    }
+    if (filters.assignedTo) {
+      parts.push("assigned to " + filters.assignedTo);
+    }
+    var suffix = parts.length ? " (" + parts.join(", ") + ")" : "";
+    if (!allLeads.length) {
+      setStatus("No leads found in NOVARALeads.", false);
+      return;
+    }
+    setStatus(
+      visibleCount +
+        " lead" +
+        (visibleCount === 1 ? "" : "s") +
+        " shown" +
+        suffix +
+        " · " +
+        allLeads.length +
+        " total",
+      false
+    );
+  }
+
+  function renderViews() {
+    leadsById = {};
+    allLeads.forEach(function (lead) {
+      if (lead && lead.leadId) {
+        leadsById[lead.leadId] = lead;
+      }
+    });
+    var visible = filteredLeads();
+    renderList(visible);
+    renderPipeline(visible);
+    updateStatusFromFilters(visible.length);
+  }
+
+  function setView(view, options) {
+    options = options || {};
+    currentView = view === "pipeline" ? "pipeline" : "list";
+
+    viewTabs.forEach(function (tab) {
+      var isActive = tab.getAttribute("data-view") === currentView;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+
+    if (listView) {
+      listView.hidden = currentView !== "list";
+    }
+    if (pipelineView) {
+      pipelineView.hidden = currentView !== "pipeline";
+    }
+
+    if (!options.skipHash) {
+      var desiredHash = currentView === "pipeline" ? "#pipeline" : "";
+      var currentHash = window.location.hash || "";
+      if (desiredHash && currentHash !== desiredHash) {
+        if (history.replaceState) {
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search + desiredHash
+          );
+        } else {
+          window.location.hash = "pipeline";
+        }
+      } else if (!desiredHash && currentHash === "#pipeline") {
+        if (history.replaceState) {
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search
+          );
+        }
+      }
+    }
+
+    // Keep sales nav highlight in sync when switching tabs.
+    if (window.NovaraNav && NovaraNav.refreshActive) {
+      NovaraNav.refreshActive();
+    } else {
+      document.dispatchEvent(
+        new CustomEvent("novara:viewchange", { detail: { view: currentView } })
+      );
+    }
+  }
+
+  function viewFromHash() {
+    var hash = String(window.location.hash || "")
+      .replace(/^#/, "")
+      .toLowerCase();
+    return hash === "pipeline" ? "pipeline" : "list";
+  }
+
   function loadLeads() {
     setStatus("Loading leads…", false);
     var api = window.NovaraApi;
@@ -238,20 +554,21 @@
 
     return request
       .then(function (data) {
-        var leads = (data && data.leads) || [];
-        renderLeads(leads);
-        if (!leads.length) {
-          setStatus("No leads found in NOVARALeads.", false);
-        } else {
-          setStatus(
-            leads.length + " lead" + (leads.length === 1 ? "" : "s"),
-            false
-          );
-        }
+        allLeads = (data && data.leads) || [];
+        rebuildAssignedFilterOptions();
+        renderViews();
       })
       .catch(function (err) {
-        tbody.innerHTML =
-          '<tr><td colspan="7">Unable to load leads.</td></tr>';
+        allLeads = [];
+        leadsById = {};
+        if (tbody) {
+          tbody.innerHTML =
+            '<tr><td colspan="7">Unable to load leads.</td></tr>';
+        }
+        if (pipelineBoard) {
+          pipelineBoard.innerHTML =
+            '<p class="pipeline-empty is-error">Unable to load pipeline.</p>';
+        }
         setStatus(err.message || "Failed to load leads", true);
       });
   }
@@ -337,6 +654,61 @@
     submit(payload, true);
   }
 
+  function changeLeadStage(leadId, newStage, selectEl) {
+    var lead = leadsById[leadId];
+    if (!lead) return;
+    var previousStage = lead.stage || "New Lead";
+    if (newStage === previousStage) return;
+
+    var api = window.NovaraApi;
+    if (!api) {
+      setStatus("API client is unavailable.", true);
+      if (selectEl) selectEl.value = previousStage;
+      return;
+    }
+
+    if (stageChangeInFlight === leadId) {
+      if (selectEl) selectEl.value = previousStage;
+      return;
+    }
+
+    stageChangeInFlight = leadId;
+    if (selectEl) {
+      selectEl.disabled = true;
+    }
+    setStatus("Moving " + companyName(lead) + " to " + newStage + "…", false);
+
+    api
+      .updateLead(leadToWritePayload(lead, newStage))
+      .then(function () {
+        return loadLeads();
+      })
+      .catch(function (err) {
+        if (selectEl) {
+          selectEl.value = previousStage;
+        }
+        setStatus(err.message || "Failed to update stage", true);
+      })
+      .finally(function () {
+        stageChangeInFlight = null;
+        if (selectEl) {
+          selectEl.disabled = false;
+        }
+      });
+  }
+
+  function handleEditClick(event) {
+    var editBtn = event.target.closest(".edit-lead-btn");
+    if (!editBtn) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    var editId = editBtn.getAttribute("data-lead-id");
+    if (editId && leadsById[editId]) {
+      openModal("edit", leadsById[editId]);
+    }
+    return true;
+  }
+
   if (addBtn) {
     addBtn.addEventListener("click", function () {
       addBtn.disabled = true;
@@ -367,27 +739,51 @@
     form.addEventListener("submit", saveLead);
   }
 
-  tbody.addEventListener("click", function (event) {
-    var editBtn = event.target.closest(".edit-lead-btn");
-    if (editBtn) {
-      event.stopPropagation();
-      var editId = editBtn.getAttribute("data-lead-id");
-      if (editId && leadsById[editId]) {
-        openModal("edit", leadsById[editId]);
-      }
-    }
+  viewTabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      setView(tab.getAttribute("data-view") || "list");
+    });
   });
 
-  tbody.addEventListener("keydown", function (event) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    var row = event.target.closest("tr.lead-row");
-    if (!row) return;
-    event.preventDefault();
-    var leadId = row.getAttribute("data-lead-id");
-    if (leadId && leadsById[leadId]) {
-      openModal("edit", leadsById[leadId]);
-    }
-  });
+  if (filterStage) {
+    filterStage.addEventListener("change", renderViews);
+  }
+  if (filterAssigned) {
+    filterAssigned.addEventListener("change", renderViews);
+  }
+
+  if (tbody) {
+    tbody.addEventListener("click", function (event) {
+      handleEditClick(event);
+    });
+
+    tbody.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      var row = event.target.closest("tr.lead-row");
+      if (!row) return;
+      event.preventDefault();
+      var leadId = row.getAttribute("data-lead-id");
+      if (leadId && leadsById[leadId]) {
+        openModal("edit", leadsById[leadId]);
+      }
+    });
+  }
+
+  if (pipelineBoard) {
+    pipelineBoard.addEventListener("click", function (event) {
+      handleEditClick(event);
+    });
+
+    pipelineBoard.addEventListener("change", function (event) {
+      var select = event.target.closest(".pipeline-stage-select");
+      if (!select) return;
+      var leadId = select.getAttribute("data-lead-id");
+      var newStage = String(select.value || "").trim();
+      if (leadId && newStage) {
+        changeLeadStage(leadId, newStage, select);
+      }
+    });
+  }
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && modal && !modal.hidden) {
@@ -395,5 +791,10 @@
     }
   });
 
+  window.addEventListener("hashchange", function () {
+    setView(viewFromHash(), { skipHash: true });
+  });
+
+  setView(viewFromHash(), { skipHash: true });
   loadLeads();
 })();
