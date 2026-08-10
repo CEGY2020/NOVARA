@@ -632,6 +632,76 @@ body.modal-open {
     font-weight: bold;
 }
 
+/* Follow-up urgency badges (Leads list + pipeline) */
+.followup-cell {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.followup-cell.is-overdue {
+    color: #b42318;
+    font-weight: 600;
+}
+
+.followup-cell.is-due-soon {
+    color: #9a6700;
+    font-weight: 600;
+}
+
+.followup-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.followup-badge-overdue {
+    color: #b42318;
+    background: #fef3f2;
+    border: 1px solid #fecdca;
+}
+
+.followup-badge-due-soon {
+    color: #9a6700;
+    background: #fffaeb;
+    border: 1px solid #fedf89;
+}
+
+.lead-row-overdue {
+    background: #fff8f7;
+}
+
+.lead-row-due-soon {
+    background: #fffcf5;
+}
+
+.muted-date {
+    color: #7b8993;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.form-field-followup {
+    background: #f4f9fc;
+    border: 1px solid #d5e6f0;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.lead-last-updated {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 13px;
+    color: #7b8993;
+}
+
 /* Leads list / pipeline view tabs + filters */
 .view-tabs {
     display: inline-flex;
@@ -791,6 +861,22 @@ body.modal-open {
     border-radius: 10px;
     padding: 12px;
     box-shadow: 0 2px 8px rgba(22, 63, 99, 0.05);
+}
+
+.pipeline-card.is-overdue {
+    border-color: #f5c2c0;
+    background: #fff8f7;
+    box-shadow: 0 2px 8px rgba(180, 35, 24, 0.06);
+}
+
+.pipeline-card.is-due-soon {
+    border-color: #f5d78e;
+    background: #fffcf5;
+    box-shadow: 0 2px 8px rgba(154, 103, 0, 0.06);
+}
+
+.pipeline-card-meta .followup-cell {
+    justify-content: flex-end;
 }
 
 .pipeline-card-header {

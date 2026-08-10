@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Leads</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-pipeline-1">
+  <link rel="stylesheet" href="dashboard.css?v=leads-followup-1">
 </head>
 <body data-page="leads">
 
@@ -53,6 +53,16 @@
           <option value="">Anyone</option>
         </select>
       </label>
+      <label class="filter-field">
+        <span>Follow-up</span>
+        <select id="filter-followup" aria-label="Filter by follow-up status">
+          <option value="">All follow-ups</option>
+          <option value="needs">Needs Follow-up</option>
+          <option value="overdue">Overdue</option>
+          <option value="due-soon">Due Soon (7 days)</option>
+          <option value="none">No date set</option>
+        </select>
+      </label>
       <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
     </div>
 
@@ -66,12 +76,13 @@
             <th>Stage</th>
             <th>Next Follow-up</th>
             <th>Assigned To</th>
+            <th>Last Updated</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="leads-tbody">
           <tr>
-            <td colspan="7">Loading…</td>
+            <td colspan="8">Loading…</td>
           </tr>
         </tbody>
       </table>
@@ -152,18 +163,20 @@
             <option value="Lost">Lost</option>
           </select>
         </label>
-        <label class="form-field">
-          <span>NextFollowUp</span>
+        <label class="form-field form-field-followup">
+          <span>Next Follow-up</span>
           <input type="date" id="field-nextFollowUp" name="NextFollowUp">
+          <small class="field-hint">Set or clear the next outreach date. Overdue and dates within 7 days are highlighted in the list and pipeline.</small>
         </label>
         <label class="form-field">
-          <span>AssignedTo</span>
+          <span>Assigned To</span>
           <input type="text" id="field-assignedTo" name="AssignedTo" maxlength="120" autocomplete="off">
         </label>
         <label class="form-field">
-          <span>EstimatedSavings</span>
+          <span>Estimated Savings</span>
           <input type="number" id="field-estimatedSavings" name="EstimatedSavings" min="0" step="any" placeholder="Optional">
         </label>
+        <p id="lead-last-updated" class="lead-last-updated" hidden></p>
         <label class="form-field form-field-wide">
           <span>Notes</span>
           <textarea id="field-notes" name="Notes" rows="3" maxlength="2000" placeholder="Optional notes"></textarea>
@@ -180,10 +193,10 @@
   </div>
 </div>
 
-<script src="api-config.js?v=leads-pipeline-1"></script>
-<script src="api-client.js?v=leads-pipeline-1"></script>
-<script src="role.js?v=leads-pipeline-1"></script>
-<script src="nav.js?v=leads-pipeline-1"></script>
-<script src="leads.js?v=leads-pipeline-1"></script>
+<script src="api-config.js?v=leads-followup-1"></script>
+<script src="api-client.js?v=leads-followup-1"></script>
+<script src="role.js?v=leads-followup-1"></script>
+<script src="nav.js?v=leads-followup-1"></script>
+<script src="leads.js?v=leads-followup-1"></script>
 </body>
 </html>
