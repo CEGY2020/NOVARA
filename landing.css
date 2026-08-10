@@ -401,3 +401,146 @@ a {
         padding-bottom: 140px;
     }
 }
+
+/* ——— Directory / role selection ——— */
+.directory-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(ellipse 70% 45% at 100% 0%, rgba(39, 167, 216, 0.12), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 0% 100%, rgba(60, 179, 113, 0.1), transparent 50%),
+        var(--foam);
+}
+
+.directory-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 0 clamp(20px, 4vw, 48px);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(22, 63, 99, 0.08);
+}
+
+.directory-header .header-logo {
+    height: 44px;
+    width: auto;
+    max-width: 170px;
+    object-fit: contain;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 4px 8px;
+    box-sizing: content-box;
+}
+
+.directory-main {
+    flex: 1;
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+    padding:
+        clamp(36px, 6vh, 64px)
+        clamp(20px, 4vw, 48px)
+        clamp(48px, 8vh, 80px);
+}
+
+.directory-intro {
+    margin-bottom: clamp(28px, 4vw, 40px);
+    animation: rise-in 0.7s ease both;
+}
+
+.directory-intro h1 {
+    font-family: "Syne", sans-serif;
+    font-size: clamp(1.8rem, 3.4vw, 2.5rem);
+    color: var(--navy);
+    margin-bottom: 10px;
+}
+
+.directory-intro p {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 46ch;
+}
+
+.role-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    animation: rise-in 0.8s ease 0.08s both;
+}
+
+.role-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 168px;
+    padding: 24px 22px 20px;
+    text-decoration: none;
+    color: inherit;
+    background: var(--white);
+    border: 1px solid rgba(22, 63, 99, 0.1);
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(16, 37, 54, 0.05);
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.role-card:hover,
+.role-card:focus-visible {
+    transform: translateY(-3px);
+    border-color: rgba(39, 167, 216, 0.45);
+    box-shadow: 0 14px 28px rgba(16, 37, 54, 0.1);
+    outline: none;
+}
+
+.role-name {
+    font-family: "Syne", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--navy);
+}
+
+.role-desc {
+    color: var(--muted);
+    font-size: 0.98rem;
+    line-height: 1.5;
+    flex: 1;
+}
+
+.role-cta {
+    margin-top: 6px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ocean);
+}
+
+.role-card:hover .role-cta,
+.role-card:focus-visible .role-cta {
+    color: var(--cyan);
+}
+
+.directory-footer {
+    padding: 20px clamp(20px, 4vw, 48px) 28px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+    .role-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .directory-header .header-logo {
+        height: 38px;
+        max-width: 150px;
+    }
+}
