@@ -109,7 +109,7 @@
       "  <strong>Steve Nold</strong>" +
       "  <span>" + title + "</span>" +
       "</div>" +
-      '<a href="index.html" class="logout-btn">Logout</a>';
+      '<a href="login.html" class="logout-btn">Logout</a>';
   }
 
   var sidebarRoot = document.getElementById("sidebar-root");
