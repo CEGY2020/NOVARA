@@ -1,4 +1,4 @@
-/* Shared NOVARA JSON API client for readings + sites + systems + owners + mgmt companies + leads. */
+/* Shared NOVARA JSON API client for readings + savings + sites + systems + owners + mgmt companies + leads. */
 (function (global) {
   function apiBase() {
     var base = global.NOVARA_API_BASE;
@@ -97,6 +97,11 @@
         siteId: siteId,
         days: days,
         systemId: systemId,
+      });
+    },
+    getSavings: function (days) {
+      return fetchJson("/api/savings", {
+        days: days,
       });
     },
     getSites: function () {
