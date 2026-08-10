@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Leads</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-crud-1">
+  <link rel="stylesheet" href="dashboard.css?v=leads-pipeline-1">
 </head>
 <body data-page="leads">
 
@@ -25,26 +25,63 @@
       </div>
     </header>
 
-    <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
+    <div class="view-tabs" role="tablist" aria-label="Leads views">
+      <button type="button" class="view-tab is-active" role="tab" id="tab-list" data-view="list" aria-selected="true" aria-controls="leads-list-view">
+        List
+      </button>
+      <button type="button" class="view-tab" role="tab" id="tab-pipeline" data-view="pipeline" aria-selected="false" aria-controls="leads-pipeline-view">
+        Pipeline
+      </button>
+    </div>
 
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Lead ID</th>
-          <th>Company / Site</th>
-          <th>Contact</th>
-          <th>Stage</th>
-          <th>Next Follow-up</th>
-          <th>Assigned To</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="leads-tbody">
-        <tr>
-          <td colspan="7">Loading…</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="leads-toolbar">
+      <label class="filter-field">
+        <span>Stage</span>
+        <select id="filter-stage" aria-label="Filter by stage">
+          <option value="">All stages</option>
+          <option value="New Lead">New Lead</option>
+          <option value="Contacted">Contacted</option>
+          <option value="Qualified">Qualified</option>
+          <option value="Proposal Sent">Proposal Sent</option>
+          <option value="Won">Won</option>
+          <option value="Lost">Lost</option>
+        </select>
+      </label>
+      <label class="filter-field">
+        <span>Assigned To</span>
+        <select id="filter-assigned" aria-label="Filter by assigned to">
+          <option value="">Anyone</option>
+        </select>
+      </label>
+      <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
+    </div>
+
+    <div id="leads-list-view" class="leads-view" role="tabpanel" aria-labelledby="tab-list">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Lead ID</th>
+            <th>Company / Site</th>
+            <th>Contact</th>
+            <th>Stage</th>
+            <th>Next Follow-up</th>
+            <th>Assigned To</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="leads-tbody">
+          <tr>
+            <td colspan="7">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="leads-pipeline-view" class="leads-view" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
+      <div id="pipeline-board" class="pipeline-board" aria-live="polite">
+        <p class="pipeline-empty">Loading pipeline…</p>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -143,9 +180,10 @@
   </div>
 </div>
 
-<script src="api-config.js?v=leads-crud-1"></script>
-<script src="api-client.js?v=leads-crud-1"></script>
-<script src="nav.js?v=leads-crud-1"></script>
-<script src="leads.js?v=leads-crud-1"></script>
+<script src="api-config.js?v=leads-pipeline-1"></script>
+<script src="api-client.js?v=leads-pipeline-1"></script>
+<script src="role.js?v=leads-pipeline-1"></script>
+<script src="nav.js?v=leads-pipeline-1"></script>
+<script src="leads.js?v=leads-pipeline-1"></script>
 </body>
 </html>
