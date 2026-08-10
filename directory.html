@@ -66,5 +66,19 @@
   <p>© 2026 Advanced Energy Management. All rights reserved.</p>
 </footer>
 
+<script src="role.js"></script>
+<script>
+  document.querySelectorAll(".role-card").forEach(function (card) {
+    card.addEventListener("click", function () {
+      try {
+        var url = new URL(card.getAttribute("href"), window.location.href);
+        NovaraRole.setSelectedRole(url.searchParams.get("role"));
+      } catch (e) {
+        // Navigation still proceeds via the href with ?role=
+      }
+    });
+  });
+</script>
+
 </body>
 </html>
