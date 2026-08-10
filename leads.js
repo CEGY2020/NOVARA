@@ -7,6 +7,8 @@
     "Won",
     "Lost",
   ];
+  var CLOSED_STAGES = { Won: true, Lost: true };
+  var DUE_SOON_DAYS = 7;
 
   var statusEl = document.getElementById("leads-status");
   var tbody = document.getElementById("leads-tbody");
@@ -15,6 +17,7 @@
   var pipelineView = document.getElementById("leads-pipeline-view");
   var filterStage = document.getElementById("filter-stage");
   var filterAssigned = document.getElementById("filter-assigned");
+  var filterFollowUp = document.getElementById("filter-followup");
   var addBtn = document.getElementById("add-lead-btn");
   var modal = document.getElementById("lead-modal");
   var form = document.getElementById("lead-form");
@@ -22,6 +25,7 @@
   var modalTitle = document.getElementById("lead-modal-title");
   var modalSubtitle = document.getElementById("lead-modal-subtitle");
   var formError = document.getElementById("lead-form-error");
+  var lastUpdatedEl = document.getElementById("lead-last-updated");
   var saveBtn = document.getElementById("lead-save-btn");
   var closeBtn = document.getElementById("lead-modal-close");
   var cancelBtn = document.getElementById("lead-cancel-btn");
@@ -76,9 +80,101 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function todayIsoDate() {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, "0");
+    var d = String(now.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  function addDaysIso(isoDate, days) {
+    var parts = String(isoDate || "").split("-");
+    if (parts.length !== 3) return "";
+    var date = new Date(
+      Number(parts[0]),
+      Number(parts[1]) - 1,
+      Number(parts[2])
+    );
+    if (Number.isNaN(date.getTime())) return "";
+    date.setDate(date.getDate() + days);
+    var y = date.getFullYear();
+    var m = String(date.getMonth() + 1).padStart(2, "0");
+    var d = String(date.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  function parseFollowUpDate(value) {
+    var raw = String(value || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+    return raw;
+  }
+
+  /**
+   * Returns "overdue" | "due-soon" | "scheduled" | "" for a lead's nextFollowUp.
+   * Closed stages (Won/Lost) are not flagged for attention.
+   */
+  function followUpUrgency(lead) {
+    if (!lead) return "";
+    var stage = lead.stage || "";
+    if (CLOSED_STAGES[stage]) return "";
+    var date = parseFollowUpDate(lead.nextFollowUp);
+    if (!date) return "";
+    var today = todayIsoDate();
+    if (date < today) return "overdue";
+    var soonLimit = addDaysIso(today, DUE_SOON_DAYS);
+    if (date <= soonLimit) return "due-soon";
+    return "scheduled";
+  }
+
+  function needsFollowUp(lead) {
+    var urgency = followUpUrgency(lead);
+    return urgency === "overdue" || urgency === "due-soon";
+  }
+
   function formatFollowUp(value) {
     if (!value) return "—";
     return String(value);
+  }
+
+  function formatUpdatedAt(value) {
+    if (!value) return "—";
+    var raw = String(value).trim();
+    // Prefer date portion of ISO timestamps (YYYY-MM-DDTHH:MM:SSZ).
+    var datePart = raw.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      return datePart;
+    }
+    return raw;
+  }
+
+  function followUpBadgeHtml(urgency) {
+    if (urgency === "overdue") {
+      return '<span class="followup-badge followup-badge-overdue">Overdue</span>';
+    }
+    if (urgency === "due-soon") {
+      return '<span class="followup-badge followup-badge-due-soon">Due soon</span>';
+    }
+    return "";
+  }
+
+  function followUpCellHtml(lead) {
+    var urgency = followUpUrgency(lead);
+    var badge = followUpBadgeHtml(urgency);
+    var dateText = formatFollowUp(lead && lead.nextFollowUp);
+    var classes = "followup-cell";
+    if (urgency === "overdue") classes += " is-overdue";
+    if (urgency === "due-soon") classes += " is-due-soon";
+    return (
+      '<div class="' +
+      classes +
+      '">' +
+      "<span>" +
+      escapeHtml(dateText) +
+      "</span>" +
+      badge +
+      "</div>"
+    );
   }
 
   function formatSavings(value) {
@@ -165,6 +261,18 @@
     }
   }
 
+  function setLastUpdatedDisplay(lead) {
+    if (!lastUpdatedEl) return;
+    if (lead && lead.updatedAt) {
+      lastUpdatedEl.hidden = false;
+      lastUpdatedEl.textContent =
+        "Last updated: " + formatUpdatedAt(lead.updatedAt);
+    } else {
+      lastUpdatedEl.hidden = true;
+      lastUpdatedEl.textContent = "";
+    }
+  }
+
   function openModal(mode, lead) {
     if (!modal || !form) return;
     mode = mode === "edit" ? "edit" : "create";
@@ -204,16 +312,21 @@
         lead.estimatedSavings == null ? "" : lead.estimatedSavings
       );
       setFieldValue("field-notes", lead.notes || "");
+      setLastUpdatedDisplay(lead);
     } else {
       modalTitle.textContent = "Add Lead";
       modalSubtitle.textContent = "Create a new lead in NOVARALeads";
       setFieldValue("field-leadId", nextLeadId());
       setFieldValue("field-stage", "New Lead");
+      setLastUpdatedDisplay(null);
     }
 
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    var focusEl = document.getElementById("field-companyName");
+    var focusEl =
+      mode === "edit"
+        ? document.getElementById("field-nextFollowUp")
+        : document.getElementById("field-companyName");
     if (focusEl) {
       focusEl.focus();
     }
@@ -224,6 +337,7 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     setFormError("");
+    setLastUpdatedDisplay(null);
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.textContent = "Save";
@@ -236,7 +350,30 @@
       assignedTo: filterAssigned
         ? String(filterAssigned.value || "").trim()
         : "",
+      followUp: filterFollowUp
+        ? String(filterFollowUp.value || "").trim()
+        : "",
     };
+  }
+
+  function matchesFollowUpFilter(lead, followUpFilter) {
+    if (!followUpFilter) return true;
+    var urgency = followUpUrgency(lead);
+    var hasDate = Boolean(parseFollowUpDate(lead && lead.nextFollowUp));
+
+    if (followUpFilter === "needs") {
+      return needsFollowUp(lead);
+    }
+    if (followUpFilter === "overdue") {
+      return urgency === "overdue";
+    }
+    if (followUpFilter === "due-soon") {
+      return urgency === "due-soon";
+    }
+    if (followUpFilter === "none") {
+      return !hasDate && !CLOSED_STAGES[lead.stage || ""];
+    }
+    return true;
   }
 
   function filteredLeads() {
@@ -250,6 +387,9 @@
         if (assigned !== filters.assignedTo) {
           return false;
         }
+      }
+      if (!matchesFollowUpFilter(lead, filters.followUp)) {
+        return false;
       }
       return true;
     });
@@ -317,15 +457,21 @@
     if (!tbody) return;
     if (!leads.length) {
       tbody.innerHTML =
-        '<tr><td colspan="7">No leads match the current filters.</td></tr>';
+        '<tr><td colspan="8">No leads match the current filters.</td></tr>';
       return;
     }
 
     tbody.innerHTML = leads
       .map(function (lead) {
         var contact = lead.contactName || lead.contactEmail || "—";
+        var urgency = followUpUrgency(lead);
+        var rowClass = "lead-row";
+        if (urgency === "overdue") rowClass += " lead-row-overdue";
+        if (urgency === "due-soon") rowClass += " lead-row-due-soon";
         return (
-          '<tr class="lead-row" data-lead-id="' +
+          '<tr class="' +
+          rowClass +
+          '" data-lead-id="' +
           escapeHtml(lead.leadId) +
           '" tabindex="0">' +
           "<td>" +
@@ -341,10 +487,13 @@
           escapeHtml(lead.stage || "—") +
           "</td>" +
           "<td>" +
-          escapeHtml(formatFollowUp(lead.nextFollowUp)) +
+          followUpCellHtml(lead) +
           "</td>" +
           "<td>" +
           escapeHtml(lead.assignedTo || "—") +
+          "</td>" +
+          '<td class="muted-date">' +
+          escapeHtml(formatUpdatedAt(lead.updatedAt)) +
           "</td>" +
           "<td>" +
           '<button type="button" class="link-btn edit-lead-btn" data-lead-id="' +
@@ -381,8 +530,14 @@
           ? columnLeads
               .map(function (lead) {
                 var savings = formatSavings(lead.estimatedSavings);
+                var urgency = followUpUrgency(lead);
+                var cardClass = "pipeline-card";
+                if (urgency === "overdue") cardClass += " is-overdue";
+                if (urgency === "due-soon") cardClass += " is-due-soon";
                 return (
-                  '<article class="pipeline-card" data-lead-id="' +
+                  '<article class="' +
+                  cardClass +
+                  '" data-lead-id="' +
                   escapeHtml(lead.leadId) +
                   '">' +
                   '<div class="pipeline-card-header">' +
@@ -398,8 +553,13 @@
                   "</p>" +
                   '<dl class="pipeline-card-meta">' +
                   "<div><dt>Follow-up</dt><dd>" +
-                  escapeHtml(formatFollowUp(lead.nextFollowUp)) +
+                  followUpCellHtml(lead) +
                   "</dd></div>" +
+                  (lead.updatedAt
+                    ? "<div><dt>Updated</dt><dd class=\"muted-date\">" +
+                      escapeHtml(formatUpdatedAt(lead.updatedAt)) +
+                      "</dd></div>"
+                    : "") +
                   (savings
                     ? "<div><dt>Est. savings</dt><dd class=\"savings-value\">" +
                       escapeHtml(savings) +
@@ -439,6 +599,14 @@
       .join("");
   }
 
+  function followUpFilterLabel(value) {
+    if (value === "needs") return "needs follow-up";
+    if (value === "overdue") return "overdue";
+    if (value === "due-soon") return "due soon";
+    if (value === "none") return "no follow-up date";
+    return "";
+  }
+
   function updateStatusFromFilters(visibleCount) {
     var filters = getFilters();
     var parts = [];
@@ -447,6 +615,10 @@
     }
     if (filters.assignedTo) {
       parts.push("assigned to " + filters.assignedTo);
+    }
+    var followLabel = followUpFilterLabel(filters.followUp);
+    if (followLabel) {
+      parts.push(followLabel);
     }
     var suffix = parts.length ? " (" + parts.join(", ") + ")" : "";
     if (!allLeads.length) {
@@ -563,7 +735,7 @@
         leadsById = {};
         if (tbody) {
           tbody.innerHTML =
-            '<tr><td colspan="7">Unable to load leads.</td></tr>';
+            '<tr><td colspan="8">Unable to load leads.</td></tr>';
         }
         if (pipelineBoard) {
           pipelineBoard.innerHTML =
@@ -750,6 +922,9 @@
   }
   if (filterAssigned) {
     filterAssigned.addEventListener("change", renderViews);
+  }
+  if (filterFollowUp) {
+    filterFollowUp.addEventListener("change", renderViews);
   }
 
   if (tbody) {

@@ -1085,8 +1085,31 @@ class RouteTests(unittest.TestCase):
         )
         self.assertIn('id="add-lead-btn"', source)
         self.assertIn('id="lead-modal"', source)
-        self.assertIn("NextFollowUp", source)
+        self.assertIn("Next Follow-up", source)
+        self.assertIn('id="filter-followup"', source)
+        self.assertIn("Needs Follow-up", source)
+        self.assertIn("Last Updated", source)
+        self.assertIn('id="field-nextFollowUp"', source)
         self.assertIn("EstimatedSavings", source)
+
+    def test_leads_js_followup_urgency_and_filter(self):
+        source = Path(__file__).resolve().parent.joinpath("leads.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("function followUpUrgency", source)
+        self.assertIn("function needsFollowUp", source)
+        self.assertIn("DUE_SOON_DAYS = 7", source)
+        self.assertIn('followup-badge-overdue', source)
+        self.assertIn('followup-badge-due-soon', source)
+        self.assertIn("filterFollowUp", source)
+        self.assertIn('followUpFilter === "needs"', source)
+        self.assertIn("formatUpdatedAt", source)
+        self.assertIn("setLastUpdatedDisplay", source)
+        # Edit mode focuses Next Follow-up so the date is easy to update.
+        open_modal = source.split("function openModal", 1)[1].split(
+            "function closeModal", 1
+        )[0]
+        self.assertIn('field-nextFollowUp', open_modal)
 
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
