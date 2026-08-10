@@ -74,6 +74,35 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["systemId"], "SYS001")
         mocked.assert_called_once_with("SITE001", 7, "SYS001")
 
+    def test_savings_route_returns_demo_series(self):
+        status, payload = novara_api.route_request(
+            "GET", "/api/savings", {"days": ["30"]}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["days"], 30)
+        self.assertEqual(payload["source"], "demo")
+        self.assertEqual(payload["count"], 30)
+        self.assertEqual(len(payload["points"]), 30)
+        self.assertGreater(payload["points"][-1]["cumulative"], 0)
+        self.assertEqual(len(payload["sites"]), 4)
+        self.assertIn("totalSavings", payload["summary"])
+
+    def test_savings_invalid_days(self):
+        status, payload = novara_api.route_request(
+            "GET", "/api/savings", {"days": ["7"]}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("days", payload["error"])
+
+    def test_savings_days_90_and_365_accepted(self):
+        for days in (90, 365):
+            status, payload = novara_api.route_request(
+                "GET", "/api/savings", {"days": [str(days)]}
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["days"], days)
+            self.assertEqual(len(payload["points"]), days)
+
     def test_sites_route(self):
         fake = {
             "table": "NOVARASites",

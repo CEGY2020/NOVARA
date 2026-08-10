@@ -82,6 +82,12 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/readings
             Method: GET
+        Savings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/savings
+            Method: GET
         SitesGet:
           Type: HttpApi
           Properties:
@@ -258,6 +264,9 @@ Outputs:
   ReadingsEndpoint:
     Description: Example readings endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/readings?siteId=VS001&days=7"
+  SavingsEndpoint:
+    Description: Energy savings graphs endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/savings?days=30"
   SitesEndpoint:
     Description: Sites endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/sites"

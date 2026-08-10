@@ -1053,6 +1053,53 @@ a.sales-home-link {
     margin-top: 8px;
 }
 
+.chart-wrap-short {
+    height: 280px;
+}
+
+.chart-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 24px;
+    text-align: center;
+    color: #536772;
+    background: rgba(248, 250, 252, 0.92);
+    border: 1px dashed #c9d5de;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.45;
+    z-index: 1;
+}
+
+.chart-empty-state[hidden] {
+    display: none;
+}
+
+.savings-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    margin: 0 0 16px;
+}
+
+.savings-summary-row .card-label {
+    display: block;
+    margin-bottom: 4px;
+    color: #7b8993;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.savings-summary-row strong {
+    font-size: 22px;
+    color: var(--heading);
+}
+
 .chart-status {
     margin: 0 0 4px;
     font-size: 13px;

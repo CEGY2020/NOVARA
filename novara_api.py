@@ -1640,6 +1640,120 @@ def handle_readings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
         }
 
 
+# Demo portfolio used until verified savings are calculated from NOVARAReadings.
+DEMO_SAVINGS_SITES = (
+    {
+        "siteId": "SITE001",
+        "name": "Vista Springs",
+        "systemType": "Domestic Hot Water",
+        "savingsPct": 34.2,
+        "verifiedSavings": 42850.0,
+        "period": "Rolling 12 months",
+    },
+    {
+        "siteId": "SITE002",
+        "name": "Highlander Pointe",
+        "systemType": "Boiler System",
+        "savingsPct": 31.8,
+        "verifiedSavings": 38920.0,
+        "period": "Rolling 12 months",
+    },
+    {
+        "siteId": "SITE003",
+        "name": "La Verne Pool",
+        "systemType": "Pool Heating",
+        "savingsPct": 28.4,
+        "verifiedSavings": 21450.0,
+        "period": "Rolling 12 months",
+    },
+    {
+        "siteId": "SITE004",
+        "name": "Solar Thermal Demo",
+        "systemType": "Solar Thermal",
+        "savingsPct": 22.1,
+        "verifiedSavings": 12480.0,
+        "period": "Rolling 12 months",
+    },
+)
+
+SAVINGS_ALLOWED_DAYS = (30, 90, 365)
+
+
+def build_demo_savings(days: int) -> dict:
+    """Build a clean portfolio savings series for charts (demo until calc exists)."""
+    end = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    sites = [dict(site) for site in DEMO_SAVINGS_SITES]
+    annual_total = sum(float(site["verifiedSavings"]) for site in sites)
+    # Scale annual verified savings into the selected window with mild daily variation.
+    window_total = annual_total * (days / 365.0)
+    baseline_daily = window_total / max(days, 1)
+
+    points: list[dict] = []
+    cumulative = 0.0
+    for offset in range(days, 0, -1):
+        day = end - timedelta(days=offset - 1)
+        # Deterministic variation so charts look professional and stable across reloads.
+        wave = 1.0 + 0.12 * ((offset % 7) - 3) / 3.0
+        weekend = 0.92 if day.weekday() >= 5 else 1.0
+        seasonal = 1.0 + 0.08 * ((day.timetuple().tm_yday % 45) - 22) / 22.0
+        daily = round(baseline_daily * wave * weekend * seasonal, 2)
+        if daily < 0:
+            daily = 0.0
+        cumulative = round(cumulative + daily, 2)
+        points.append(
+            {
+                "t": day.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "daily": daily,
+                "cumulative": cumulative,
+            }
+        )
+
+    # Align site window totals to the chart window while preserving annual % / dollars.
+    scale = days / 365.0
+    for site in sites:
+        site["windowSavings"] = round(float(site["verifiedSavings"]) * scale, 2)
+
+    avg_pct = round(
+        sum(float(site["savingsPct"]) for site in sites) / max(len(sites), 1),
+        1,
+    )
+    last_update = points[-1]["t"] if points else None
+    return {
+        "points": points,
+        "sites": sites,
+        "summary": {
+            "totalSavings": round(cumulative, 2),
+            "annualSavings": round(annual_total, 2),
+            "avgSavingsPct": avg_pct,
+            "siteCount": len(sites),
+        },
+        "lastUpdate": last_update,
+        "days": days,
+        "count": len(points),
+        "source": "demo",
+    }
+
+
+def handle_savings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
+    try:
+        days = int((params.get("days") or ["30"])[0])
+    except ValueError:
+        return 400, {"error": "days must be an integer"}
+    if days not in SAVINGS_ALLOWED_DAYS:
+        return 400, {"error": "days must be one of 30, 90, or 365"}
+
+    try:
+        # Verified savings calculation from NOVARAReadings is not available yet.
+        # Serve deterministic demo data so Savings Graphs render usefully.
+        return 200, build_demo_savings(days)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load savings data",
+            "detail": str(exc),
+        }
+
+
 def handle_sites_request() -> tuple[int, dict]:
     try:
         return 200, scan_sites()
@@ -1934,6 +2048,10 @@ def route_request(
         if method != "GET":
             return 405, {"error": "Method not allowed"}
         return handle_readings_request(params)
+    if normalized.endswith("/api/savings") or normalized == "/savings":
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
+        return handle_savings_request(params)
     if normalized.endswith("/api/sites") or normalized == "/sites":
         if method == "GET":
             return handle_sites_request()
