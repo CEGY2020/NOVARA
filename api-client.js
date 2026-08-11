@@ -57,11 +57,26 @@
     });
   }
 
+  function authHeaders() {
+    var headers = { Accept: "application/json" };
+    try {
+      if (global.NovaraAuth && typeof NovaraAuth.getToken === "function") {
+        var token = NovaraAuth.getToken();
+        if (token) {
+          headers.Authorization = "Bearer " + token;
+        }
+      }
+    } catch (e) {
+      // Ignore storage access issues.
+    }
+    return headers;
+  }
+
   function fetchJson(path, query) {
     var url = buildUrl(path, query);
     return fetch(url, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: authHeaders(),
       cache: "no-store",
     }).then(function (response) {
       return parseResponse(response, path);
@@ -70,12 +85,11 @@
 
   function sendJson(path, method, payload) {
     var url = buildUrl(path);
+    var headers = authHeaders();
+    headers["Content-Type"] = "application/json";
     var options = {
       method: method,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers: headers,
       cache: "no-store",
     };
     // Avoid DELETE/GET request bodies (some proxies reject them).
@@ -204,6 +218,9 @@
     },
     loginUser: function (payload) {
       return sendJson("/api/users/login", "POST", payload);
+    },
+    getSession: function () {
+      return fetchJson("/api/users/session");
     },
     updateUserStatus: function (userId, status) {
       var id =

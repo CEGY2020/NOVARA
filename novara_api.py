@@ -74,6 +74,8 @@ def _load_preapproved_emails() -> frozenset[str]:
 
 PREAPPROVED_EMAILS = _load_preapproved_emails()
 PASSWORD_HASH_ITERATIONS = 120_000
+# Browser sessions stay valid for 30 days (Remember me / localStorage).
+SESSION_TTL_SECONDS = int(os.environ.get("NOVARA_SESSION_TTL_SECONDS", str(30 * 24 * 3600)))
 _USER_ID_PATTERN = re.compile(r"^USR(\d+)$", re.IGNORECASE)
 
 _systems_table_ready = False
@@ -1586,6 +1588,102 @@ def create_user_from_signup(item: dict) -> dict:
     raise RuntimeError("Failed to allocate a UserID")
 
 
+def _hash_session_token(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def create_session_for_user(user_id: str) -> dict:
+    """Issue a bearer session token and persist its hash on the user row."""
+    target_id = _as_text(user_id)
+    if not target_id:
+        raise ValueError("UserID is required")
+
+    token_secret = secrets.token_urlsafe(32)
+    token = f"{target_id}.{token_secret}"
+    token_hash = _hash_session_token(token)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=max(60, SESSION_TTL_SECONDS))
+    now_s = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    expires_s = expires.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    table.update_item(
+        Key={"UserID": target_id},
+        UpdateExpression=(
+            "SET SessionTokenHash = :hash, SessionExpiresAt = :expires, "
+            "UpdatedAt = :updated"
+        ),
+        ExpressionAttributeValues={
+            ":hash": token_hash,
+            ":expires": expires_s,
+            ":updated": now_s,
+        },
+        ConditionExpression="attribute_exists(UserID)",
+    )
+    return {"token": token, "expiresAt": expires_s}
+
+
+def clear_session_for_user(user_id: str) -> None:
+    target_id = _as_text(user_id)
+    if not target_id:
+        return
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    now_s = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    table.update_item(
+        Key={"UserID": target_id},
+        UpdateExpression=(
+            "REMOVE SessionTokenHash, SessionExpiresAt SET UpdatedAt = :updated"
+        ),
+        ExpressionAttributeValues={":updated": now_s},
+        ConditionExpression="attribute_exists(UserID)",
+    )
+
+
+def resolve_session_token(token: str) -> dict:
+    """Validate a bearer token and return the Active user it belongs to."""
+    raw = _as_text(token)
+    if not raw or "." not in raw:
+        raise PermissionError("Invalid or expired session")
+
+    user_id, _sep, _secret = raw.partition(".")
+    if not user_id or not _secret:
+        raise PermissionError("Invalid or expired session")
+
+    item = find_user_by_id(user_id)
+    if not item:
+        raise PermissionError("Invalid or expired session")
+
+    stored_hash = first_present(
+        item, ("SessionTokenHash", "sessionTokenHash", "session_token_hash"), default=""
+    )
+    if not stored_hash or not secrets.compare_digest(
+        str(stored_hash), _hash_session_token(raw)
+    ):
+        raise PermissionError("Invalid or expired session")
+
+    expires_raw = first_present(
+        item, ("SessionExpiresAt", "sessionExpiresAt", "session_expires_at"), default=""
+    )
+    expires_text = str(expires_raw or "").strip()
+    if not expires_text:
+        raise PermissionError("Invalid or expired session")
+    try:
+        expires_at = datetime.strptime(expires_text, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError as exc:
+        raise PermissionError("Invalid or expired session") from exc
+    if datetime.now(timezone.utc) >= expires_at:
+        raise PermissionError("Invalid or expired session")
+
+    user = normalize_user(item)
+    if (user.get("status") or "Pending") != "Active":
+        raise PermissionError("Your account is not active.")
+    return user
+
+
 def authenticate_user(email: str, password: str) -> dict:
     item = find_user_by_email(email)
     # Use a generic failure for missing users / bad passwords.
@@ -1605,10 +1703,13 @@ def authenticate_user(email: str, password: str) -> dict:
     if status != "Active":
         raise PermissionError("Your account is not active.")
 
+    session = create_session_for_user(user["userId"])
     return {
         "ok": True,
         "table": USERS_TABLE_NAME,
         "user": user,
+        "token": session["token"],
+        "expiresAt": session["expiresAt"],
         "message": "Signed in successfully.",
     }
 
@@ -2012,9 +2113,34 @@ def _request_path(event: dict) -> str:
         or (event.get("requestContext") or {}).get("http", {}).get("path")
         or ""
     )
+    # Some proxies put the mapped path under pathParameters.proxy.
+    if (not path or path == "/") and isinstance(event.get("pathParameters"), dict):
+        proxy = event["pathParameters"].get("proxy")
+        if proxy:
+            path = str(proxy)
+            if not path.startswith("/"):
+                path = f"/{path}"
+            # Prefer /api/... when the proxy value omitted the prefix.
+            if not path.startswith("/api/") and path.split("/", 2)[1] in {
+                "users",
+                "user",
+                "login",
+                "session",
+                "sites",
+                "systems",
+                "owners",
+                "leads",
+                "readings",
+                "savings",
+                "health",
+                "mgmt-companies",
+            }:
+                path = f"/api{path}"
     # Strip stage prefixes such as /prod/api/sites
-    if path.startswith("/prod/") or path.startswith("/Stage/"):
-        path = "/" + path.split("/", 2)[-1]
+    for prefix in ("/prod/", "/Stage/", "/stage/", "/$default/"):
+        if path.startswith(prefix):
+            path = "/" + path.split("/", 2)[-1]
+            break
     return path.rstrip("/") or "/"
 
 
@@ -2492,6 +2618,46 @@ def handle_login_request(body: dict | None) -> tuple[int, dict]:
         }
 
 
+def _bearer_token_from_headers(headers: dict | None) -> str:
+    if not isinstance(headers, dict):
+        return ""
+    # API Gateway may lowercase header names.
+    for key, value in headers.items():
+        if str(key).lower() != "authorization":
+            continue
+        text = str(value or "").strip()
+        if text.lower().startswith("bearer "):
+            return text[7:].strip()
+        return text
+    return ""
+
+
+def handle_session_request(
+    *, headers: dict | None = None, params: dict | None = None
+) -> tuple[int, dict]:
+    token = _bearer_token_from_headers(headers)
+    if not token and isinstance(params, dict):
+        token = _as_text((params.get("token") or [""])[0])
+    if not token:
+        return 401, {"error": "Authorization bearer token is required"}
+    try:
+        user = resolve_session_token(token)
+        return 200, {
+            "ok": True,
+            "table": USERS_TABLE_NAME,
+            "user": user,
+            "message": "Session is valid.",
+        }
+    except PermissionError as exc:
+        return 401, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to validate session",
+            "detail": str(exc),
+        }
+
+
 def _user_id_from_path(path: str) -> str | None:
     """Extract UserID from /api/users/{id} (not signup/login/status suffixes)."""
     normalized = path if path.startswith("/") else f"/{path}"
@@ -2565,12 +2731,18 @@ def route_request(
     path: str,
     params: dict[str, list[str]],
     body: dict | None = None,
+    *,
+    headers: dict | None = None,
 ) -> tuple[int, dict]:
     method = (method or "GET").upper()
     if method == "OPTIONS":
         return 204, {}
 
     normalized = path if path.startswith("/") else f"/{path}"
+    # Tolerate accidental trailing path noise from proxies.
+    while "//" in normalized:
+        normalized = normalized.replace("//", "/")
+    normalized = normalized.rstrip("/") or "/"
     if normalized.endswith("/api/readings") or normalized == "/readings":
         if method != "GET":
             return 405, {"error": "Method not allowed"}
@@ -2652,14 +2824,35 @@ def route_request(
                 body, mode="update", lead_id=lead_path_id
             )
         return 405, {"error": "Method not allowed"}
-    if normalized.endswith("/api/users/signup") or normalized == "/users/signup":
+    if (
+        normalized.endswith("/api/users/signup")
+        or normalized == "/users/signup"
+        or normalized.endswith("/api/user/signup")
+        or normalized == "/user/signup"
+    ):
         if method != "POST":
             return 405, {"error": "Method not allowed"}
         return handle_signup_request(body)
-    if normalized.endswith("/api/users/login") or normalized == "/users/login":
+    if (
+        normalized.endswith("/api/users/login")
+        or normalized == "/users/login"
+        or normalized.endswith("/api/user/login")
+        or normalized == "/user/login"
+        or normalized.endswith("/api/login")
+        or normalized == "/login"
+    ):
         if method != "POST":
             return 405, {"error": "Method not allowed"}
         return handle_login_request(body)
+    if (
+        normalized.endswith("/api/users/session")
+        or normalized == "/users/session"
+        or normalized.endswith("/api/session")
+        or normalized == "/session"
+    ):
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
+        return handle_session_request(headers=headers, params=params)
     user_status_id = _user_status_path_id(normalized)
     if user_status_id is not None:
         if method != "PUT":
@@ -2668,6 +2861,9 @@ def route_request(
     if normalized.endswith("/api/users") or normalized == "/users":
         if method == "GET":
             return handle_users_request(params)
+        # Alias: POST /api/users creates an account (same as /api/users/signup).
+        if method == "POST":
+            return handle_signup_request(body)
         return 405, {"error": "Method not allowed"}
     user_path_id = _user_id_from_path(normalized)
     if user_path_id is not None:
@@ -2683,8 +2879,8 @@ def route_request(
         "hint": (
             "Supported routes include /api/sites, /api/systems, /api/owners, "
             "/api/mgmt-companies, /api/leads, /api/users, /api/users/signup, "
-            "/api/users/login, /api/readings, /api/savings, and /api/health. "
-            "Redeploy novara-api if a known route returns this."
+            "/api/users/login, /api/users/session, /api/readings, /api/savings, "
+            "and /api/health. Redeploy novara-api if a known route returns this."
         ),
     }
 
@@ -2696,7 +2892,7 @@ def api_response(status: int, payload: dict, *, cors: bool = True) -> dict:
     }
     if cors:
         headers["Access-Control-Allow-Origin"] = "*"
-        headers["Access-Control-Allow-Headers"] = "Content-Type"
+        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
     body = "" if status == 204 else json.dumps(payload)
     return {
@@ -2719,9 +2915,12 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
     )
     path = _request_path(event)
     params = _query_params(event)
+    headers = event.get("headers") or {}
     try:
         body = _request_body(event)
     except json.JSONDecodeError:
         return api_response(400, {"error": "Invalid JSON body"})
-    status, payload = route_request(method, path, params, body)
+    status, payload = route_request(
+        method, path, params, body, headers=headers
+    )
     return api_response(status, payload)

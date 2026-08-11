@@ -47,15 +47,25 @@ if (loginForm) {
       loginSubmit.textContent = "Signing in…";
     }
 
+    var rememberEl = document.getElementById("rememberMe");
+    var remember = Boolean(rememberEl && rememberEl.checked);
+
     NovaraApi.loginUser({ Email: email, Password: password })
       .then(function (result) {
         var user = result && result.user;
         if (!user) {
           throw new Error("Login succeeded but no user was returned.");
         }
+        if (!result.token) {
+          throw new Error("Login succeeded but no session token was returned.");
+        }
 
         if (window.NovaraAuth && NovaraAuth.setCurrentUser) {
-          NovaraAuth.setCurrentUser(user);
+          NovaraAuth.setCurrentUser(user, {
+            token: result.token,
+            expiresAt: result.expiresAt || "",
+            remember: remember,
+          });
         }
 
         var role = user.role;

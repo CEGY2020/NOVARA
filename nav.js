@@ -61,7 +61,9 @@
       return NovaraAuth.getCurrentUser();
     }
     try {
-      var raw = sessionStorage.getItem("novaraUser");
+      var raw =
+        sessionStorage.getItem("novaraUser") ||
+        localStorage.getItem("novaraUser");
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
@@ -202,7 +204,12 @@
         }
         try {
           sessionStorage.removeItem("novaraUser");
+          sessionStorage.removeItem("novaraToken");
+          sessionStorage.removeItem("novaraTokenExpires");
           sessionStorage.removeItem("novaraRole");
+          localStorage.removeItem("novaraUser");
+          localStorage.removeItem("novaraToken");
+          localStorage.removeItem("novaraTokenExpires");
         } catch (e) {
           // no-op
         }
