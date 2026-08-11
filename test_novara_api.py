@@ -1020,7 +1020,7 @@ class RouteTests(unittest.TestCase):
                 "contactEmail": "sam@example.com",
                 "contactPhone": "303-555-0199",
                 "source": "Referral",
-                "systemType": "DHW",
+                "systemType": "DHW NG",
                 "stage": "Qualified",
                 "nextFollowUp": "2026-10-15",
                 "assignedTo": "Steve Nold",
@@ -1032,12 +1032,39 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(item["LeadID"], "LD002")
         self.assertEqual(item["CompanyName"], "Summit Residences")
         self.assertEqual(item["Source"], "Referral")
-        self.assertEqual(item["SystemType"], "DHW")
+        self.assertEqual(item["SystemType"], "DHW NG")
         self.assertEqual(item["Stage"], "Qualified")
         self.assertEqual(item["NextFollowUp"], "2026-10-15")
         self.assertEqual(item["AssignedTo"], "Steve Nold")
         self.assertEqual(item["EstimatedSavings"], Decimal("12500.5"))
         self.assertEqual(item["Notes"], "Interested in pool retrofit")
+
+    def test_parse_lead_payload_maps_legacy_dhw_and_accepts_dhw_kw(self):
+        legacy, legacy_error = novara_api.parse_lead_payload(
+            {
+                "LeadID": "LD010",
+                "CompanyName": "Legacy DHW Co",
+                "SystemType": "DHW",
+            }
+        )
+        self.assertIsNone(legacy_error)
+        self.assertEqual(legacy["SystemType"], "DHW NG")
+
+        kw_item, kw_error = novara_api.parse_lead_payload(
+            {
+                "LeadID": "LD011",
+                "CompanyName": "DHW kW Co",
+                "SystemType": "DHW kW",
+            }
+        )
+        self.assertIsNone(kw_error)
+        self.assertEqual(kw_item["SystemType"], "DHW kW")
+
+    def test_normalize_lead_maps_legacy_dhw(self):
+        lead = novara_api.normalize_lead(
+            {"LeadID": "LD012", "CompanyName": "Old DHW", "SystemType": "DHW"}
+        )
+        self.assertEqual(lead["systemType"], "DHW NG")
 
     def test_parse_lead_payload_rejects_bad_source(self):
         item, error = novara_api.parse_lead_payload(
@@ -1160,6 +1187,16 @@ class RouteTests(unittest.TestCase):
             "Other",
         ):
             self.assertIn('value="' + option + '"', source_select)
+        system_select = source.split('id="field-systemType"', 1)[1].split(
+            "</select>", 1
+        )[0]
+        self.assertIn('value="DHW NG"', system_select)
+        self.assertIn('value="DHW kW"', system_select)
+        self.assertIn('value="Pool"', system_select)
+        self.assertIn('value="HVAC"', system_select)
+        self.assertIn('value="Other"', system_select)
+        self.assertNotIn('value="DHW">', system_select)
+        self.assertIn("phone-format.js", source)
 
     def test_leads_js_followup_urgency_and_filter(self):
         source = Path(__file__).resolve().parent.joinpath("leads.js").read_text(

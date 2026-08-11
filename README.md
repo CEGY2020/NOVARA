@@ -165,7 +165,7 @@ Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (requir
 
 Management Companies create/update body fields: `MgmtCompanyID` (required, `MGT###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 
-Leads create/update body fields: `LeadID` (required, `LD###`), `CompanyName` / `SiteName` (required), `ContactName`, `ContactEmail`, `ContactPhone`, `Source` (`Carlos`/`Cam`/`Cold Call`/`Katia`/`PHEEP`/`Steve`/`Referral`/`Website`/`Rinnai`/`Trade Show`/`Other`), `SystemType` (`DHW`/`Pool`/`HVAC`/`Other`), `Stage` (`New Lead`/`Contacted`/`Qualified`/`Proposal Sent`/`Won`/`Lost`), `NextFollowUp` (`YYYY-MM-DD`), `AssignedTo`, `EstimatedSavings` (number, optional), `Notes` (optional).
+Leads create/update body fields: `LeadID` (required, `LD###`), `CompanyName` / `SiteName` (required), `ContactName`, `ContactEmail`, `ContactPhone`, `Source` (`Carlos`/`Cam`/`Cold Call`/`Katia`/`PHEEP`/`Steve`/`Referral`/`Website`/`Rinnai`/`Trade Show`/`Other`), `SystemType` (`DHW NG`/`DHW kW`/`Pool`/`HVAC`/`Other`; legacy `DHW` is accepted and stored as `DHW NG`), `Stage` (`New Lead`/`Contacted`/`Qualified`/`Proposal Sent`/`Won`/`Lost`), `NextFollowUp` (`YYYY-MM-DD`), `AssignedTo`, `EstimatedSavings` (number, optional), `Notes` (optional).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 

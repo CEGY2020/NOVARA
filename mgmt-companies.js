@@ -58,6 +58,16 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function formatPhoneValue(value) {
+    if (
+      window.NovaraPhone &&
+      typeof window.NovaraPhone.formatPhoneUS === "function"
+    ) {
+      return window.NovaraPhone.formatPhoneUS(value);
+    }
+    return value == null ? "" : String(value);
+  }
+
   function formatLocation(company) {
     var city = company.city || "";
     var state = company.state || "";
@@ -77,7 +87,7 @@
       Zip: fieldValue("field-zip"),
       ContactName: fieldValue("field-contactName"),
       ContactEmail: fieldValue("field-contactEmail"),
-      ContactPhone: fieldValue("field-contactPhone"),
+      ContactPhone: formatPhoneValue(fieldValue("field-contactPhone")),
       Notes: fieldValue("field-notes"),
     };
   }
@@ -140,7 +150,10 @@
       setFieldValue("field-zip", company.zip || "");
       setFieldValue("field-contactName", company.contactName || "");
       setFieldValue("field-contactEmail", company.contactEmail || "");
-      setFieldValue("field-contactPhone", company.contactPhone || "");
+      setFieldValue(
+        "field-contactPhone",
+        formatPhoneValue(company.contactPhone || "")
+      );
       setFieldValue("field-notes", company.notes || "");
     } else {
       modalTitle.textContent = "Add Management Company";
@@ -197,7 +210,7 @@
           escapeHtml(contact) +
           "</td>" +
           "<td>" +
-          escapeHtml(company.contactPhone || "—") +
+          escapeHtml(formatPhoneValue(company.contactPhone) || "—") +
           "</td>" +
           "<td>" +
           '<button type="button" class="link-btn edit-mgmt-company-btn" data-mgmt-company-id="' +
@@ -347,6 +360,15 @@
   }
   if (form) {
     form.addEventListener("submit", saveMgmtCompany);
+  }
+
+  if (
+    window.NovaraPhone &&
+    typeof window.NovaraPhone.bindPhoneInput === "function"
+  ) {
+    window.NovaraPhone.bindPhoneInput(
+      document.getElementById("field-contactPhone")
+    );
   }
 
   tbody.addEventListener("click", function (event) {

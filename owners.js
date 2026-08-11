@@ -58,6 +58,16 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function formatPhoneValue(value) {
+    if (
+      window.NovaraPhone &&
+      typeof window.NovaraPhone.formatPhoneUS === "function"
+    ) {
+      return window.NovaraPhone.formatPhoneUS(value);
+    }
+    return value == null ? "" : String(value);
+  }
+
   function formatLocation(owner) {
     var city = owner.city || "";
     var state = owner.state || "";
@@ -77,7 +87,7 @@
       Zip: fieldValue("field-zip"),
       ContactName: fieldValue("field-contactName"),
       ContactEmail: fieldValue("field-contactEmail"),
-      ContactPhone: fieldValue("field-contactPhone"),
+      ContactPhone: formatPhoneValue(fieldValue("field-contactPhone")),
       Notes: fieldValue("field-notes"),
     };
   }
@@ -138,7 +148,10 @@
       setFieldValue("field-zip", owner.zip || "");
       setFieldValue("field-contactName", owner.contactName || "");
       setFieldValue("field-contactEmail", owner.contactEmail || "");
-      setFieldValue("field-contactPhone", owner.contactPhone || "");
+      setFieldValue(
+        "field-contactPhone",
+        formatPhoneValue(owner.contactPhone || "")
+      );
       setFieldValue("field-notes", owner.notes || "");
     } else {
       modalTitle.textContent = "Add Owner";
@@ -195,7 +208,7 @@
           escapeHtml(contact) +
           "</td>" +
           "<td>" +
-          escapeHtml(owner.contactPhone || "—") +
+          escapeHtml(formatPhoneValue(owner.contactPhone) || "—") +
           "</td>" +
           "<td>" +
           '<button type="button" class="link-btn edit-owner-btn" data-owner-id="' +
@@ -343,6 +356,15 @@
   }
   if (form) {
     form.addEventListener("submit", saveOwner);
+  }
+
+  if (
+    window.NovaraPhone &&
+    typeof window.NovaraPhone.bindPhoneInput === "function"
+  ) {
+    window.NovaraPhone.bindPhoneInput(
+      document.getElementById("field-contactPhone")
+    );
   }
 
   tbody.addEventListener("click", function (event) {

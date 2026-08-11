@@ -39,7 +39,7 @@ LEAD_SOURCES = (
     "Trade Show",
     "Other",
 )
-LEAD_SYSTEM_TYPES = ("DHW", "Pool", "HVAC", "Other")
+LEAD_SYSTEM_TYPES = ("DHW NG", "DHW kW", "Pool", "HVAC", "Other")
 LEAD_STAGES = (
     "New Lead",
     "Contacted",
@@ -1044,6 +1044,9 @@ def normalize_lead(item: dict) -> dict:
     system_type = first_present(
         item, ("SystemType", "systemType", "system_type"), default=""
     )
+    # Legacy lead value "DHW" was renamed to "DHW NG".
+    if str(system_type or "").strip() == "DHW":
+        system_type = "DHW NG"
     stage = first_present(item, ("Stage", "stage"), default="")
     next_follow_up = first_present(
         item,
@@ -1159,6 +1162,9 @@ def parse_lead_payload(body: dict | None) -> tuple[dict | None, str | None]:
     system_type = _as_text(
         body.get("SystemType") if "SystemType" in body else body.get("systemType")
     )
+    # Legacy lead value "DHW" was renamed to "DHW NG".
+    if system_type == "DHW":
+        system_type = "DHW NG"
     stage = _as_text(body.get("Stage") if "Stage" in body else body.get("stage"))
     next_follow_up = _as_text(
         body.get("NextFollowUp")
