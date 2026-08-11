@@ -1044,11 +1044,36 @@ class RouteTests(unittest.TestCase):
             {
                 "LeadID": "LD003",
                 "CompanyName": "Bad Source Co",
-                "Source": "Cold Call",
+                "Source": "Not A Real Source",
             }
         )
         self.assertIsNone(item)
         self.assertIn("Source", error)
+
+    def test_parse_lead_payload_accepts_new_sources(self):
+        for source in (
+            "Carlos",
+            "Cam",
+            "Cold Call",
+            "Katia",
+            "PHEEP",
+            "Steve",
+        ):
+            item, error = novara_api.parse_lead_payload(
+                {
+                    "LeadID": "LD004",
+                    "CompanyName": "Source Check Co",
+                    "Source": source,
+                }
+            )
+            self.assertIsNone(error, source)
+            self.assertEqual(item["Source"], source)
+
+    def test_unknown_api_path_returns_clear_error(self):
+        status, payload = novara_api.route_request("POST", "/api/missing", {})
+        self.assertEqual(status, 404)
+        self.assertIn("Unknown API path", payload["error"])
+        self.assertIn("/api/leads", payload.get("hint", ""))
 
     def test_normalize_lead(self):
         lead = novara_api.normalize_lead(
@@ -1120,6 +1145,21 @@ class RouteTests(unittest.TestCase):
         self.assertIn("Last Updated", source)
         self.assertIn('id="field-nextFollowUp"', source)
         self.assertIn("EstimatedSavings", source)
+        source_select = source.split('id="field-source"', 1)[1].split("</select>", 1)[0]
+        for option in (
+            "Carlos",
+            "Cam",
+            "Cold Call",
+            "Katia",
+            "PHEEP",
+            "Steve",
+            "Referral",
+            "Website",
+            "Rinnai",
+            "Trade Show",
+            "Other",
+        ):
+            self.assertIn('value="' + option + '"', source_select)
 
     def test_leads_js_followup_urgency_and_filter(self):
         source = Path(__file__).resolve().parent.joinpath("leads.js").read_text(
