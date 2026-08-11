@@ -74,6 +74,24 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["systemId"], "SYS001")
         mocked.assert_called_once_with("SITE001", 7, "SYS001")
 
+    def test_reading_sort_key_helpers(self):
+        self.assertEqual(
+            novara_api.reading_sort_key("2026-08-05T07:00:00Z", "sys001"),
+            "2026-08-05T07:00:00Z#SYS001",
+        )
+        self.assertEqual(
+            novara_api.reading_sort_key("2026-08-05T07:00:00Z", None),
+            "2026-08-05T07:00:00Z",
+        )
+        self.assertEqual(
+            novara_api.split_reading_sort_key("2026-08-05T07:00:00Z#SYS002"),
+            ("2026-08-05T07:00:00Z", "SYS002"),
+        )
+        self.assertEqual(
+            novara_api.split_reading_sort_key("2026-08-05T07:00:00Z"),
+            ("2026-08-05T07:00:00Z", None),
+        )
+
     def test_savings_route_returns_demo_series(self):
         status, payload = novara_api.route_request(
             "GET", "/api/savings", {"days": ["30"]}

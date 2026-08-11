@@ -105,6 +105,9 @@ _mgmt_companies_table_ready = False
 _leads_table_ready = False
 _users_table_ready = False
 _preapproved_table_ready = False
+_readings_table_ready = False
+# Multi-system readings use TimestampUTC sort keys like 2026-08-05T07:00:00Z#SYS001
+_READING_SORT_SYSTEM_RE = re.compile(r"#(SYS\d+)$", re.IGNORECASE)
 
 
 def sanitize_aws_env() -> None:
@@ -135,6 +138,69 @@ def dynamodb_resource():
 
 def dynamodb_table(table_name: str = TABLE_NAME):
     return dynamodb_resource().Table(table_name)
+
+
+def reading_sort_key(timestamp_utc: str, system_id: str | None) -> str:
+    """Build DynamoDB TimestampUTC sort key; append #SystemID when present."""
+    ts = (timestamp_utc or "").strip()
+    system = (system_id or "").strip().upper()
+    if system:
+        return f"{ts}#{system}"
+    return ts
+
+
+def split_reading_sort_key(sort_key: str) -> tuple[str, str | None]:
+    """Split ``{iso}#{SystemID}`` back into timestamp + system (or plain iso)."""
+    text = "" if sort_key is None else str(sort_key)
+    match = _READING_SORT_SYSTEM_RE.search(text)
+    if not match:
+        return text, None
+    return text[: match.start()], match.group(1).upper()
+
+
+def ensure_readings_table() -> str:
+    """Create NOVARAReadings if missing (pay-per-request, SiteID + TimestampUTC)."""
+    global _readings_table_ready
+    if _readings_table_ready:
+        return TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=TABLE_NAME)
+        _readings_table_ready = True
+        return TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "SiteID", "AttributeType": "S"},
+                {"AttributeName": "TimestampUTC", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "SiteID", "KeyType": "HASH"},
+                {"AttributeName": "TimestampUTC", "KeyType": "RANGE"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _readings_table_ready = True
+    return TABLE_NAME
 
 
 def json_safe(value: Any) -> Any:
@@ -2566,12 +2632,14 @@ def query_readings(site_id: str, days: int, system_id: str | None = None) -> dic
     start = end - timedelta(days=days)
     start_iso = start.strftime("%Y-%m-%dT%H:%M:%SZ")
     end_iso = end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Include composite keys like ``{end_iso}#SYS001`` (lexicographically after end_iso).
+    end_bound = end_iso + "\uffff"
 
     table = dynamodb_table(TABLE_NAME)
     items = []
     query_kwargs: dict[str, Any] = {
         "KeyConditionExpression": Key("SiteID").eq(site_id)
-        & Key("TimestampUTC").between(start_iso, end_iso),
+        & Key("TimestampUTC").between(start_iso, end_bound),
         "ScanIndexForward": True,
     }
     if system_id:
@@ -2589,7 +2657,10 @@ def query_readings(site_id: str, days: int, system_id: str | None = None) -> dic
 
     points = []
     for item in items:
-        timestamp = item.get("TimestampUTC")
+        raw_timestamp = item.get("TimestampUTC")
+        if not raw_timestamp:
+            continue
+        timestamp, key_system = split_reading_sort_key(str(raw_timestamp))
         if not timestamp:
             continue
         point = {
@@ -2597,7 +2668,7 @@ def query_readings(site_id: str, days: int, system_id: str | None = None) -> dic
             "t1": to_float(item.get("T1")),
             "t2": to_float(item.get("T2")),
         }
-        item_system = item.get("SystemID") or item.get("systemId")
+        item_system = item.get("SystemID") or item.get("systemId") or key_system
         if item_system:
             point["systemId"] = str(item_system)
         points.append(point)

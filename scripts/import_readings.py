@@ -4,18 +4,18 @@
 Expected columns (header names are case-insensitive; aliases accepted):
 
   Required:
-    TimestampUTC  — ISO-8601 UTC preferred (aliases: Timestamp, DateTime, Time)
-    T1            — supply temperature °F (aliases: t1, Supply, SupplyTemp)
-    T2            — return temperature °F (aliases: t2, Return, ReturnTemp)
+    TimestampUTC  — ISO-8601 UTC preferred (aliases: Timestamp, Timestamp (UTC), DateTime, Time)
+    T1            — supply temperature °F (aliases: t1, T1 (F), Supply, SupplyTemp)
+    T2            — return temperature °F (aliases: t2, T2 (F), Return, ReturnTemp)
 
-  Site / system (column or CLI flag):
+  Site / system (column, CLI flag, or filename for Vista Springs):
     SiteID        — e.g. SITE001 (aliases: Site Id, site_id, Site)
                     or pass --site-id / --default-site-id
     SystemID      — e.g. SYS001 (aliases: System Id, system_id, System)
                     or pass --system-id / --default-system-id
 
   Optional:
-    RelayState    — numeric relay state (aliases: Relay, relay_state)
+    RelayState    — numeric relay state (aliases: Relay, Relay State, relay_state)
 
 Place files under data/readings/ (recommended), then run:
 
@@ -24,14 +24,21 @@ Place files under data/readings/ (recommended), then run:
   python3 scripts/import_readings.py data/readings/my_export.csv --execute \\
     --site-id SITE001 --system-id SYS001
 
-CSV may omit SiteID/SystemID when those flags are provided, e.g.:
+Import all Vista Springs DHW exports in one run (DHW-Sys-N → SITE001 / SYS00N):
+
+  python3 scripts/import_readings.py data/readings/vista-springs --dry-run
+  python3 scripts/import_readings.py data/readings/vista-springs --execute
+
+CSV may omit SiteID/SystemID when those flags (or Vista Springs filenames) are provided:
 
   TimestampUTC,T1,T2,RelayState
+  Timestamp (UTC),Relay State,T2 (F),T1 (F)
 
-DynamoDB keys are SiteID (HASH) + TimestampUTC (RANGE). SystemID is stored on
-each item so Temperature Trends / future graphs can filter by system. By
-default, existing keys are skipped so re-imports are safe. Use --overwrite to
-replace values.
+DynamoDB keys are SiteID (HASH) + TimestampUTC (RANGE). When SystemID is set,
+TimestampUTC is stored as ``{iso}#{SystemID}`` so multiple systems at the same
+site/time can coexist; the API strips the suffix for charts. SystemID is also
+stored on each item for filtering. By default, existing keys are skipped so
+re-imports are safe. Use --overwrite to replace values.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ import csv
 import os
 import re
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -51,10 +59,20 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from novara_api import TABLE_NAME, dynamodb_resource, sanitize_aws_env  # noqa: E402
+from novara_api import (  # noqa: E402
+    TABLE_NAME,
+    dynamodb_resource,
+    ensure_readings_table,
+    reading_sort_key,
+    sanitize_aws_env,
+)
 
 SITE_ID_RE = re.compile(r"^SITE\d{3,}$", re.IGNORECASE)
 SYSTEM_ID_RE = re.compile(r"^SYS\d{3,}$", re.IGNORECASE)
+# Vista Springs exports: DHW-Sys-1-chart-data-....csv.csv → SITE001 / SYS001
+DHW_SYS_FILE_RE = re.compile(r"DHW-Sys-(\d+)", re.IGNORECASE)
+READING_FILE_SUFFIXES = (".csv", ".txt", ".tsv", ".xlsx", ".xlsm")
+VISTA_SPRINGS_SITE_ID = "SITE001"
 
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "SiteID": (
@@ -102,10 +120,42 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
 
 
 def normalize_header(name: str) -> str:
+    """Normalize CSV headers; strip units in parentheses (e.g. T1 (F), Timestamp (UTC))."""
     text = (name or "").strip().lower()
-    text = text.replace("-", " ").replace("/", " ")
-    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = text.replace("-", " ").replace("/", " ").replace("_", " ")
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def is_reading_file(path: Path) -> bool:
+    name = path.name.lower()
+    if name.startswith("."):
+        return False
+    return any(name.endswith(suffix) for suffix in READING_FILE_SUFFIXES)
+
+
+def expand_input_paths(paths: list[Path]) -> list[Path]:
+    """Expand directories to reading files (sorted); keep explicit files as-is."""
+    expanded: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            files = sorted(p for p in path.iterdir() if p.is_file() and is_reading_file(p))
+            if not files:
+                raise ValueError(f"No reading files found in directory: {path}")
+            expanded.extend(files)
+        else:
+            expanded.append(path)
+    return expanded
+
+
+def infer_vista_springs_ids(path: Path) -> tuple[str, str] | None:
+    """Map DHW-Sys-N-... filenames to (SITE001, SYS00N)."""
+    match = DHW_SYS_FILE_RE.search(path.name)
+    if not match:
+        return None
+    system_num = int(match.group(1))
+    return VISTA_SPRINGS_SITE_ID, f"SYS{system_num:03d}"
 
 
 def resolve_columns(headers: list[str]) -> dict[str, str]:
@@ -268,6 +318,8 @@ def row_to_item(
     system_id = parse_system_id(system_raw, default_system)
     if system_id:
         item["SystemID"] = system_id
+        # Composite sort key so SYS001 and SYS002 at the same site/time do not collide.
+        item["TimestampUTC"] = reading_sort_key(item["TimestampUTC"], system_id)
     if "RelayState" in columns:
         relay = parse_number(row.get(columns["RelayState"]), "RelayState", required=False)
         if relay is not None:
@@ -337,6 +389,13 @@ def load_rows(path: Path) -> tuple[list[str], list[dict[str, Any]]]:
     )
 
 
+def _cell_blank(row: dict[str, Any], header: str | None) -> bool:
+    if not header:
+        return True
+    value = row.get(header)
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
 def parse_items(
     path: Path,
     *,
@@ -350,6 +409,11 @@ def parse_items(
     errors: list[str] = []
     for index, row in enumerate(rows, start=2):  # header is row 1
         if not any(str(v).strip() for v in row.values() if v is not None):
+            continue
+        # Chart exports often pad future timestamps with blank T1/T2 — skip those.
+        t1_blank = _cell_blank(row, columns.get("T1"))
+        t2_blank = _cell_blank(row, columns.get("T2"))
+        if t1_blank and t2_blank:
             continue
         try:
             items.append(
@@ -433,6 +497,43 @@ def put_items(
     }
 
 
+def summarize_by_system(items: Iterable[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for item in items:
+        counts[str(item.get("SystemID") or "(none)")] += 1
+    return dict(sorted(counts.items()))
+
+
+def print_system_summary(
+    label: str,
+    items: list[dict[str, Any]],
+    *,
+    stats_by_system: dict[str, dict[str, int]] | None = None,
+) -> None:
+    counts = summarize_by_system(items)
+    print(f"{label}:")
+    if not counts:
+        print("  (no records)")
+        return
+    for system_id, count in counts.items():
+        if stats_by_system and system_id in stats_by_system:
+            stats = stats_by_system[system_id]
+            if "overwritten" in stats and stats.get("overwritten", 0) and not stats.get(
+                "written", 0
+            ):
+                detail = (
+                    f"overwrote {stats['overwritten']}, errors={stats['errors']}"
+                )
+            else:
+                detail = (
+                    f"wrote {stats['written']}, skipped {stats['skipped']}, "
+                    f"errors={stats['errors']}"
+                )
+            print(f"  {system_id}: {count} record(s) → {detail}")
+        else:
+            print(f"  {system_id}: {count} record(s)")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -442,7 +543,10 @@ def main(argv: list[str] | None = None) -> int:
         "files",
         nargs="+",
         type=Path,
-        help="CSV or Excel files to import (place under data/readings/)",
+        help=(
+            "CSV/Excel files or a directory of them "
+            "(e.g. data/readings/vista-springs)"
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -503,20 +607,40 @@ def main(argv: list[str] | None = None) -> int:
     if default_system and not SYSTEM_ID_RE.match(default_system):
         parser.error("--system-id / --default-system-id must look like SYS001")
 
+    try:
+        input_paths = expand_input_paths(list(args.files))
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
     all_items: list[dict[str, Any]] = []
     had_errors = False
-    for path in args.files:
+    for path in input_paths:
         if not path.is_file():
             print(f"ERROR: file not found: {path}", file=sys.stderr)
             had_errors = True
             continue
+
+        file_site = default_site
+        file_system = default_system
+        inferred = infer_vista_springs_ids(path)
+        if inferred:
+            inferred_site, inferred_system = inferred
+            if not file_site:
+                file_site = inferred_site
+            if not file_system:
+                file_system = inferred_system
+
         print(f"Reading {path} …")
+        if inferred and (file_site or file_system):
+            print(f"  mapped → SiteID={file_site} SystemID={file_system}")
+
         try:
             items, errors = parse_items(
                 path,
                 site_map=site_map,
-                default_site=default_site,
-                default_system=default_system,
+                default_site=file_site,
+                default_system=file_system,
             )
         except (ValueError, RuntimeError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -546,6 +670,7 @@ def main(argv: list[str] | None = None) -> int:
         f"Ready: {len(unique_items)} item(s) across site(s) {', '.join(sites)} "
         f"system(s) {systems_label} → table {args.table}"
     )
+    print_system_summary("Records per system (parsed)", unique_items)
     if unique_items:
         sample = unique_items[0]
         sample_out = {
@@ -565,21 +690,44 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if had_errors else 0
 
     sanitize_aws_env()
+    if args.table == TABLE_NAME:
+        ensure_readings_table()
     table = dynamodb_resource().Table(args.table)
-    stats = put_items(
-        table,
+
+    # Write per system so the summary matches DynamoDB outcomes clearly.
+    by_system: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in unique_items:
+        by_system[str(item.get("SystemID") or "(none)")].append(item)
+
+    stats_by_system: dict[str, dict[str, int]] = {}
+    totals = {"written": 0, "skipped": 0, "overwritten": 0, "errors": 0}
+    for system_id in sorted(by_system):
+        stats = put_items(
+            table,
+            by_system[system_id],
+            overwrite=args.overwrite,
+            dry_run=False,
+        )
+        stats_by_system[system_id] = stats
+        for key in totals:
+            totals[key] += stats[key]
+
+    print_system_summary(
+        "Import summary per system",
         unique_items,
-        overwrite=args.overwrite,
-        dry_run=False,
+        stats_by_system=stats_by_system,
     )
     if args.overwrite:
-        print(f"Wrote/overwrote {stats['overwritten']} item(s); errors={stats['errors']}")
+        print(
+            f"Total: wrote/overwrote {totals['overwritten']} item(s); "
+            f"errors={totals['errors']}"
+        )
     else:
         print(
-            f"Wrote {stats['written']} new item(s); "
-            f"skipped {stats['skipped']} existing; errors={stats['errors']}"
+            f"Total: wrote {totals['written']} new item(s); "
+            f"skipped {totals['skipped']} existing; errors={totals['errors']}"
         )
-    if stats["errors"] or had_errors:
+    if totals["errors"] or had_errors:
         return 1
     return 0
 
