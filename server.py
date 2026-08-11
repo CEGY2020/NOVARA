@@ -75,6 +75,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(status, payload)
             return
+        if parsed.path in ("/api/users/preapproved", "/users/preapproved"):
+            status, payload = novara_api.handle_preapproved_list_request()
+            self._send_json(status, payload)
+            return
         if parsed.path == "/api/health":
             status, payload = novara_api.handle_health_request()
             self._send_json(status, payload)
@@ -97,6 +101,13 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_login_request(body)
             self._send_json(status, payload)
             return
+        if parsed.path in ("/api/users/preapproved", "/users/preapproved"):
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_preapproved_add_request(body)
+            self._send_json(status, payload)
+            return
         self._handle_json_write("create")
 
     def do_PUT(self):
@@ -115,6 +126,13 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         parsed = urlparse(self.path)
+        preapproved_email = novara_api._preapproved_email_from_path(parsed.path)
+        if preapproved_email is not None:
+            status, payload = novara_api.handle_preapproved_remove_request(
+                preapproved_email
+            )
+            self._send_json(status, payload)
+            return
         system_path_id = novara_api._system_id_from_path(parsed.path)
         if system_path_id is not None:
             status, payload = novara_api.handle_system_delete_request(system_path_id)
@@ -233,12 +251,14 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
 def main():
     novara_api.sanitize_aws_env()
+    # Local default: log approval/welcome emails instead of calling SES.
+    os.environ.setdefault("NOVARA_EMAIL_MODE", "log")
     os.chdir(os.path.dirname(os.path.abspath(__file__)) or ".")
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
         "NOVARA server on http://0.0.0.0:%s "
         "(readings=%s savings=demo sites=%s systems=%s owners=%s "
-        "mgmtCompanies=%s leads=%s users=%s)"
+        "mgmtCompanies=%s leads=%s users=%s preapproved=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
@@ -248,6 +268,7 @@ def main():
             novara_api.MGMT_COMPANIES_TABLE_NAME,
             novara_api.LEADS_TABLE_NAME,
             novara_api.USERS_TABLE_NAME,
+            novara_api.PREAPPROVED_TABLE_NAME,
         )
     )
     try:

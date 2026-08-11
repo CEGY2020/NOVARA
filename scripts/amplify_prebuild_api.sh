@@ -93,7 +93,11 @@ if ! sam deploy \
     "OwnersTableName=${NOVARA_OWNERS_TABLE:-NOVARAOwners}" \
     "MgmtCompaniesTableName=${NOVARA_MGMT_COMPANIES_TABLE:-NOVARAMgmtCompanies}" \
     "LeadsTableName=${NOVARA_LEADS_TABLE:-NOVARALeads}" \
-    "UsersTableName=${NOVARA_USERS_TABLE:-NOVARAUsers}"; then
+    "UsersTableName=${NOVARA_USERS_TABLE:-NOVARAUsers}" \
+    "PreapprovedTableName=${NOVARA_PREAPPROVED_TABLE:-NOVARAPreapprovedEmails}" \
+    "AdminAlertEmail=${NOVARA_ADMIN_ALERT_EMAIL:-steve@cegy.us}" \
+    "SesFromEmail=${NOVARA_SES_FROM_EMAIL:-${NOVARA_ADMIN_ALERT_EMAIL:-steve@cegy.us}}" \
+    "AppBaseUrl=${NOVARA_APP_BASE_URL:-}"; then
   echo "ERROR: sam deploy failed after AWS auth succeeded."
   echo "Static site will still publish, but /api/users/login and other API routes"
   echo "may keep serving a stale Lambda until novara-api is redeployed."

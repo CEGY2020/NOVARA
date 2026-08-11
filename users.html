@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Users</title>
-  <link rel="stylesheet" href="dashboard.css?v=users-admin-1">
+  <link rel="stylesheet" href="dashboard.css?v=users-admin-2">
 </head>
 <body data-page="users" data-role="aem">
 
@@ -59,16 +59,72 @@
             <th>Role</th>
             <th>Company</th>
             <th>Status</th>
+            <th>Notes</th>
           </tr>
         </thead>
         <tbody id="all-users-tbody">
           <tr>
-            <td colspan="6">Loading…</td>
+            <td colspan="7">Loading…</td>
           </tr>
         </tbody>
       </table>
     </section>
+
+    <section class="users-section" aria-labelledby="preapproved-heading">
+      <h3 id="preapproved-heading" class="users-section-title">Pre-approved emails</h3>
+      <p class="users-section-help">
+        Emails on this list are set to Active automatically at sign-up and receive a welcome email.
+        Pending sign-ups alert <span id="admin-alert-email">steve@cegy.us</span>.
+      </p>
+      <form id="preapproved-form" class="preapproved-form" novalidate>
+        <label class="form-field preapproved-field">
+          <span>Add email</span>
+          <input type="email" id="preapproved-email-input" name="email" maxlength="160" placeholder="name@company.com" required>
+        </label>
+        <button type="submit" class="primary-btn" id="preapproved-add-btn">Add</button>
+      </form>
+      <ul id="preapproved-list" class="preapproved-list" aria-live="polite">
+        <li>Loading…</li>
+      </ul>
+    </section>
   </main>
+</div>
+
+<div class="modal-backdrop" id="reject-modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+    <div class="modal-header">
+      <div>
+        <h3 id="reject-modal-title">Reject account</h3>
+        <p id="reject-modal-subtitle">Provide a reason before rejecting this applicant.</p>
+      </div>
+      <button type="button" class="modal-close" id="reject-modal-close" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="reject-form" class="site-form" novalidate>
+      <input type="hidden" id="reject-user-id" value="">
+      <div class="form-grid">
+        <label class="form-field form-field-wide">
+          <span>Applicant</span>
+          <input type="text" id="reject-user-label" readonly>
+        </label>
+        <label class="form-field form-field-wide">
+          <span>Rejection reason <em>*</em></span>
+          <textarea id="reject-reason" name="reason" required maxlength="500" rows="4" placeholder="Explain why this account is being rejected"></textarea>
+        </label>
+        <label class="form-field form-field-wide reject-email-option">
+          <span class="checkbox-label">
+            <input type="checkbox" id="reject-send-email" checked>
+            Send a polite rejection email that includes this reason
+          </span>
+        </label>
+      </div>
+      <p id="reject-form-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="secondary-btn" id="reject-cancel-btn">Cancel</button>
+        <button type="submit" class="primary-btn danger-btn" id="reject-confirm-btn">Reject account</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="api-config.js"></script>
