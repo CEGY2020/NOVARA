@@ -80,6 +80,25 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function formatPhoneValue(value) {
+    if (
+      window.NovaraPhone &&
+      typeof window.NovaraPhone.formatPhoneUS === "function"
+    ) {
+      return window.NovaraPhone.formatPhoneUS(value);
+    }
+    return value == null ? "" : String(value);
+  }
+
+  function normalizeSystemTypeValue(value) {
+    var text = value == null ? "" : String(value).trim();
+    // Legacy lead value "DHW" was renamed to "DHW NG".
+    if (text === "DHW") {
+      return "DHW NG";
+    }
+    return text;
+  }
+
   function todayIsoDate() {
     var now = new Date();
     var y = now.getFullYear();
@@ -199,9 +218,9 @@
       CompanyName: lead.companyName || lead.siteName || "",
       ContactName: lead.contactName || "",
       ContactEmail: lead.contactEmail || "",
-      ContactPhone: lead.contactPhone || "",
+      ContactPhone: formatPhoneValue(lead.contactPhone || ""),
       Source: lead.source || "",
-      SystemType: lead.systemType || "",
+      SystemType: normalizeSystemTypeValue(lead.systemType || ""),
       Stage: stageOverride != null ? stageOverride : lead.stage || "New Lead",
       NextFollowUp: lead.nextFollowUp || "",
       AssignedTo: lead.assignedTo || "",
@@ -219,9 +238,9 @@
       CompanyName: fieldValue("field-companyName"),
       ContactName: fieldValue("field-contactName"),
       ContactEmail: fieldValue("field-contactEmail"),
-      ContactPhone: fieldValue("field-contactPhone"),
+      ContactPhone: formatPhoneValue(fieldValue("field-contactPhone")),
       Source: fieldValue("field-source"),
-      SystemType: fieldValue("field-systemType"),
+      SystemType: normalizeSystemTypeValue(fieldValue("field-systemType")),
       Stage: fieldValue("field-stage") || "New Lead",
       NextFollowUp: fieldValue("field-nextFollowUp"),
       AssignedTo: fieldValue("field-assignedTo"),
@@ -301,9 +320,15 @@
       );
       setFieldValue("field-contactName", lead.contactName || "");
       setFieldValue("field-contactEmail", lead.contactEmail || "");
-      setFieldValue("field-contactPhone", lead.contactPhone || "");
+      setFieldValue(
+        "field-contactPhone",
+        formatPhoneValue(lead.contactPhone || "")
+      );
       setFieldValue("field-source", lead.source || "");
-      setFieldValue("field-systemType", lead.systemType || "");
+      setFieldValue(
+        "field-systemType",
+        normalizeSystemTypeValue(lead.systemType || "")
+      );
       setFieldValue("field-stage", lead.stage || "New Lead");
       setFieldValue("field-nextFollowUp", lead.nextFollowUp || "");
       setFieldValue("field-assignedTo", lead.assignedTo || "");
@@ -909,6 +934,15 @@
   }
   if (form) {
     form.addEventListener("submit", saveLead);
+  }
+
+  if (
+    window.NovaraPhone &&
+    typeof window.NovaraPhone.bindPhoneInput === "function"
+  ) {
+    window.NovaraPhone.bindPhoneInput(
+      document.getElementById("field-contactPhone")
+    );
   }
 
   viewTabs.forEach(function (tab) {
