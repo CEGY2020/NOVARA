@@ -14,12 +14,17 @@
 <main class="hero" id="top" aria-label="NOVARA video landing reference">
   <div class="hero-media" aria-hidden="true">
     <video
+      id="hero-video"
       class="hero-video"
       autoplay
       muted
       loop
       playsinline
+      webkit-playsinline
       preload="auto"
+      poster="images/wave1.jpg"
+      disablepictureinpicture
+      disableremoteplayback
     >
       <source src="images/wave-video.mp4" type="video/mp4">
     </video>
@@ -38,6 +43,47 @@
     </div>
   </div>
 </main>
+
+<script>
+  (function () {
+    var video = document.getElementById("hero-video");
+    if (!video) return;
+
+    // iOS / strict autoplay policies: muted must be set as a property, then play().
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute("muted", "");
+    video.playsInline = true;
+
+    function tryPlay() {
+      var playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(function () {
+          // Retry once media can play; ignore if the browser still blocks it.
+          video.addEventListener(
+            "canplay",
+            function onCanPlay() {
+              video.removeEventListener("canplay", onCanPlay);
+              video.play().catch(function () {});
+            },
+            { once: true }
+          );
+        });
+      }
+    }
+
+    if (video.readyState >= 2) {
+      tryPlay();
+    } else {
+      video.addEventListener("loadeddata", tryPlay, { once: true });
+      video.load();
+    }
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && video.paused) tryPlay();
+    });
+  })();
+</script>
 
 </body>
 </html>
