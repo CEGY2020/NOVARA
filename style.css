@@ -68,18 +68,6 @@ body {
     text-decoration: underline;
 }
 
-.bootstrap-admin-link {
-    margin-top: -12px;
-    margin-bottom: 20px;
-}
-
-.bootstrap-admin-hint {
-    display: block;
-    margin-top: 4px;
-    color: #7b8993;
-    font-size: 12px;
-}
-
 form label {
     display: block;
     margin: 0 0 7px;

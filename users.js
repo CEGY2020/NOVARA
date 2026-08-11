@@ -63,47 +63,43 @@
     }
   }
 
-  // TEMPORARY: allow Users admin without an approved AEM session so the
-  // first accounts can be approved. Set to false after bootstrap to
-  // re-lock this page to AEM-only.
-  var ALLOW_USERS_ADMIN_BOOTSTRAP = true;
-
   function ensureAemAccess() {
     var loggedIn =
       (window.NovaraAuth &&
         NovaraAuth.getCurrentUser &&
         NovaraAuth.getCurrentUser()) ||
       null;
+    // Require an authenticated AEM session — do not trust directory role
+    // selection or body data-role alone.
     var role =
-      (loggedIn && loggedIn.role) ||
-      (window.NovaraRole &&
-        NovaraRole.getSelectedRole &&
-        NovaraRole.getSelectedRole()) ||
-      document.body.getAttribute("data-role") ||
-      "";
+      loggedIn && loggedIn.role ? String(loggedIn.role).toLowerCase() : "";
 
-    if (String(role).toLowerCase() === "aem") {
+    if (loggedIn && role === "aem") {
       return true;
     }
 
-    // Bootstrap: no Active session yet — ignore directory role selection
-    // so /users.html remains usable for first-account approval.
-    if (ALLOW_USERS_ADMIN_BOOTSTRAP && !loggedIn) {
-      return true;
-    }
-
-    setStatus("Users admin is available to AEM accounts only.", true);
+    setStatus("Access denied. Users admin is available to AEM accounts only.", true);
     if (pendingBody) {
       pendingBody.innerHTML =
-        '<tr><td colspan="6">AEM access required.</td></tr>';
+        '<tr><td colspan="6">Access denied.</td></tr>';
     }
     if (allBody) {
       allBody.innerHTML =
-        '<tr><td colspan="7">AEM access required.</td></tr>';
+        '<tr><td colspan="7">Access denied.</td></tr>';
     }
     if (preapprovedList) {
-      preapprovedList.innerHTML = "<li>AEM access required.</li>";
+      preapprovedList.innerHTML = "<li>Access denied.</li>";
     }
+
+    var redirectTo = "login.html";
+    if (loggedIn) {
+      redirectTo =
+        (window.NovaraRole &&
+          NovaraRole.getHomeForRole &&
+          NovaraRole.getHomeForRole(role)) ||
+        "dashboard.html";
+    }
+    window.location.replace(redirectTo);
     return false;
   }
 

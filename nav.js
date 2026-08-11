@@ -95,18 +95,19 @@
     role = "aem";
   }
 
-  // TEMPORARY bootstrap: before any approved login exists, keep the AEM
-  // admin sidebar (including Users) so pending accounts can be approved.
-  // Remove this once the first AEM user is Active and you re-lock users.js.
-  if (!currentUser) {
-    role = "aem";
-  }
-
   if (window.NovaraRole && NovaraRole.setSelectedRole) {
     NovaraRole.setSelectedRole(role);
   }
 
-  var NAV_ITEMS = ROLE_NAV[role] || AEM_NAV_ITEMS;
+  var NAV_ITEMS = (ROLE_NAV[role] || AEM_NAV_ITEMS).slice();
+  // Users admin is only for logged-in AEM accounts.
+  var isLoggedInAem =
+    currentUser && String(currentUser.role || "").toLowerCase() === "aem";
+  if (!isLoggedInAem) {
+    NAV_ITEMS = NAV_ITEMS.filter(function (item) {
+      return item.id !== "users";
+    });
+  }
 
   function currentHash() {
     return String(window.location.hash || "")
