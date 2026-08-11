@@ -115,12 +115,23 @@ a {
 }
 
 .hero-video {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     object-position: center center;
     display: block;
     background: var(--deep);
+    z-index: 0;
+}
+
+.video-landing .hero-media {
+    background: var(--deep);
+}
+
+.video-landing .hero-veil {
+    z-index: 1;
 }
 
 .hero-veil {
