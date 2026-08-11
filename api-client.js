@@ -222,7 +222,7 @@
     getSession: function () {
       return fetchJson("/api/users/session");
     },
-    updateUserStatus: function (userId, status) {
+    updateUserStatus: function (userId, status, options) {
       var id =
         typeof userId === "string" || typeof userId === "number"
           ? userId
@@ -230,10 +230,36 @@
       if (!id) {
         return Promise.reject(new Error("UserID is required"));
       }
+      var opts = options || {};
+      var body = { Status: status };
+      if (opts.rejectionReason != null) {
+        body.RejectionReason = opts.rejectionReason;
+      }
+      if (opts.sendRejectionEmail != null) {
+        body.SendRejectionEmail = opts.sendRejectionEmail;
+      }
+      if (opts.decisionToken) {
+        body.DecisionToken = opts.decisionToken;
+      }
       return sendJson(
         "/api/users/" + encodeURIComponent(String(id)) + "/status",
         "PUT",
-        { Status: status }
+        body
+      );
+    },
+    getPreapprovedEmails: function () {
+      return fetchJson("/api/users/preapproved");
+    },
+    addPreapprovedEmail: function (email) {
+      return sendJson("/api/users/preapproved", "POST", { Email: email });
+    },
+    removePreapprovedEmail: function (email) {
+      if (!email) {
+        return Promise.reject(new Error("Email is required"));
+      }
+      return sendJson(
+        "/api/users/preapproved/" + encodeURIComponent(String(email)),
+        "DELETE"
       );
     },
   };

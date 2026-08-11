@@ -1272,17 +1272,31 @@ class RouteTests(unittest.TestCase):
         self.assertTrue(created_item["PasswordHash"].startswith("pbkdf2_sha256$"))
         self.assertNotIn("Password", created_item)
 
-        with patch.object(novara_api, "PREAPPROVED_EMAILS", frozenset({"admin@novara.com"})):
-            item, error = novara_api.parse_signup_payload(
-                {
-                    "FullName": "Admin User",
-                    "Email": "admin@novara.com",
-                    "Password": "Password1!",
-                    "Role": "aem",
-                }
-            )
+        item, error = novara_api.parse_signup_payload(
+            {
+                "FullName": "Admin User",
+                "Email": "admin@novara.com",
+                "Password": "Password1!",
+                "Role": "aem",
+            }
+        )
         self.assertIsNone(error)
-        self.assertEqual(item["Status"], "Active")
+        self.assertEqual(item["Status"], "Pending")
+
+        with patch.object(novara_api, "is_email_preapproved", return_value=True), patch.object(
+            novara_api, "find_user_by_email", return_value=None
+        ), patch.object(novara_api, "ensure_users_table", return_value="NOVARAUsers"), patch.object(
+            novara_api, "next_user_id", return_value="USR099"
+        ), patch.object(
+            novara_api, "dynamodb_table"
+        ) as mocked_table, patch.object(
+            novara_api, "notify_user_welcome", return_value={"ok": True, "mode": "log"}
+        ) as mocked_welcome:
+            table = mocked_table.return_value
+            table.put_item.return_value = {}
+            result = novara_api.create_user_from_signup(item)
+        self.assertEqual(result["user"]["status"], "Active")
+        mocked_welcome.assert_called_once()
 
     def test_signup_validation(self):
         status, payload = novara_api.route_request(
@@ -1431,7 +1445,125 @@ class RouteTests(unittest.TestCase):
             )
         self.assertEqual(status, 200)
         self.assertEqual(payload["user"]["status"], "Active")
-        mocked.assert_called_once_with("USR001", "Active")
+        mocked.assert_called_once_with(
+            "USR001",
+            "Active",
+            rejection_reason=None,
+            send_rejection_email=True,
+            decision_token=None,
+        )
+
+        fake_reject = {
+            "ok": True,
+            "table": "NOVARAUsers",
+            "user": {
+                "userId": "USR001",
+                "status": "Rejected",
+                "rejectionReason": "Incomplete company info",
+            },
+            "message": "User status set to Rejected.",
+        }
+        with patch.object(
+            novara_api, "update_user_status", return_value=fake_reject
+        ) as mocked_reject:
+            status, payload = novara_api.route_request(
+                "PUT",
+                "/api/users/USR001/status",
+                {},
+                {
+                    "Status": "Rejected",
+                    "RejectionReason": "Incomplete company info",
+                    "SendRejectionEmail": False,
+                },
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["user"]["status"], "Rejected")
+        mocked_reject.assert_called_once_with(
+            "USR001",
+            "Rejected",
+            rejection_reason="Incomplete company info",
+            send_rejection_email=False,
+            decision_token=None,
+        )
+
+    def test_preapproved_routes(self):
+        with patch.object(
+            novara_api,
+            "list_preapproved_emails",
+            return_value=["admin@novara.com"],
+        ):
+            status, payload = novara_api.route_request(
+                "GET", "/api/users/preapproved", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["preapprovedEmails"], ["admin@novara.com"])
+
+        with patch.object(
+            novara_api,
+            "add_preapproved_email",
+            return_value={
+                "ok": True,
+                "email": "new@novara.com",
+                "preapprovedEmails": ["admin@novara.com", "new@novara.com"],
+            },
+        ) as mocked_add:
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/users/preapproved",
+                {},
+                {"Email": "new@novara.com"},
+            )
+        self.assertEqual(status, 201)
+        mocked_add.assert_called_once_with("new@novara.com")
+
+        with patch.object(
+            novara_api,
+            "remove_preapproved_email",
+            return_value={
+                "ok": True,
+                "email": "new@novara.com",
+                "preapprovedEmails": ["admin@novara.com"],
+            },
+        ) as mocked_remove:
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/users/preapproved/new@novara.com", {}
+            )
+        self.assertEqual(status, 200)
+        mocked_remove.assert_called_once_with("new@novara.com")
+
+    def test_admin_alert_email_includes_applicant_details(self):
+        user = {
+            "userId": "USR010",
+            "fullName": "Pat Pending",
+            "email": "pat@example.com",
+            "role": "owner",
+            "company": "Acme Co",
+            "createdAt": "2026-08-11T12:00:00Z",
+        }
+        subject, text, html_body = novara_api.build_admin_alert_email(
+            user, decision_token="secret-token"
+        )
+        self.assertIn("Pat Pending", subject)
+        self.assertIn("pat@example.com", text)
+        self.assertIn("Acme Co", text)
+        self.assertIn("Owner", text)
+        self.assertIn("Approve", html_body)
+        self.assertIn("Reject", html_body)
+        self.assertIn("account-decision.html", text)
+        self.assertIn("secret-token", text)
+
+    def test_reject_requires_reason(self):
+        existing = {
+            "UserID": "USR001",
+            "FullName": "Pat Pending",
+            "Email": "pat@example.com",
+            "Role": "owner",
+            "Status": "Pending",
+        }
+        with patch.object(novara_api, "find_user_by_id", return_value=existing):
+            with self.assertRaises(ValueError) as ctx:
+                novara_api.update_user_status("USR001", "Rejected")
+        self.assertIn("RejectionReason", str(ctx.exception))
 
     def test_password_hash_roundtrip(self):
         stored = novara_api.hash_password("SecretPass1!")
@@ -1464,8 +1596,15 @@ class RouteTests(unittest.TestCase):
         source = Path(__file__).resolve().parent.joinpath("users.html").read_text(
             encoding="utf-8"
         )
+        users_js = Path(__file__).resolve().parent.joinpath("users.js").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("pending-users-tbody", source)
-        self.assertIn("Approve", Path(__file__).resolve().parent.joinpath("users.js").read_text(encoding="utf-8"))
+        self.assertIn("preapproved-list", source)
+        self.assertIn("reject-modal", source)
+        self.assertIn("Approve", users_js)
+        self.assertIn("rejectionReason", users_js)
+        self.assertIn("addPreapprovedEmail", users_js)
 
     def test_api_client_exposes_user_methods(self):
         source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
@@ -1475,9 +1614,24 @@ class RouteTests(unittest.TestCase):
         self.assertIn("loginUser", source)
         self.assertIn("getSession", source)
         self.assertIn("updateUserStatus", source)
+        self.assertIn("getPreapprovedEmails", source)
+        self.assertIn("addPreapprovedEmail", source)
+        self.assertIn("removePreapprovedEmail", source)
         self.assertIn("/api/users/signup", source)
         self.assertIn("/api/users/login", source)
+        self.assertIn("/api/users/preapproved", source)
         self.assertIn("Authorization", source)
+
+    def test_account_decision_page_exists(self):
+        html = Path(__file__).resolve().parent.joinpath(
+            "account-decision.html"
+        ).read_text(encoding="utf-8")
+        js = Path(__file__).resolve().parent.joinpath(
+            "account-decision.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("decisionActions", html)
+        self.assertIn("decisionToken", js)
+        self.assertIn("updateUserStatus", js)
 
     def test_login_page_wires_remember_me_and_token(self):
         app_source = Path(__file__).resolve().parent.joinpath("app.js").read_text(
@@ -1503,6 +1657,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["mgmtCompaniesTable"], "NOVARAMgmtCompanies")
         self.assertEqual(payload["leadsTable"], "NOVARALeads")
         self.assertEqual(payload["usersTable"], "NOVARAUsers")
+        self.assertEqual(payload["preapprovedTable"], "NOVARAPreapprovedEmails")
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})

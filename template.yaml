@@ -24,6 +24,18 @@ Parameters:
   UsersTableName:
     Type: String
     Default: NOVARAUsers
+  PreapprovedTableName:
+    Type: String
+    Default: NOVARAPreapprovedEmails
+  AdminAlertEmail:
+    Type: String
+    Default: steve@cegy.us
+  SesFromEmail:
+    Type: String
+    Default: steve@cegy.us
+  AppBaseUrl:
+    Type: String
+    Default: ""
   MaxChartPoints:
     Type: Number
     Default: 720
@@ -53,6 +65,10 @@ Resources:
           NOVARA_MGMT_COMPANIES_TABLE: !Ref MgmtCompaniesTableName
           NOVARA_LEADS_TABLE: !Ref LeadsTableName
           NOVARA_USERS_TABLE: !Ref UsersTableName
+          NOVARA_PREAPPROVED_TABLE: !Ref PreapprovedTableName
+          NOVARA_ADMIN_ALERT_EMAIL: !Ref AdminAlertEmail
+          NOVARA_SES_FROM_EMAIL: !Ref SesFromEmail
+          NOVARA_APP_BASE_URL: !Ref AppBaseUrl
           NOVARA_MAX_CHART_POINTS: !Ref MaxChartPoints
       Policies:
         - Statement:
@@ -63,6 +79,7 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:PutItem
                 - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
                 - dynamodb:BatchGetItem
                 - dynamodb:DescribeTable
                 - dynamodb:CreateTable
@@ -74,6 +91,7 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}/index/*
@@ -81,6 +99,12 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}/index/*
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
       Events:
         Readings:
           Type: HttpApi
@@ -250,6 +274,24 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/users/{userId}/status
             Method: PUT
+        UsersPreapprovedGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/users/preapproved
+            Method: GET
+        UsersPreapprovedAdd:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/users/preapproved
+            Method: POST
+        UsersPreapprovedRemove:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/users/preapproved/{email}
+            Method: DELETE
         Health:
           Type: HttpApi
           Properties:

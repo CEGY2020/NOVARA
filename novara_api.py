@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import json
+import logging
 import os
 import re
 import secrets
@@ -12,7 +14,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
-from urllib.parse import parse_qs, unquote
+from urllib.parse import parse_qs, unquote, urlencode
 
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
@@ -23,8 +25,19 @@ MGMT_COMPANIES_TABLE_NAME = os.environ.get(
 )
 LEADS_TABLE_NAME = os.environ.get("NOVARA_LEADS_TABLE", "NOVARALeads")
 USERS_TABLE_NAME = os.environ.get("NOVARA_USERS_TABLE", "NOVARAUsers")
+PREAPPROVED_TABLE_NAME = os.environ.get(
+    "NOVARA_PREAPPROVED_TABLE", "NOVARAPreapprovedEmails"
+)
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
+ADMIN_ALERT_EMAIL = (
+    os.environ.get("NOVARA_ADMIN_ALERT_EMAIL") or "steve@cegy.us"
+).strip().lower()
+SES_FROM_EMAIL = (
+    os.environ.get("NOVARA_SES_FROM_EMAIL") or ADMIN_ALERT_EMAIL or "steve@cegy.us"
+).strip()
+APP_BASE_URL = (os.environ.get("NOVARA_APP_BASE_URL") or "").rstrip("/")
+_LOGGER = logging.getLogger("novara_api")
 
 SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
 SITE_STATUSES = ("Online", "Offline", "Needs Review")
@@ -54,17 +67,23 @@ LEAD_STAGES = (
 )
 USER_ROLES = ("aem", "owner", "contractor", "sales")
 USER_STATUSES = ("Pending", "Active", "Rejected")
-# Emails in this set are auto-approved (Status=Active) on sign-up.
-# Keep values lowercase. Extend as needed or override via NOVARA_PREAPPROVED_EMAILS
-# (comma-separated).
+USER_ROLE_LABELS = {
+    "aem": "AEM",
+    "owner": "Owner",
+    "contractor": "Contractor",
+    "sales": "Sales",
+}
+# Seed emails for NOVARAPreapprovedEmails (lowercase).
+# Override/extend via NOVARA_PREAPPROVED_EMAILS (comma-separated).
 _DEFAULT_PREAPPROVED_EMAILS = (
     "steve@aemenergy.com",
     "admin@novara.com",
     "ops@novara.com",
 )
+_PREAPPROVED_SEED_MARKER = "__novara_seeded__"
 
 
-def _load_preapproved_emails() -> frozenset[str]:
+def _env_preapproved_emails() -> frozenset[str]:
     raw = (os.environ.get("NOVARA_PREAPPROVED_EMAILS") or "").strip()
     if not raw:
         return frozenset(_DEFAULT_PREAPPROVED_EMAILS)
@@ -72,17 +91,20 @@ def _load_preapproved_emails() -> frozenset[str]:
     return frozenset(emails) if emails else frozenset(_DEFAULT_PREAPPROVED_EMAILS)
 
 
-PREAPPROVED_EMAILS = _load_preapproved_emails()
+# Backward-compatible snapshot used by tests / env-only fallbacks.
+PREAPPROVED_EMAILS = _env_preapproved_emails()
 PASSWORD_HASH_ITERATIONS = 120_000
 # Browser sessions stay valid for 30 days (Remember me / localStorage).
 SESSION_TTL_SECONDS = int(os.environ.get("NOVARA_SESSION_TTL_SECONDS", str(30 * 24 * 3600)))
 _USER_ID_PATTERN = re.compile(r"^USR(\d+)$", re.IGNORECASE)
+_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _systems_table_ready = False
 _owners_table_ready = False
 _mgmt_companies_table_ready = False
 _leads_table_ready = False
 _users_table_ready = False
+_preapproved_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -1330,6 +1352,411 @@ def ensure_users_table() -> str:
     return USERS_TABLE_NAME
 
 
+def ensure_preapproved_table() -> str:
+    """Create NOVARAPreapprovedEmails if missing (pay-per-request, Email hash key)."""
+    global _preapproved_table_ready
+    if _preapproved_table_ready:
+        return PREAPPROVED_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    created = False
+    try:
+        client.describe_table(TableName=PREAPPROVED_TABLE_NAME)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+        try:
+            client.create_table(
+                TableName=PREAPPROVED_TABLE_NAME,
+                AttributeDefinitions=[
+                    {"AttributeName": "Email", "AttributeType": "S"},
+                ],
+                KeySchema=[
+                    {"AttributeName": "Email", "KeyType": "HASH"},
+                ],
+                BillingMode="PAY_PER_REQUEST",
+            )
+            created = True
+        except ClientError as create_exc:
+            create_code = (create_exc.response.get("Error") or {}).get("Code")
+            if create_code != "ResourceInUseException":
+                raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=PREAPPROVED_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _preapproved_table_ready = True
+    if created:
+        _seed_preapproved_emails(force=True)
+    else:
+        _seed_preapproved_emails(force=False)
+    return PREAPPROVED_TABLE_NAME
+
+
+def _seed_preapproved_emails(*, force: bool = False) -> None:
+    """Seed default/env pre-approved emails once (marker prevents re-seed)."""
+    table = dynamodb_table(PREAPPROVED_TABLE_NAME)
+    if not force:
+        marker = table.get_item(Key={"Email": _PREAPPROVED_SEED_MARKER}).get("Item")
+        if marker:
+            return
+        # If real emails already exist, just write the marker.
+        existing = list_preapproved_emails(include_ensure=False)
+        if existing:
+            table.put_item(
+                Item={
+                    "Email": _PREAPPROVED_SEED_MARKER,
+                    "IsMeta": True,
+                    "SeededAt": datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                }
+            )
+            return
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for email in sorted(_env_preapproved_emails()):
+        table.put_item(
+            Item={
+                "Email": email,
+                "CreatedAt": now,
+                "Source": "seed",
+            }
+        )
+    table.put_item(
+        Item={
+            "Email": _PREAPPROVED_SEED_MARKER,
+            "IsMeta": True,
+            "SeededAt": now,
+        }
+    )
+
+
+def list_preapproved_emails(*, include_ensure: bool = True) -> list[str]:
+    if include_ensure:
+        ensure_preapproved_table()
+    table = dynamodb_table(PREAPPROVED_TABLE_NAME)
+    emails: list[str] = []
+    scan_kwargs: dict[str, Any] = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for item in response.get("Items", []):
+            email = str(item.get("Email") or "").strip().lower()
+            if not email or email == _PREAPPROVED_SEED_MARKER:
+                continue
+            if item.get("IsMeta"):
+                continue
+            emails.append(email)
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    emails.sort()
+    return emails
+
+
+def is_email_preapproved(email: str) -> bool:
+    target = (email or "").strip().lower()
+    if not target:
+        return False
+    # Prefer DynamoDB list; fall back to env snapshot if table unavailable.
+    try:
+        ensure_preapproved_table()
+        table = dynamodb_table(PREAPPROVED_TABLE_NAME)
+        item = table.get_item(Key={"Email": target}).get("Item")
+        if item and not item.get("IsMeta"):
+            return True
+        return False
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+        return target in PREAPPROVED_EMAILS
+
+
+def add_preapproved_email(email: str) -> dict:
+    target = (email or "").strip().lower()
+    if not target or not _EMAIL_PATTERN.match(target):
+        raise ValueError("Email must be a valid email address")
+    if target == _PREAPPROVED_SEED_MARKER:
+        raise ValueError("Email is reserved")
+    ensure_preapproved_table()
+    table = dynamodb_table(PREAPPROVED_TABLE_NAME)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    table.put_item(
+        Item={
+            "Email": target,
+            "CreatedAt": now,
+            "Source": "admin",
+        }
+    )
+    return {
+        "ok": True,
+        "table": PREAPPROVED_TABLE_NAME,
+        "email": target,
+        "preapprovedEmails": list_preapproved_emails(),
+        "message": f"Pre-approved email '{target}' added.",
+    }
+
+
+def remove_preapproved_email(email: str) -> dict:
+    target = (email or "").strip().lower()
+    if not target:
+        raise ValueError("Email is required")
+    if target == _PREAPPROVED_SEED_MARKER:
+        raise ValueError("Email is reserved")
+    ensure_preapproved_table()
+    table = dynamodb_table(PREAPPROVED_TABLE_NAME)
+    existing = table.get_item(Key={"Email": target}).get("Item")
+    if not existing or existing.get("IsMeta"):
+        raise LookupError(f"Pre-approved email '{target}' was not found")
+    table.delete_item(Key={"Email": target})
+    return {
+        "ok": True,
+        "table": PREAPPROVED_TABLE_NAME,
+        "email": target,
+        "preapprovedEmails": list_preapproved_emails(),
+        "message": f"Pre-approved email '{target}' removed.",
+    }
+
+
+def _role_label(role: str) -> str:
+    key = str(role or "").strip().lower()
+    return USER_ROLE_LABELS.get(key, key or "—")
+
+
+def _app_url(path: str, query: dict[str, str] | None = None) -> str:
+    clean = path if str(path).startswith("/") else f"/{path}"
+    if query:
+        clean = f"{clean}?{urlencode(query)}"
+    if APP_BASE_URL:
+        return f"{APP_BASE_URL}{clean}"
+    return clean
+
+
+def send_novara_email(
+    *,
+    to_address: str,
+    subject: str,
+    text_body: str,
+    html_body: str | None = None,
+) -> dict:
+    """Send email via SES. Never raises — signup/approval must not fail on mail."""
+    to_addr = (to_address or "").strip()
+    if not to_addr:
+        return {"ok": False, "skipped": True, "reason": "missing recipient"}
+    from_addr = SES_FROM_EMAIL
+    if not from_addr:
+        _LOGGER.warning("NOVARA email skipped (no from address): %s", subject)
+        return {"ok": False, "skipped": True, "reason": "missing from address"}
+
+    # Local/dev escape hatch: log instead of calling SES.
+    if (os.environ.get("NOVARA_EMAIL_MODE") or "").strip().lower() == "log":
+        _LOGGER.info(
+            "NOVARA email (log mode) to=%s subject=%s\n%s",
+            to_addr,
+            subject,
+            text_body,
+        )
+        return {"ok": True, "mode": "log", "to": to_addr, "subject": subject}
+
+    try:
+        import boto3
+
+        client = boto3.client("ses", **_aws_client_kwargs())
+        body: dict[str, Any] = {"Text": {"Data": text_body, "Charset": "UTF-8"}}
+        if html_body:
+            body["Html"] = {"Data": html_body, "Charset": "UTF-8"}
+        response = client.send_email(
+            Source=from_addr,
+            Destination={"ToAddresses": [to_addr]},
+            Message={
+                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                "Body": body,
+            },
+        )
+        return {
+            "ok": True,
+            "mode": "ses",
+            "to": to_addr,
+            "subject": subject,
+            "messageId": response.get("MessageId"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        _LOGGER.warning("NOVARA email failed to=%s subject=%s: %s", to_addr, subject, exc)
+        return {
+            "ok": False,
+            "mode": "ses",
+            "to": to_addr,
+            "subject": subject,
+            "error": str(exc),
+        }
+
+
+def _aws_client_kwargs() -> dict[str, str]:
+    kwargs: dict[str, str] = {}
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    if region:
+        kwargs["region_name"] = region
+    return kwargs
+
+
+def _format_signup_date(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    return text.replace("T", " ").replace("Z", " UTC")[:19]
+
+
+def build_welcome_email(user: dict) -> tuple[str, str, str]:
+    name = str(user.get("fullName") or "there").strip() or "there"
+    role = _role_label(str(user.get("role") or ""))
+    login_url = _app_url("login.html", {"role": str(user.get("role") or "aem")})
+    subject = "Welcome to NOVARA — your account is active"
+    text = (
+        f"Hi {name},\n\n"
+        "Congratulations — your NOVARA account is active. You can sign in now.\n\n"
+        f"Role: {role}\n"
+        f"Sign in: {login_url}\n\n"
+        "— The NOVARA / AEM team\n"
+    )
+    safe_name = html.escape(name)
+    safe_role = html.escape(role)
+    safe_login = html.escape(login_url)
+    html_body = (
+        f"<p>Hi {safe_name},</p>"
+        "<p>Congratulations — your <strong>NOVARA</strong> account is active. "
+        "You can sign in now.</p>"
+        f"<p><strong>Role:</strong> {safe_role}</p>"
+        f'<p><a href="{safe_login}">Sign in to NOVARA</a></p>'
+        "<p>— The NOVARA / AEM team</p>"
+    )
+    return subject, text, html_body
+
+
+def build_admin_alert_email(user: dict, *, decision_token: str) -> tuple[str, str, str]:
+    name = str(user.get("fullName") or "—")
+    email = str(user.get("email") or "—")
+    role = _role_label(str(user.get("role") or ""))
+    company = str(user.get("company") or "—") or "—"
+    signup_date = _format_signup_date(str(user.get("createdAt") or ""))
+    user_id = str(user.get("userId") or "")
+    approve_url = _app_url(
+        "account-decision.html",
+        {
+            "userId": user_id,
+            "token": decision_token,
+            "decision": "approve",
+        },
+    )
+    reject_url = _app_url(
+        "account-decision.html",
+        {
+            "userId": user_id,
+            "token": decision_token,
+            "decision": "reject",
+        },
+    )
+    users_url = _app_url("users.html", {"focus": user_id})
+    subject = f"NOVARA account pending approval: {name}"
+    text = (
+        "A new NOVARA user signed up and needs approval.\n\n"
+        f"Name: {name}\n"
+        f"Email: {email}\n"
+        f"Role: {role}\n"
+        f"Company: {company}\n"
+        f"Sign-up date: {signup_date}\n"
+        f"User ID: {user_id}\n\n"
+        f"Approve: {approve_url}\n"
+        f"Reject: {reject_url}\n"
+        f"Users admin: {users_url}\n"
+    )
+    html_body = (
+        "<p>A new <strong>NOVARA</strong> user signed up and needs approval.</p>"
+        "<table cellpadding='6' cellspacing='0' style='border-collapse:collapse'>"
+        f"<tr><td><strong>Name</strong></td><td>{html.escape(name)}</td></tr>"
+        f"<tr><td><strong>Email</strong></td><td>{html.escape(email)}</td></tr>"
+        f"<tr><td><strong>Role</strong></td><td>{html.escape(role)}</td></tr>"
+        f"<tr><td><strong>Company</strong></td><td>{html.escape(company)}</td></tr>"
+        f"<tr><td><strong>Sign-up date</strong></td><td>{html.escape(signup_date)}</td></tr>"
+        f"<tr><td><strong>User ID</strong></td><td>{html.escape(user_id)}</td></tr>"
+        "</table>"
+        "<p style='margin-top:20px'>"
+        f'<a href="{html.escape(approve_url)}" '
+        'style="background:#0f6b4c;color:#fff;padding:10px 16px;'
+        'text-decoration:none;border-radius:6px;margin-right:10px">'
+        "Approve</a>"
+        f'<a href="{html.escape(reject_url)}" '
+        'style="background:#b42318;color:#fff;padding:10px 16px;'
+        'text-decoration:none;border-radius:6px">'
+        "Reject</a>"
+        "</p>"
+        f'<p><a href="{html.escape(users_url)}">Open Users admin</a></p>'
+    )
+    return subject, text, html_body
+
+
+def build_rejection_email(user: dict, reason: str) -> tuple[str, str, str]:
+    name = str(user.get("fullName") or "there").strip() or "there"
+    reason_text = str(reason or "").strip() or "No reason was provided."
+    subject = "Update on your NOVARA account request"
+    text = (
+        f"Hi {name},\n\n"
+        "Thank you for your interest in NOVARA. After review, we are unable to "
+        "activate your account at this time.\n\n"
+        f"Reason: {reason_text}\n\n"
+        "If you believe this is a mistake or have questions, reply to this email "
+        f"or contact {ADMIN_ALERT_EMAIL}.\n\n"
+        "— The NOVARA / AEM team\n"
+    )
+    html_body = (
+        f"<p>Hi {html.escape(name)},</p>"
+        "<p>Thank you for your interest in <strong>NOVARA</strong>. After review, "
+        "we are unable to activate your account at this time.</p>"
+        f"<p><strong>Reason:</strong> {html.escape(reason_text)}</p>"
+        "<p>If you believe this is a mistake or have questions, reply to this email "
+        f"or contact {html.escape(ADMIN_ALERT_EMAIL)}.</p>"
+        "<p>— The NOVARA / AEM team</p>"
+    )
+    return subject, text, html_body
+
+
+def notify_user_welcome(user: dict) -> dict:
+    subject, text, html_body = build_welcome_email(user)
+    return send_novara_email(
+        to_address=str(user.get("email") or ""),
+        subject=subject,
+        text_body=text,
+        html_body=html_body,
+    )
+
+
+def notify_admin_pending_signup(user: dict, *, decision_token: str) -> dict:
+    subject, text, html_body = build_admin_alert_email(
+        user, decision_token=decision_token
+    )
+    return send_novara_email(
+        to_address=ADMIN_ALERT_EMAIL,
+        subject=subject,
+        text_body=text,
+        html_body=html_body,
+    )
+
+
+def notify_user_rejection(user: dict, reason: str) -> dict:
+    subject, text, html_body = build_rejection_email(user, reason)
+    return send_novara_email(
+        to_address=str(user.get("email") or ""),
+        subject=subject,
+        text_body=text,
+        html_body=html_body,
+    )
+
+
 def hash_password(password: str) -> str:
     """Store passwords as pbkdf2_sha256$iterations$salt$hash (stdlib only)."""
     salt = secrets.token_hex(16)
@@ -1382,6 +1809,11 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
     updated_at = first_present(
         item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
     )
+    rejection_reason = first_present(
+        item,
+        ("RejectionReason", "rejectionReason", "rejection_reason"),
+        default="",
+    )
     role_text = str(role or "").lower().strip()
     status_text = str(status or "Pending").strip()
     if status_text.lower() == "approved":
@@ -1393,6 +1825,7 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
         "role": role_text,
         "company": str(company or ""),
         "status": status_text,
+        "rejectionReason": str(rejection_reason or ""),
         "createdAt": str(created_at or ""),
         "updatedAt": str(updated_at or ""),
     }
@@ -1400,6 +1833,14 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
         payload["passwordHash"] = str(
             first_present(
                 item, ("PasswordHash", "passwordHash", "password_hash"), default=""
+            )
+            or ""
+        )
+        payload["decisionTokenHash"] = str(
+            first_present(
+                item,
+                ("DecisionTokenHash", "decisionTokenHash", "decision_token_hash"),
+                default="",
             )
             or ""
         )
@@ -1474,11 +1915,17 @@ def scan_users(*, status: str | None = None) -> dict:
             (row.get("userId") or "").lower(),
         )
     )
+    try:
+        preapproved = list_preapproved_emails()
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+        preapproved = sorted(PREAPPROVED_EMAILS)
     return {
         "table": USERS_TABLE_NAME,
         "count": len(users),
         "users": users,
-        "preapprovedEmails": sorted(PREAPPROVED_EMAILS),
+        "preapprovedEmails": preapproved,
+        "adminAlertEmail": ADMIN_ALERT_EMAIL,
     }
 
 
@@ -1531,14 +1978,14 @@ def parse_signup_payload(body: dict | None) -> tuple[dict | None, str | None]:
         return None, "Company must be 160 characters or fewer"
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    status = "Active" if email in PREAPPROVED_EMAILS else "Pending"
+    # Status is finalized in create_user_from_signup after the pre-approved check.
     item = {
         "FullName": full_name,
         "Email": email,
         "PasswordHash": hash_password(password_text),
         "Role": role,
         "Company": company,
-        "Status": status,
+        "Status": "Pending",
         "CreatedAt": now,
         "UpdatedAt": now,
     }
@@ -1554,29 +2001,47 @@ def create_user_from_signup(item: dict) -> dict:
 
     ensure_users_table()
     table = dynamodb_table(USERS_TABLE_NAME)
+    preapproved = is_email_preapproved(item["Email"])
+    status = "Active" if preapproved else "Pending"
+    decision_token = ""
     # Allocate IDs with a few retries in case of concurrent sign-ups.
     last_error: Exception | None = None
     for _ in range(5):
         user_id = next_user_id()
         write_item = dict(item)
         write_item["UserID"] = user_id
+        write_item["Status"] = status
+        if status == "Pending":
+            decision_token = secrets.token_urlsafe(32)
+            write_item["DecisionTokenHash"] = _hash_session_token(decision_token)
         try:
             table.put_item(
                 Item=write_item,
                 ConditionExpression="attribute_not_exists(UserID)",
             )
             user = normalize_user(write_item)
-            message = (
-                "Account created and activated (pre-approved email)."
-                if user["status"] == "Active"
-                else "Account created and pending admin approval."
-            )
-            return {
+            email_result: dict | None = None
+            if user["status"] == "Active":
+                email_result = notify_user_welcome(user)
+                message = "Account created and activated (pre-approved email)."
+            else:
+                email_result = notify_admin_pending_signup(
+                    user, decision_token=decision_token
+                )
+                message = "Account created and pending admin approval."
+            result = {
                 "ok": True,
                 "table": USERS_TABLE_NAME,
                 "user": user,
                 "message": message,
             }
+            if email_result is not None:
+                result["email"] = {
+                    "ok": bool(email_result.get("ok")),
+                    "mode": email_result.get("mode"),
+                    "skipped": bool(email_result.get("skipped")),
+                }
+            return result
         except ClientError as exc:
             code = (exc.response.get("Error") or {}).get("Code")
             if code == "ConditionalCheckFailedException":
@@ -1714,7 +2179,14 @@ def authenticate_user(email: str, password: str) -> dict:
     }
 
 
-def update_user_status(user_id: str, status: str) -> dict:
+def update_user_status(
+    user_id: str,
+    status: str,
+    *,
+    rejection_reason: str | None = None,
+    send_rejection_email: bool = True,
+    decision_token: str | None = None,
+) -> dict:
     from botocore.exceptions import ClientError
 
     target_id = _as_text(user_id)
@@ -1728,16 +2200,53 @@ def update_user_status(user_id: str, status: str) -> dict:
     if not existing:
         raise LookupError(f"UserID '{target_id}' was not found")
 
+    if decision_token:
+        stored_hash = first_present(
+            existing,
+            ("DecisionTokenHash", "decisionTokenHash", "decision_token_hash"),
+            default="",
+        )
+        if not stored_hash or not secrets.compare_digest(
+            str(stored_hash), _hash_session_token(str(decision_token))
+        ):
+            raise PermissionError("Invalid or expired decision token")
+        current_status = str(
+            first_present(existing, ("Status", "status"), default="Pending") or "Pending"
+        )
+        if current_status != "Pending":
+            raise ValueError("Only Pending accounts can be decided via email link")
+
+    reason_text = _as_text(rejection_reason)
+    if next_status == "Rejected" and not reason_text:
+        raise ValueError("RejectionReason is required when rejecting a user")
+    if reason_text and len(reason_text) > 500:
+        raise ValueError("RejectionReason must be 500 characters or fewer")
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     ensure_users_table()
     table = dynamodb_table(USERS_TABLE_NAME)
+
+    update_expression = "SET #status = :status, UpdatedAt = :updated"
+    names = {"#status": "Status"}
+    values: dict[str, Any] = {":status": next_status, ":updated": now}
+    remove_parts: list[str] = ["DecisionTokenHash"]
+
+    if next_status == "Rejected":
+        update_expression += ", RejectionReason = :reason"
+        values[":reason"] = reason_text
+    else:
+        remove_parts.append("RejectionReason")
+
+    if remove_parts:
+        update_expression += " REMOVE " + ", ".join(remove_parts)
+
     try:
         response = table.update_item(
             Key={"UserID": target_id},
-            UpdateExpression="SET #status = :status, UpdatedAt = :updated",
+            UpdateExpression=update_expression,
             ConditionExpression="attribute_exists(UserID)",
-            ExpressionAttributeNames={"#status": "Status"},
-            ExpressionAttributeValues={":status": next_status, ":updated": now},
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
             ReturnValues="ALL_NEW",
         )
     except ClientError as exc:
@@ -1749,12 +2258,31 @@ def update_user_status(user_id: str, status: str) -> dict:
     updated = json_safe(response.get("Attributes") or existing)
     updated["Status"] = next_status
     updated["UpdatedAt"] = now
-    return {
+    if next_status == "Rejected":
+        updated["RejectionReason"] = reason_text
+    else:
+        updated.pop("RejectionReason", None)
+    user = normalize_user(updated)
+
+    email_result: dict | None = None
+    if next_status == "Active":
+        email_result = notify_user_welcome(user)
+    elif next_status == "Rejected" and send_rejection_email:
+        email_result = notify_user_rejection(user, reason_text)
+
+    result = {
         "ok": True,
         "table": USERS_TABLE_NAME,
-        "user": normalize_user(updated),
+        "user": user,
         "message": f"User status set to {next_status}.",
     }
+    if email_result is not None:
+        result["email"] = {
+            "ok": bool(email_result.get("ok")),
+            "mode": email_result.get("mode"),
+            "skipped": bool(email_result.get("skipped")),
+        }
+    return result
 
 
 def _sync_site_from_systems(site_id: str) -> None:
@@ -2699,8 +3227,37 @@ def handle_user_status_request(
     status = _as_text(
         body.get("Status") if "Status" in body else body.get("status")
     )
+    rejection_reason = body.get("RejectionReason")
+    if rejection_reason is None:
+        rejection_reason = body.get("rejectionReason")
+    if rejection_reason is None:
+        rejection_reason = body.get("reason")
+    decision_token = _as_text(
+        body.get("DecisionToken")
+        if "DecisionToken" in body
+        else body.get("decisionToken")
+        if "decisionToken" in body
+        else body.get("token")
+    )
+    send_flag = body.get("SendRejectionEmail")
+    if send_flag is None:
+        send_flag = body.get("sendRejectionEmail")
+    if send_flag is None:
+        send_rejection_email = True
+    else:
+        send_rejection_email = bool(send_flag)
     try:
-        return 200, update_user_status(user_id, status)
+        return 200, update_user_status(
+            user_id,
+            status,
+            rejection_reason=(
+                None if rejection_reason is None else str(rejection_reason)
+            ),
+            send_rejection_email=send_rejection_email,
+            decision_token=decision_token or None,
+        )
+    except PermissionError as exc:
+        return 403, {"error": str(exc)}
     except ValueError as exc:
         return 400, {"error": str(exc)}
     except LookupError as exc:
@@ -2713,6 +3270,68 @@ def handle_user_status_request(
         }
 
 
+def handle_preapproved_list_request() -> tuple[int, dict]:
+    try:
+        emails = list_preapproved_emails()
+        return 200, {
+            "ok": True,
+            "table": PREAPPROVED_TABLE_NAME,
+            "count": len(emails),
+            "preapprovedEmails": emails,
+            "adminAlertEmail": ADMIN_ALERT_EMAIL,
+        }
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load pre-approved emails",
+            "detail": str(exc),
+        }
+
+
+def handle_preapproved_add_request(body: dict | None) -> tuple[int, dict]:
+    if not isinstance(body, dict):
+        return 400, {"error": "JSON body is required"}
+    email = _as_text(body.get("Email") if "Email" in body else body.get("email"))
+    try:
+        return 201, add_preapproved_email(email)
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to add pre-approved email",
+            "detail": str(exc),
+        }
+
+
+def handle_preapproved_remove_request(email: str) -> tuple[int, dict]:
+    try:
+        return 200, remove_preapproved_email(email)
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to remove pre-approved email",
+            "detail": str(exc),
+        }
+
+
+def _preapproved_email_from_path(path: str) -> str | None:
+    """Extract email from /api/users/preapproved/{email}."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/users/preapproved/", "/users/preapproved/"):
+        if marker not in normalized:
+            continue
+        remainder = normalized.split(marker, 1)[1]
+        if not remainder or "/" in remainder:
+            return None
+        return unquote(remainder).strip().lower()
+    return None
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -2723,6 +3342,7 @@ def handle_health_request() -> tuple[int, dict]:
         "mgmtCompaniesTable": MGMT_COMPANIES_TABLE_NAME,
         "leadsTable": LEADS_TABLE_NAME,
         "usersTable": USERS_TABLE_NAME,
+        "preapprovedTable": PREAPPROVED_TABLE_NAME,
     }
 
 
@@ -2853,6 +3473,20 @@ def route_request(
         if method != "GET":
             return 405, {"error": "Method not allowed"}
         return handle_session_request(headers=headers, params=params)
+    if (
+        normalized.endswith("/api/users/preapproved")
+        or normalized == "/users/preapproved"
+    ):
+        if method == "GET":
+            return handle_preapproved_list_request()
+        if method == "POST":
+            return handle_preapproved_add_request(body)
+        return 405, {"error": "Method not allowed"}
+    preapproved_email = _preapproved_email_from_path(normalized)
+    if preapproved_email is not None:
+        if method == "DELETE":
+            return handle_preapproved_remove_request(preapproved_email)
+        return 405, {"error": "Method not allowed"}
     user_status_id = _user_status_path_id(normalized)
     if user_status_id is not None:
         if method != "PUT":
@@ -2879,8 +3513,9 @@ def route_request(
         "hint": (
             "Supported routes include /api/sites, /api/systems, /api/owners, "
             "/api/mgmt-companies, /api/leads, /api/users, /api/users/signup, "
-            "/api/users/login, /api/users/session, /api/readings, /api/savings, "
-            "and /api/health. Redeploy novara-api if a known route returns this."
+            "/api/users/login, /api/users/session, /api/users/preapproved, "
+            "/api/readings, /api/savings, and /api/health. Redeploy novara-api "
+            "if a known route returns this."
         ),
     }
 

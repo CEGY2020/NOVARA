@@ -1120,6 +1120,13 @@ a.sales-home-link {
     color: var(--heading);
 }
 
+.users-section-help {
+    margin: 0 0 14px;
+    color: #7b8993;
+    font-size: 14px;
+    max-width: 720px;
+}
+
 .users-actions {
     white-space: nowrap;
 }
@@ -1129,6 +1136,83 @@ a.sales-home-link {
     padding: 6px 12px;
     font-size: 13px;
     min-height: 0;
+}
+
+.users-notes {
+    max-width: 280px;
+    color: #5c6f7c;
+    font-size: 13px;
+}
+
+.users-row-focus {
+    outline: 2px solid rgba(39, 167, 216, 0.55);
+    outline-offset: -2px;
+    background: #f3fafd;
+}
+
+.preapproved-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.preapproved-field {
+    min-width: min(320px, 100%);
+    flex: 1;
+}
+
+.preapproved-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 560px;
+    border: 1px solid #d9e3ea;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.preapproved-item,
+.preapproved-empty {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e7eef3;
+    font-size: 14px;
+}
+
+.preapproved-item:last-child,
+.preapproved-empty:last-child {
+    border-bottom: none;
+}
+
+.preapproved-empty {
+    color: #7b8993;
+}
+
+.reject-email-option .checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 400;
+    color: #4a5d6a;
+}
+
+.reject-email-option input[type="checkbox"] {
+    margin-top: 3px;
+}
+
+.primary-btn.danger-btn {
+    background: #b42318;
+    border-color: #b42318;
+}
+
+.primary-btn.danger-btn:hover {
+    background: #912018;
+    border-color: #912018;
 }
 
 .status-badge {

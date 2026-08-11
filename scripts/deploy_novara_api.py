@@ -65,6 +65,25 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_USERS_TABLE", "NOVARAUsers"),
     )
     parser.add_argument(
+        "--preapproved-table",
+        default=os.environ.get(
+            "NOVARA_PREAPPROVED_TABLE", "NOVARAPreapprovedEmails"
+        ),
+    )
+    parser.add_argument(
+        "--admin-alert-email",
+        default=os.environ.get("NOVARA_ADMIN_ALERT_EMAIL", "steve@cegy.us"),
+    )
+    parser.add_argument(
+        "--ses-from-email",
+        default=os.environ.get("NOVARA_SES_FROM_EMAIL")
+        or os.environ.get("NOVARA_ADMIN_ALERT_EMAIL", "steve@cegy.us"),
+    )
+    parser.add_argument(
+        "--app-base-url",
+        default=os.environ.get("NOVARA_APP_BASE_URL", ""),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -121,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
             f"MgmtCompaniesTableName={args.mgmt_companies_table}",
             f"LeadsTableName={args.leads_table}",
             f"UsersTableName={args.users_table}",
+            f"PreapprovedTableName={args.preapproved_table}",
+            f"AdminAlertEmail={args.admin_alert_email}",
+            f"SesFromEmail={args.ses_from_email}",
+            f"AppBaseUrl={args.app_base_url}",
         ],
         env=env,
     )
