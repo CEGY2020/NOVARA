@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Leads</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-followup-1">
+  <link rel="stylesheet" href="dashboard.css?v=leads-date-mmddyy-1">
 </head>
 <body data-page="leads">
 
@@ -172,8 +172,26 @@
         </label>
         <label class="form-field form-field-followup">
           <span>Next Follow-up</span>
-          <input type="date" id="field-nextFollowUp" name="NextFollowUp">
-          <small class="field-hint">Set or clear the next outreach date. Overdue and dates within 7 days are highlighted in the list and pipeline.</small>
+          <span class="date-input-wrap">
+            <input
+              type="text"
+              id="field-nextFollowUp"
+              name="NextFollowUp"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="8"
+              placeholder="MM/DD/YY"
+              aria-describedby="next-followup-hint"
+            >
+            <input
+              type="date"
+              id="field-nextFollowUp-picker"
+              class="date-input-picker"
+              tabindex="-1"
+              aria-label="Pick next follow-up date"
+            >
+          </span>
+          <small class="field-hint" id="next-followup-hint">Use MM/DD/YY or the calendar. Overdue and dates within 7 days are highlighted in the list and pipeline.</small>
         </label>
         <label class="form-field">
           <span>Assigned To</span>
@@ -200,11 +218,12 @@
   </div>
 </div>
 
-<script src="api-config.js?v=leads-phone-systemtype-1"></script>
-<script src="api-client.js?v=leads-phone-systemtype-1"></script>
-<script src="role.js?v=leads-phone-systemtype-1"></script>
-<script src="nav.js?v=leads-phone-systemtype-1"></script>
-<script src="phone-format.js?v=leads-phone-systemtype-1"></script>
-<script src="leads.js?v=leads-phone-systemtype-1"></script>
+<script src="api-config.js?v=leads-date-mmddyy-1"></script>
+<script src="api-client.js?v=leads-date-mmddyy-1"></script>
+<script src="role.js?v=leads-date-mmddyy-1"></script>
+<script src="nav.js?v=leads-date-mmddyy-1"></script>
+<script src="phone-format.js?v=leads-date-mmddyy-1"></script>
+<script src="date-format.js?v=leads-date-mmddyy-1"></script>
+<script src="leads.js?v=leads-date-mmddyy-1"></script>
 </body>
 </html>

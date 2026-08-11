@@ -80,6 +80,47 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function nextFollowUpPicker() {
+    return document.getElementById("field-nextFollowUp-picker");
+  }
+
+  function setNextFollowUpField(isoValue) {
+    var textInput = document.getElementById("field-nextFollowUp");
+    if (
+      window.NovaraDate &&
+      typeof window.NovaraDate.setDateFieldValue === "function"
+    ) {
+      window.NovaraDate.setDateFieldValue(
+        textInput,
+        isoValue,
+        nextFollowUpPicker()
+      );
+      return;
+    }
+    setFieldValue(
+      "field-nextFollowUp",
+      isoValue == null ? "" : String(isoValue)
+    );
+  }
+
+  /** Read Next Follow-up as YYYY-MM-DD for API storage. null = invalid. */
+  function readNextFollowUpIso() {
+    var raw = fieldValue("field-nextFollowUp");
+    if (!raw) {
+      return "";
+    }
+    if (
+      window.NovaraDate &&
+      typeof window.NovaraDate.displayToIso === "function"
+    ) {
+      return window.NovaraDate.displayToIso(raw);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return raw;
+    }
+    return null;
+  }
+
   function formatPhoneValue(value) {
     if (
       window.NovaraPhone &&
@@ -242,7 +283,7 @@
       Source: fieldValue("field-source"),
       SystemType: normalizeSystemTypeValue(fieldValue("field-systemType")),
       Stage: fieldValue("field-stage") || "New Lead",
-      NextFollowUp: fieldValue("field-nextFollowUp"),
+      NextFollowUp: readNextFollowUpIso(),
       AssignedTo: fieldValue("field-assignedTo"),
       Notes: fieldValue("field-notes"),
     };
@@ -330,7 +371,7 @@
         normalizeSystemTypeValue(lead.systemType || "")
       );
       setFieldValue("field-stage", lead.stage || "New Lead");
-      setFieldValue("field-nextFollowUp", lead.nextFollowUp || "");
+      setNextFollowUpField(lead.nextFollowUp || "");
       setFieldValue("field-assignedTo", lead.assignedTo || "");
       setFieldValue(
         "field-estimatedSavings",
@@ -343,6 +384,7 @@
       modalSubtitle.textContent = "Create a new lead in NOVARALeads";
       setFieldValue("field-leadId", nextLeadId());
       setFieldValue("field-stage", "New Lead");
+      setNextFollowUpField("");
       setLastUpdatedDisplay(null);
     }
 
@@ -786,6 +828,12 @@
       if (nameEl) nameEl.focus();
       return;
     }
+    if (payload.NextFollowUp === null) {
+      setFormError("Next Follow-up must be a valid date in MM/DD/YY format.");
+      var followUpEl = document.getElementById("field-nextFollowUp");
+      if (followUpEl) followUpEl.focus();
+      return;
+    }
     if (
       payload.EstimatedSavings != null &&
       !Number.isFinite(payload.EstimatedSavings)
@@ -942,6 +990,16 @@
   ) {
     window.NovaraPhone.bindPhoneInput(
       document.getElementById("field-contactPhone")
+    );
+  }
+
+  if (
+    window.NovaraDate &&
+    typeof window.NovaraDate.bindDateInput === "function"
+  ) {
+    window.NovaraDate.bindDateInput(
+      document.getElementById("field-nextFollowUp"),
+      nextFollowUpPicker()
     );
   }
 
