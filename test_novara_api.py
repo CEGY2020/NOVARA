@@ -1217,6 +1217,203 @@ class RouteTests(unittest.TestCase):
         )[0]
         self.assertIn('field-nextFollowUp', open_modal)
 
+    def test_users_list_route(self):
+        fake = {
+            "table": "NOVARAUsers",
+            "count": 1,
+            "users": [
+                {
+                    "userId": "USR001",
+                    "fullName": "Pat Pending",
+                    "email": "pat@example.com",
+                    "role": "owner",
+                    "status": "Pending",
+                }
+            ],
+            "preapprovedEmails": ["admin@novara.com"],
+        }
+        with patch.object(novara_api, "scan_users", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "GET", "/api/users", {"status": ["Pending"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["users"][0]["userId"], "USR001")
+        mocked.assert_called_once_with(status="Pending")
+
+    def test_signup_route_pending_and_preapproved(self):
+        pending_body = {
+            "FullName": "Pat Pending",
+            "Email": "pat.pending@example.com",
+            "Password": "Password1!",
+            "Role": "owner",
+            "Company": "Acme",
+        }
+        fake_pending = {
+            "ok": True,
+            "table": "NOVARAUsers",
+            "user": {
+                "userId": "USR001",
+                "email": "pat.pending@example.com",
+                "status": "Pending",
+            },
+            "message": "pending",
+        }
+        with patch.object(
+            novara_api, "create_user_from_signup", return_value=fake_pending
+        ) as mocked:
+            status, payload = novara_api.route_request(
+                "POST", "/api/users/signup", {}, pending_body
+            )
+        self.assertEqual(status, 201)
+        self.assertEqual(payload["user"]["status"], "Pending")
+        mocked.assert_called_once()
+        created_item = mocked.call_args.args[0]
+        self.assertEqual(created_item["Status"], "Pending")
+        self.assertTrue(created_item["PasswordHash"].startswith("pbkdf2_sha256$"))
+        self.assertNotIn("Password", created_item)
+
+        with patch.object(novara_api, "PREAPPROVED_EMAILS", frozenset({"admin@novara.com"})):
+            item, error = novara_api.parse_signup_payload(
+                {
+                    "FullName": "Admin User",
+                    "Email": "admin@novara.com",
+                    "Password": "Password1!",
+                    "Role": "aem",
+                }
+            )
+        self.assertIsNone(error)
+        self.assertEqual(item["Status"], "Active")
+
+    def test_signup_validation(self):
+        status, payload = novara_api.route_request(
+            "POST",
+            "/api/users/signup",
+            {},
+            {"Email": "bad", "Password": "short", "Role": "owner"},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("FullName", payload["error"])
+
+        status, payload = novara_api.route_request(
+            "POST",
+            "/api/users/signup",
+            {},
+            {
+                "FullName": "Pat",
+                "Email": "pat@example.com",
+                "Password": "short",
+                "Role": "owner",
+            },
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("Password", payload["error"])
+
+    def test_login_requires_active_status(self):
+        pending_user = {
+            "UserID": "USR001",
+            "FullName": "Pat Pending",
+            "Email": "pat@example.com",
+            "Role": "owner",
+            "Status": "Pending",
+            "PasswordHash": novara_api.hash_password("Password1!"),
+        }
+        with patch.object(novara_api, "find_user_by_email", return_value=pending_user):
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/users/login",
+                {},
+                {"Email": "pat@example.com", "Password": "Password1!"},
+            )
+        self.assertEqual(status, 403)
+        self.assertIn("pending", payload["error"].lower())
+
+        active_user = dict(pending_user)
+        active_user["Status"] = "Active"
+        with patch.object(novara_api, "find_user_by_email", return_value=active_user):
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/users/login",
+                {},
+                {"Email": "pat@example.com", "Password": "Password1!"},
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["user"]["status"], "Active")
+        self.assertNotIn("passwordHash", payload["user"])
+
+        with patch.object(novara_api, "find_user_by_email", return_value=active_user):
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/users/login",
+                {},
+                {"Email": "pat@example.com", "Password": "WrongPass1!"},
+            )
+        self.assertEqual(status, 403)
+        self.assertIn("Invalid", payload["error"])
+
+    def test_update_user_status_route(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARAUsers",
+            "user": {"userId": "USR001", "status": "Active"},
+            "message": "User status set to Active.",
+        }
+        with patch.object(
+            novara_api, "update_user_status", return_value=fake
+        ) as mocked:
+            status, payload = novara_api.route_request(
+                "PUT",
+                "/api/users/USR001/status",
+                {},
+                {"Status": "Active"},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["user"]["status"], "Active")
+        mocked.assert_called_once_with("USR001", "Active")
+
+    def test_password_hash_roundtrip(self):
+        stored = novara_api.hash_password("SecretPass1!")
+        self.assertTrue(novara_api.verify_password("SecretPass1!", stored))
+        self.assertFalse(novara_api.verify_password("other", stored))
+
+    def test_next_user_id(self):
+        self.assertEqual(novara_api.next_user_id([]), "USR001")
+        self.assertEqual(
+            novara_api.next_user_id([{"UserID": "USR002"}, {"UserID": "USR010"}]),
+            "USR011",
+        )
+
+    def test_directory_links_to_signup(self):
+        source = Path(__file__).resolve().parent.joinpath("directory.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("signup.html?role=aem", source)
+        self.assertIn("signup.html?role=owner", source)
+        self.assertIn('href="login.html"', source)
+
+    def test_nav_includes_users_for_aem(self):
+        source = Path(__file__).resolve().parent.joinpath("nav.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id: "users"', source)
+        self.assertIn("users.html", source)
+
+    def test_users_html_has_pending_table(self):
+        source = Path(__file__).resolve().parent.joinpath("users.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pending-users-tbody", source)
+        self.assertIn("Approve", Path(__file__).resolve().parent.joinpath("users.js").read_text(encoding="utf-8"))
+
+    def test_api_client_exposes_user_methods(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("signupUser", source)
+        self.assertIn("loginUser", source)
+        self.assertIn("updateUserStatus", source)
+        self.assertIn("/api/users/signup", source)
+
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
         self.assertEqual(status, 200)
@@ -1227,6 +1424,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["ownersTable"], "NOVARAOwners")
         self.assertEqual(payload["mgmtCompaniesTable"], "NOVARAMgmtCompanies")
         self.assertEqual(payload["leadsTable"], "NOVARALeads")
+        self.assertEqual(payload["usersTable"], "NOVARAUsers")
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})

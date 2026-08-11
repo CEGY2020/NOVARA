@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import re
+import secrets
 import traceback
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote
 
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
@@ -19,6 +22,7 @@ MGMT_COMPANIES_TABLE_NAME = os.environ.get(
     "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
 )
 LEADS_TABLE_NAME = os.environ.get("NOVARA_LEADS_TABLE", "NOVARALeads")
+USERS_TABLE_NAME = os.environ.get("NOVARA_USERS_TABLE", "NOVARAUsers")
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 
@@ -48,11 +52,35 @@ LEAD_STAGES = (
     "Won",
     "Lost",
 )
+USER_ROLES = ("aem", "owner", "contractor", "sales")
+USER_STATUSES = ("Pending", "Active", "Rejected")
+# Emails in this set are auto-approved (Status=Active) on sign-up.
+# Keep values lowercase. Extend as needed or override via NOVARA_PREAPPROVED_EMAILS
+# (comma-separated).
+_DEFAULT_PREAPPROVED_EMAILS = (
+    "steve@aemenergy.com",
+    "admin@novara.com",
+    "ops@novara.com",
+)
+
+
+def _load_preapproved_emails() -> frozenset[str]:
+    raw = (os.environ.get("NOVARA_PREAPPROVED_EMAILS") or "").strip()
+    if not raw:
+        return frozenset(_DEFAULT_PREAPPROVED_EMAILS)
+    emails = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return frozenset(emails) if emails else frozenset(_DEFAULT_PREAPPROVED_EMAILS)
+
+
+PREAPPROVED_EMAILS = _load_preapproved_emails()
+PASSWORD_HASH_ITERATIONS = 120_000
+_USER_ID_PATTERN = re.compile(r"^USR(\d+)$", re.IGNORECASE)
 
 _systems_table_ready = False
 _owners_table_ready = False
 _mgmt_companies_table_ready = False
 _leads_table_ready = False
+_users_table_ready = False
 
 
 def sanitize_aws_env() -> None:
@@ -1257,6 +1285,377 @@ def save_lead(item: dict, *, mode: str = "upsert") -> dict:
     }
 
 
+def ensure_users_table() -> str:
+    """Create NOVARAUsers if missing (pay-per-request, UserID hash key)."""
+    global _users_table_ready
+    if _users_table_ready:
+        return USERS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=USERS_TABLE_NAME)
+        _users_table_ready = True
+        return USERS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=USERS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "UserID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "UserID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=USERS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _users_table_ready = True
+    return USERS_TABLE_NAME
+
+
+def hash_password(password: str) -> str:
+    """Store passwords as pbkdf2_sha256$iterations$salt$hash (stdlib only)."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return (
+        f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt}${digest.hex()}"
+    )
+
+
+def verify_password(password: str, stored: str) -> bool:
+    if not password or not stored:
+        return False
+    try:
+        algo, iterations_s, salt, hash_hex = str(stored).split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        iterations = int(iterations_s)
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            iterations,
+        )
+        return secrets.compare_digest(digest.hex(), hash_hex)
+    except (TypeError, ValueError):
+        return False
+
+
+def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
+    user_id = first_present(item, ("UserID", "userId", "user_id", "id"))
+    full_name = first_present(
+        item, ("FullName", "fullName", "full_name", "Name", "name"), default=""
+    )
+    email = first_present(item, ("Email", "email"), default="")
+    role = first_present(item, ("Role", "role"), default="")
+    company = first_present(
+        item,
+        ("Company", "company", "Organization", "organization", "Org", "org"),
+        default="",
+    )
+    status = first_present(item, ("Status", "status"), default="Pending")
+    created_at = first_present(
+        item, ("CreatedAt", "createdAt", "created_at"), default=""
+    )
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    role_text = str(role or "").lower().strip()
+    status_text = str(status or "Pending").strip()
+    if status_text.lower() == "approved":
+        status_text = "Active"
+    payload = {
+        "userId": "" if user_id is None else str(user_id),
+        "fullName": str(full_name or ""),
+        "email": str(email or "").strip().lower(),
+        "role": role_text,
+        "company": str(company or ""),
+        "status": status_text,
+        "createdAt": str(created_at or ""),
+        "updatedAt": str(updated_at or ""),
+    }
+    if include_sensitive:
+        payload["passwordHash"] = str(
+            first_present(
+                item, ("PasswordHash", "passwordHash", "password_hash"), default=""
+            )
+            or ""
+        )
+    return payload
+
+
+def _scan_user_items() -> list[dict]:
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    items: list[dict] = []
+    scan_kwargs: dict[str, Any] = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return items
+
+
+def next_user_id(existing_items: list[dict] | None = None) -> str:
+    items = existing_items if existing_items is not None else _scan_user_items()
+    max_num = 0
+    for item in items:
+        user_id = first_present(item, ("UserID", "userId", "user_id", "id"))
+        if not user_id:
+            continue
+        match = _USER_ID_PATTERN.match(str(user_id).strip())
+        if match:
+            max_num = max(max_num, int(match.group(1)))
+    return f"USR{max_num + 1:03d}"
+
+
+def find_user_by_email(email: str) -> dict | None:
+    target = (email or "").strip().lower()
+    if not target:
+        return None
+    for item in _scan_user_items():
+        item_email = first_present(item, ("Email", "email"), default="")
+        if str(item_email or "").strip().lower() == target:
+            return json_safe(item)
+    return None
+
+
+def find_user_by_id(user_id: str) -> dict | None:
+    target = _as_text(user_id)
+    if not target:
+        return None
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    response = table.get_item(Key={"UserID": target})
+    item = response.get("Item")
+    return json_safe(item) if item else None
+
+
+def scan_users(*, status: str | None = None) -> dict:
+    status_filter = _as_text(status) if status else ""
+    if status_filter and status_filter not in USER_STATUSES:
+        raise ValueError(
+            "status must be one of: " + ", ".join(USER_STATUSES)
+        )
+    items = _scan_user_items()
+    users = [normalize_user(json_safe(item)) for item in items]
+    if status_filter:
+        users = [row for row in users if row.get("status") == status_filter]
+    users.sort(
+        key=lambda row: (
+            0 if row.get("status") == "Pending" else 1,
+            (row.get("createdAt") or ""),
+            (row.get("fullName") or "").lower(),
+            (row.get("userId") or "").lower(),
+        )
+    )
+    return {
+        "table": USERS_TABLE_NAME,
+        "count": len(users),
+        "users": users,
+        "preapprovedEmails": sorted(PREAPPROVED_EMAILS),
+    }
+
+
+def parse_signup_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    full_name = _as_text(
+        body.get("FullName")
+        if "FullName" in body
+        else body.get("fullName")
+        if "fullName" in body
+        else body.get("Name")
+        if "Name" in body
+        else body.get("name")
+    )
+    email = _as_text(
+        body.get("Email") if "Email" in body else body.get("email")
+    ).lower()
+    password = body.get("Password") if "Password" in body else body.get("password")
+    password_text = "" if password is None else str(password)
+    role = _as_text(
+        body.get("Role") if "Role" in body else body.get("role")
+    ).lower()
+    company = _as_text(
+        body.get("Company")
+        if "Company" in body
+        else body.get("company")
+        if "company" in body
+        else body.get("Organization")
+        if "Organization" in body
+        else body.get("organization")
+    )
+
+    if not full_name:
+        return None, "FullName is required"
+    if len(full_name) > 120:
+        return None, "FullName must be 120 characters or fewer"
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        return None, "Email must be a valid email address"
+    if len(email) > 160:
+        return None, "Email must be 160 characters or fewer"
+    if len(password_text) < 8:
+        return None, "Password must be at least 8 characters"
+    if len(password_text) > 128:
+        return None, "Password must be 128 characters or fewer"
+    if role not in USER_ROLES:
+        return None, "Role must be one of: " + ", ".join(USER_ROLES)
+    if company and len(company) > 160:
+        return None, "Company must be 160 characters or fewer"
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    status = "Active" if email in PREAPPROVED_EMAILS else "Pending"
+    item = {
+        "FullName": full_name,
+        "Email": email,
+        "PasswordHash": hash_password(password_text),
+        "Role": role,
+        "Company": company,
+        "Status": status,
+        "CreatedAt": now,
+        "UpdatedAt": now,
+    }
+    return item, None
+
+
+def create_user_from_signup(item: dict) -> dict:
+    from botocore.exceptions import ClientError
+
+    existing = find_user_by_email(item["Email"])
+    if existing:
+        raise ValueError(f"Email '{item['Email']}' is already registered")
+
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    # Allocate IDs with a few retries in case of concurrent sign-ups.
+    last_error: Exception | None = None
+    for _ in range(5):
+        user_id = next_user_id()
+        write_item = dict(item)
+        write_item["UserID"] = user_id
+        try:
+            table.put_item(
+                Item=write_item,
+                ConditionExpression="attribute_not_exists(UserID)",
+            )
+            user = normalize_user(write_item)
+            message = (
+                "Account created and activated (pre-approved email)."
+                if user["status"] == "Active"
+                else "Account created and pending admin approval."
+            )
+            return {
+                "ok": True,
+                "table": USERS_TABLE_NAME,
+                "user": user,
+                "message": message,
+            }
+        except ClientError as exc:
+            code = (exc.response.get("Error") or {}).get("Code")
+            if code == "ConditionalCheckFailedException":
+                last_error = ValueError(f"UserID '{user_id}' already exists")
+                continue
+            raise
+    if last_error:
+        raise last_error
+    raise RuntimeError("Failed to allocate a UserID")
+
+
+def authenticate_user(email: str, password: str) -> dict:
+    item = find_user_by_email(email)
+    # Use a generic failure for missing users / bad passwords.
+    if not item or not verify_password(password, item.get("PasswordHash") or ""):
+        raise PermissionError("Invalid email or password")
+
+    user = normalize_user(item)
+    status = user.get("status") or "Pending"
+    if status == "Pending":
+        raise PermissionError(
+            "Your account is pending approval. An AEM admin must activate it before you can sign in."
+        )
+    if status == "Rejected":
+        raise PermissionError(
+            "Your account request was rejected. Contact an AEM admin for help."
+        )
+    if status != "Active":
+        raise PermissionError("Your account is not active.")
+
+    return {
+        "ok": True,
+        "table": USERS_TABLE_NAME,
+        "user": user,
+        "message": "Signed in successfully.",
+    }
+
+
+def update_user_status(user_id: str, status: str) -> dict:
+    from botocore.exceptions import ClientError
+
+    target_id = _as_text(user_id)
+    next_status = _as_text(status)
+    if not target_id:
+        raise ValueError("UserID is required")
+    if next_status not in ("Active", "Rejected"):
+        raise ValueError("Status must be Active or Rejected")
+
+    existing = find_user_by_id(target_id)
+    if not existing:
+        raise LookupError(f"UserID '{target_id}' was not found")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    try:
+        response = table.update_item(
+            Key={"UserID": target_id},
+            UpdateExpression="SET #status = :status, UpdatedAt = :updated",
+            ConditionExpression="attribute_exists(UserID)",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={":status": next_status, ":updated": now},
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            raise LookupError(f"UserID '{target_id}' was not found") from exc
+        raise
+
+    updated = json_safe(response.get("Attributes") or existing)
+    updated["Status"] = next_status
+    updated["UpdatedAt"] = now
+    return {
+        "ok": True,
+        "table": USERS_TABLE_NAME,
+        "user": normalize_user(updated),
+        "message": f"User status set to {next_status}.",
+    }
+
+
 def _sync_site_from_systems(site_id: str) -> None:
     """Update NOVARASites.Systems (+ Status when derivable) from live NOVARASystems."""
     if not site_id:
@@ -2039,6 +2438,115 @@ def handle_lead_write_request(
         }
 
 
+def handle_users_request(params: dict[str, list[str]] | None = None) -> tuple[int, dict]:
+    params = params or {}
+    status_values = params.get("status") or params.get("Status") or []
+    status = status_values[0] if status_values else None
+    try:
+        return 200, scan_users(status=status)
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load users from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_signup_request(body: dict | None) -> tuple[int, dict]:
+    item, error = parse_signup_payload(body)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 201, create_user_from_signup(item)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to create user in DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_login_request(body: dict | None) -> tuple[int, dict]:
+    if not isinstance(body, dict):
+        return 400, {"error": "JSON body is required"}
+    email = _as_text(body.get("Email") if "Email" in body else body.get("email")).lower()
+    password = body.get("Password") if "Password" in body else body.get("password")
+    password_text = "" if password is None else str(password)
+    if not email:
+        return 400, {"error": "Email is required"}
+    if not password_text:
+        return 400, {"error": "Password is required"}
+    try:
+        return 200, authenticate_user(email, password_text)
+    except PermissionError as exc:
+        return 403, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to authenticate user",
+            "detail": str(exc),
+        }
+
+
+def _user_id_from_path(path: str) -> str | None:
+    """Extract UserID from /api/users/{id} (not signup/login/status suffixes)."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/users/", "/users/"):
+        if marker not in normalized:
+            continue
+        remainder = normalized.split(marker, 1)[1]
+        if not remainder or "/" in remainder:
+            return None
+        if remainder in ("signup", "login"):
+            return None
+        return unquote(remainder)
+    return None
+
+
+def _user_status_path_id(path: str) -> str | None:
+    """Extract UserID from /api/users/{id}/status."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/users/", "/users/"):
+        if marker not in normalized:
+            continue
+        remainder = normalized.split(marker, 1)[1]
+        if not remainder.endswith("/status"):
+            return None
+        user_id = remainder[: -len("/status")]
+        if not user_id or "/" in user_id:
+            return None
+        if user_id in ("signup", "login"):
+            return None
+        return unquote(user_id)
+    return None
+
+
+def handle_user_status_request(
+    body: dict | None, *, user_id: str
+) -> tuple[int, dict]:
+    if not isinstance(body, dict):
+        return 400, {"error": "JSON body is required"}
+    status = _as_text(
+        body.get("Status") if "Status" in body else body.get("status")
+    )
+    try:
+        return 200, update_user_status(user_id, status)
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to update user status in DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -2048,6 +2556,7 @@ def handle_health_request() -> tuple[int, dict]:
         "ownersTable": OWNERS_TABLE_NAME,
         "mgmtCompaniesTable": MGMT_COMPANIES_TABLE_NAME,
         "leadsTable": LEADS_TABLE_NAME,
+        "usersTable": USERS_TABLE_NAME,
     }
 
 
@@ -2143,6 +2652,26 @@ def route_request(
                 body, mode="update", lead_id=lead_path_id
             )
         return 405, {"error": "Method not allowed"}
+    if normalized.endswith("/api/users/signup") or normalized == "/users/signup":
+        if method != "POST":
+            return 405, {"error": "Method not allowed"}
+        return handle_signup_request(body)
+    if normalized.endswith("/api/users/login") or normalized == "/users/login":
+        if method != "POST":
+            return 405, {"error": "Method not allowed"}
+        return handle_login_request(body)
+    user_status_id = _user_status_path_id(normalized)
+    if user_status_id is not None:
+        if method != "PUT":
+            return 405, {"error": "Method not allowed"}
+        return handle_user_status_request(body, user_id=user_status_id)
+    if normalized.endswith("/api/users") or normalized == "/users":
+        if method == "GET":
+            return handle_users_request(params)
+        return 405, {"error": "Method not allowed"}
+    user_path_id = _user_id_from_path(normalized)
+    if user_path_id is not None:
+        return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
         if method != "GET":
             return 405, {"error": "Method not allowed"}
@@ -2153,8 +2682,9 @@ def route_request(
         "method": method,
         "hint": (
             "Supported routes include /api/sites, /api/systems, /api/owners, "
-            "/api/mgmt-companies, /api/leads, /api/readings, /api/savings, "
-            "and /api/health. Redeploy novara-api if a known route returns this."
+            "/api/mgmt-companies, /api/leads, /api/users, /api/users/signup, "
+            "/api/users/login, /api/readings, /api/savings, and /api/health. "
+            "Redeploy novara-api if a known route returns this."
         ),
     }
 

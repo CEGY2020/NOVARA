@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVARA Sign Up</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main class="login-page">
+
+    <section class="login-card signup-card">
+
+        <img
+            src="images/novara-logo.png"
+            alt="NOVARA"
+            class="logo"
+        >
+
+        <p class="subtitle">
+            Create your NOVARA account
+        </p>
+
+        <p id="selectedRoleLabel" class="role-context" hidden></p>
+
+        <p class="role-switch">
+            <a href="directory.html">Change role</a>
+            ·
+            <a id="loginLink" href="login.html">Already have an account? Sign in</a>
+        </p>
+
+        <form id="signupForm" novalidate>
+
+            <label for="fullName">Full name</label>
+            <input
+                type="text"
+                id="fullName"
+                name="fullName"
+                placeholder="Jane Smith"
+                autocomplete="name"
+                required
+                maxlength="120"
+            >
+
+            <label for="email">Email address</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                placeholder="name@company.com"
+                autocomplete="email"
+                required
+                maxlength="160"
+            >
+
+            <label for="password">Password</label>
+            <div class="password-field">
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="At least 8 characters"
+                    autocomplete="new-password"
+                    required
+                    minlength="8"
+                    maxlength="128"
+                >
+                <button
+                    type="button"
+                    id="togglePassword"
+                    class="show-password"
+                >
+                    Show
+                </button>
+            </div>
+
+            <label for="confirmPassword">Confirm password</label>
+            <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder="Re-enter password"
+                autocomplete="new-password"
+                required
+                minlength="8"
+                maxlength="128"
+            >
+
+            <label for="role">Role</label>
+            <input
+                type="text"
+                id="role"
+                name="role"
+                readonly
+                aria-readonly="true"
+            >
+
+            <label for="company">Company / Organization <span class="optional-hint">(recommended)</span></label>
+            <input
+                type="text"
+                id="company"
+                name="company"
+                placeholder="Your company name"
+                autocomplete="organization"
+                maxlength="160"
+            >
+
+            <button type="submit" class="sign-in-button" id="signupSubmit">
+                Create Account
+            </button>
+
+            <p id="signupMessage" class="login-message"></p>
+
+        </form>
+
+        <footer>
+            <p>New accounts stay Pending until an AEM admin approves them.</p>
+            <p>© 2026 AEM. All rights reserved.</p>
+        </footer>
+
+    </section>
+
+</main>
+
+<script src="api-config.js"></script>
+<script src="api-client.js"></script>
+<script src="role.js"></script>
+<script src="auth.js"></script>
+<script src="signup.js"></script>
+
+</body>
+</html>

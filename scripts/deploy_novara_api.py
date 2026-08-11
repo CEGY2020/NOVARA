@@ -61,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_LEADS_TABLE", "NOVARALeads"),
     )
     parser.add_argument(
+        "--users-table",
+        default=os.environ.get("NOVARA_USERS_TABLE", "NOVARAUsers"),
+    )
+    parser.add_argument(
         "--app-id",
         default=os.environ.get("AWS_APP_ID") or os.environ.get("AMPLIFY_APP_ID"),
     )
@@ -116,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             f"OwnersTableName={args.owners_table}",
             f"MgmtCompaniesTableName={args.mgmt_companies_table}",
             f"LeadsTableName={args.leads_table}",
+            f"UsersTableName={args.users_table}",
         ],
         env=env,
     )
@@ -223,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         "/api/owners",
         "/api/mgmt-companies",
         "/api/leads",
+        "/api/users",
         "/api/readings?siteId=SITE001&days=7",
     ):
         url = f"{api_url}{path}"
@@ -401,6 +407,71 @@ def main(argv: list[str] | None = None) -> int:
         if not lead_updated.get("ok"):
             print(
                 "ERROR: PUT /api/leads/{id} did not return ok",
+                file=sys.stderr,
+            )
+            return 1
+
+    # Verify Users signup + status update persist to NOVARAUsers.
+    user_smoke_email = "deploy.smoke.user@novara.test"
+    user_signup_url = f"{api_url}/api/users/signup"
+    user_signup_body = json.dumps(
+        {
+            "FullName": "Deploy Smoke User",
+            "Email": user_smoke_email,
+            "Password": "SmokeTest1!",
+            "Role": "owner",
+            "Company": "Deploy Smoke Co",
+        }
+    ).encode("utf-8")
+    print(f"POST {user_signup_url}")
+    user_signup_req = urllib.request.Request(
+        user_signup_url,
+        data=user_signup_body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    smoke_user_id = None
+    try:
+        with urllib.request.urlopen(user_signup_req, timeout=30) as resp:
+            user_created = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} {user_created}")
+            smoke_user_id = (user_created.get("user") or {}).get("userId")
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        if exc.code != 409:
+            print(
+                f"ERROR: POST /api/users/signup failed: {exc.code} {err_body}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"  -> {exc.code} {err_body} (ok for redeploy)")
+        users_url = f"{api_url}/api/users"
+        with urllib.request.urlopen(users_url, timeout=30) as resp:
+            users_payload = json.loads(resp.read().decode("utf-8"))
+        for row in users_payload.get("users") or []:
+            if str(row.get("email") or "").lower() == user_smoke_email:
+                smoke_user_id = row.get("userId")
+                break
+
+    if not smoke_user_id:
+        print("ERROR: could not resolve smoke UserID", file=sys.stderr)
+        return 1
+
+    user_status_url = f"{api_url}/api/users/{smoke_user_id}/status"
+    user_status_body = json.dumps({"Status": "Active"}).encode("utf-8")
+    print(f"PUT {user_status_url}")
+    user_status_req = urllib.request.Request(
+        user_status_url,
+        data=user_status_body,
+        method="PUT",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(user_status_req, timeout=30) as resp:
+        user_updated = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {user_updated}")
+        if not user_updated.get("ok"):
+            print(
+                "ERROR: PUT /api/users/{id}/status did not return ok",
                 file=sys.stderr,
             )
             return 1

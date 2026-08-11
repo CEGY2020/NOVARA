@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/owners/mgmt-companies/leads APIs."""
+"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/owners/mgmt-companies/leads/users APIs."""
 
 from __future__ import annotations
 
@@ -60,6 +60,11 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_leads_request()
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/users":
+            params = parse_qs(parsed.query)
+            status, payload = novara_api.handle_users_request(params)
+            self._send_json(status, payload)
+            return
         if parsed.path == "/api/health":
             status, payload = novara_api.handle_health_request()
             self._send_json(status, payload)
@@ -67,9 +72,35 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/users/signup":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_signup_request(body)
+            self._send_json(status, payload)
+            return
+        if parsed.path == "/api/users/login":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_login_request(body)
+            self._send_json(status, payload)
+            return
         self._handle_json_write("create")
 
     def do_PUT(self):
+        parsed = urlparse(self.path)
+        user_status_id = novara_api._user_status_path_id(parsed.path)
+        if user_status_id is not None:
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_user_status_request(
+                body, user_id=user_status_id
+            )
+            self._send_json(status, payload)
+            return
         self._handle_json_write("update")
 
     def do_DELETE(self):
@@ -196,7 +227,8 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
         "NOVARA server on http://0.0.0.0:%s "
-        "(readings=%s savings=demo sites=%s systems=%s owners=%s mgmtCompanies=%s leads=%s)"
+        "(readings=%s savings=demo sites=%s systems=%s owners=%s "
+        "mgmtCompanies=%s leads=%s users=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
@@ -205,6 +237,7 @@ def main():
             novara_api.OWNERS_TABLE_NAME,
             novara_api.MGMT_COMPANIES_TABLE_NAME,
             novara_api.LEADS_TABLE_NAME,
+            novara_api.USERS_TABLE_NAME,
         )
     )
     try:
