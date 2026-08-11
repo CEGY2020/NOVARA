@@ -114,6 +114,15 @@ a {
     animation: slow-zoom 24s ease-in-out infinite alternate;
 }
 
+.hero-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    display: block;
+    background: var(--deep);
+}
+
 .hero-veil {
     position: absolute;
     inset: 0;
@@ -125,6 +134,21 @@ a {
             rgba(4, 24, 36, 0.45) 100%
         );
     pointer-events: none;
+}
+
+/* Lighter veil for video reference so the loop stays readable behind the UI */
+.hero-veil-light {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(4, 24, 36, 0.12) 0%,
+            rgba(4, 24, 36, 0.06) 45%,
+            rgba(4, 24, 36, 0.28) 100%
+        );
+}
+
+.video-landing .hero-brand-logo {
+    animation: none;
 }
 
 .hero-content {
@@ -231,6 +255,10 @@ a {
     .hero-content,
     .hero-ctas,
     .hero-brand-logo {
+        animation: none;
+    }
+
+    .hero-video {
         animation: none;
     }
 }
