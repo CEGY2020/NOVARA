@@ -1329,7 +1329,13 @@ class RouteTests(unittest.TestCase):
 
         active_user = dict(pending_user)
         active_user["Status"] = "Active"
-        with patch.object(novara_api, "find_user_by_email", return_value=active_user):
+        fake_session = {
+            "token": "USR001.session-token",
+            "expiresAt": "2099-01-01T00:00:00Z",
+        }
+        with patch.object(novara_api, "find_user_by_email", return_value=active_user), patch.object(
+            novara_api, "create_session_for_user", return_value=fake_session
+        ) as mocked_session:
             status, payload = novara_api.route_request(
                 "POST",
                 "/api/users/login",
@@ -1339,7 +1345,10 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["user"]["status"], "Active")
+        self.assertEqual(payload["token"], "USR001.session-token")
+        self.assertEqual(payload["expiresAt"], "2099-01-01T00:00:00Z")
         self.assertNotIn("passwordHash", payload["user"])
+        mocked_session.assert_called_once_with("USR001")
 
         with patch.object(novara_api, "find_user_by_email", return_value=active_user):
             status, payload = novara_api.route_request(
@@ -1350,6 +1359,59 @@ class RouteTests(unittest.TestCase):
             )
         self.assertEqual(status, 403)
         self.assertIn("Invalid", payload["error"])
+
+    def test_signup_alias_post_users(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARAUsers",
+            "user": {"userId": "USR002", "status": "Pending"},
+            "message": "pending",
+        }
+        with patch.object(novara_api, "create_user_from_signup", return_value=fake):
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/users",
+                {},
+                {
+                    "FullName": "Alias User",
+                    "Email": "alias@example.com",
+                    "Password": "Password1!",
+                    "Role": "sales",
+                },
+            )
+        self.assertEqual(status, 201)
+        self.assertEqual(payload["user"]["userId"], "USR002")
+
+    def test_session_route_validates_bearer_token(self):
+        active_user = {
+            "UserID": "USR001",
+            "FullName": "Active User",
+            "Email": "active@example.com",
+            "Role": "aem",
+            "Status": "Active",
+            "SessionTokenHash": novara_api._hash_session_token("USR001.secret"),
+            "SessionExpiresAt": "2099-01-01T00:00:00Z",
+        }
+        with patch.object(novara_api, "find_user_by_id", return_value=active_user):
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/users/session",
+                {},
+                None,
+                headers={"Authorization": "Bearer USR001.secret"},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["user"]["userId"], "USR001")
+
+        with patch.object(novara_api, "find_user_by_id", return_value=active_user):
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/users/session",
+                {},
+                None,
+                headers={"Authorization": "Bearer USR001.wrong"},
+            )
+        self.assertEqual(status, 401)
 
     def test_update_user_status_route(self):
         fake = {
@@ -1411,8 +1473,24 @@ class RouteTests(unittest.TestCase):
         )
         self.assertIn("signupUser", source)
         self.assertIn("loginUser", source)
+        self.assertIn("getSession", source)
         self.assertIn("updateUserStatus", source)
         self.assertIn("/api/users/signup", source)
+        self.assertIn("/api/users/login", source)
+        self.assertIn("Authorization", source)
+
+    def test_login_page_wires_remember_me_and_token(self):
+        app_source = Path(__file__).resolve().parent.joinpath("app.js").read_text(
+            encoding="utf-8"
+        )
+        auth_source = Path(__file__).resolve().parent.joinpath("auth.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("NovaraApi.loginUser", app_source)
+        self.assertIn("rememberMe", app_source)
+        self.assertIn("result.token", app_source)
+        self.assertIn("localStorage", auth_source)
+        self.assertIn("TOKEN_KEY", auth_source)
 
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})

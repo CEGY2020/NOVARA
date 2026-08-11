@@ -1,9 +1,28 @@
 /**
- * Lightweight session helper for NOVARAUsers sign-in.
- * Stores the authenticated user in sessionStorage (no JWT yet).
+ * Session helper for NOVARAUsers sign-in.
+ * Stores the authenticated user + bearer token in sessionStorage, or
+ * localStorage when "Remember me" is checked.
  */
 (function (global) {
   var USER_KEY = "novaraUser";
+  var TOKEN_KEY = "novaraToken";
+  var EXPIRES_KEY = "novaraTokenExpires";
+
+  function storageFor(remember) {
+    return remember ? global.localStorage : global.sessionStorage;
+  }
+
+  function readJSON(store, key) {
+    try {
+      var raw = store.getItem(key);
+      if (!raw) {
+        return null;
+      }
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
 
   function normalizeUser(user) {
     if (!user || typeof user !== "object") {
@@ -29,25 +48,93 @@
     };
   }
 
-  function getCurrentUser() {
+  function clearStore(store) {
     try {
-      var raw = sessionStorage.getItem(USER_KEY);
-      if (!raw) {
-        return null;
-      }
-      return normalizeUser(JSON.parse(raw));
+      store.removeItem(USER_KEY);
+      store.removeItem(TOKEN_KEY);
+      store.removeItem(EXPIRES_KEY);
     } catch (e) {
-      return null;
+      // no-op
     }
   }
 
-  function setCurrentUser(user) {
+  function isExpired(expiresAt) {
+    if (!expiresAt) {
+      return false;
+    }
+    var ms = Date.parse(expiresAt);
+    if (Number.isNaN(ms)) {
+      return false;
+    }
+    return Date.now() >= ms;
+  }
+
+  function readSession() {
+    var stores = [global.sessionStorage, global.localStorage];
+    for (var i = 0; i < stores.length; i += 1) {
+      var store = stores[i];
+      var user = normalizeUser(readJSON(store, USER_KEY));
+      if (!user || !user.userId) {
+        continue;
+      }
+      var token = "";
+      var expiresAt = "";
+      try {
+        token = store.getItem(TOKEN_KEY) || "";
+        expiresAt = store.getItem(EXPIRES_KEY) || "";
+      } catch (e) {
+        token = "";
+        expiresAt = "";
+      }
+      if (isExpired(expiresAt)) {
+        clearStore(store);
+        continue;
+      }
+      return {
+        user: user,
+        token: token,
+        expiresAt: expiresAt,
+        remember: store === global.localStorage,
+      };
+    }
+    return null;
+  }
+
+  function getCurrentUser() {
+    var session = readSession();
+    return session ? session.user : null;
+  }
+
+  function getToken() {
+    var session = readSession();
+    return session && session.token ? session.token : "";
+  }
+
+  function setCurrentUser(user, options) {
     var normalized = normalizeUser(user);
     if (!normalized || !normalized.userId) {
       return null;
     }
+    options = options || {};
+    var remember = Boolean(options.remember);
+    var token = String(options.token || "");
+    var expiresAt = String(options.expiresAt || "");
+    var active = storageFor(remember);
+    var other = storageFor(!remember);
+
+    clearStore(other);
     try {
-      sessionStorage.setItem(USER_KEY, JSON.stringify(normalized));
+      active.setItem(USER_KEY, JSON.stringify(normalized));
+      if (token) {
+        active.setItem(TOKEN_KEY, token);
+      } else {
+        active.removeItem(TOKEN_KEY);
+      }
+      if (expiresAt) {
+        active.setItem(EXPIRES_KEY, expiresAt);
+      } else {
+        active.removeItem(EXPIRES_KEY);
+      }
     } catch (e) {
       // Ignore storage failures.
     }
@@ -58,11 +145,8 @@
   }
 
   function clearCurrentUser() {
-    try {
-      sessionStorage.removeItem(USER_KEY);
-    } catch (e) {
-      // no-op
-    }
+    clearStore(global.sessionStorage);
+    clearStore(global.localStorage);
   }
 
   function initialsFor(user) {
@@ -88,7 +172,9 @@
 
   global.NovaraAuth = {
     USER_KEY: USER_KEY,
+    TOKEN_KEY: TOKEN_KEY,
     getCurrentUser: getCurrentUser,
+    getToken: getToken,
     setCurrentUser: setCurrentUser,
     clearCurrentUser: clearCurrentUser,
     initialsFor: initialsFor,

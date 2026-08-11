@@ -476,6 +476,50 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
+    user_login_url = f"{api_url}/api/users/login"
+    user_login_body = json.dumps(
+        {
+            "Email": user_smoke_email,
+            "Password": "SmokeTest1!",
+        }
+    ).encode("utf-8")
+    print(f"POST {user_login_url}")
+    user_login_req = urllib.request.Request(
+        user_login_url,
+        data=user_login_body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(user_login_req, timeout=30) as resp:
+        user_login = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {user_login}")
+        if not user_login.get("ok") or not user_login.get("token"):
+            print(
+                "ERROR: POST /api/users/login did not return ok+token",
+                file=sys.stderr,
+            )
+            return 1
+
+    session_url = f"{api_url}/api/users/session"
+    print(f"GET {session_url}")
+    session_req = urllib.request.Request(
+        session_url,
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {user_login['token']}",
+        },
+    )
+    with urllib.request.urlopen(session_req, timeout=30) as resp:
+        session_payload = json.loads(resp.read().decode("utf-8"))
+        print(f"  -> {resp.status} {session_payload}")
+        if not session_payload.get("ok"):
+            print(
+                "ERROR: GET /api/users/session did not return ok",
+                file=sys.stderr,
+            )
+            return 1
+
     print("Deploy complete.")
     return 0
 

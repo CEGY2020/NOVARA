@@ -19,7 +19,9 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         if parsed.path.startswith("/api/"):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
             self.send_header(
                 "Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS"
             )
@@ -65,6 +67,14 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_users_request(params)
             self._send_json(status, payload)
             return
+        if parsed.path in ("/api/users/session", "/api/session"):
+            params = parse_qs(parsed.query)
+            headers = {"Authorization": self.headers.get("Authorization", "")}
+            status, payload = novara_api.handle_session_request(
+                headers=headers, params=params
+            )
+            self._send_json(status, payload)
+            return
         if parsed.path == "/api/health":
             status, payload = novara_api.handle_health_request()
             self._send_json(status, payload)
@@ -73,14 +83,14 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/users/signup":
+        if parsed.path in ("/api/users/signup", "/api/users"):
             body = self._read_json_body()
             if body is None:
                 return
             status, payload = novara_api.handle_signup_request(body)
             self._send_json(status, payload)
             return
-        if parsed.path == "/api/users/login":
+        if parsed.path in ("/api/users/login", "/api/login"):
             body = self._read_json_body()
             if body is None:
                 return

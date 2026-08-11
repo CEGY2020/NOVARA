@@ -232,6 +232,18 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/users/login
             Method: POST
+        UsersSignupAlias:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/users
+            Method: POST
+        UsersSession:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/users/session
+            Method: GET
         UsersStatusUpdate:
           Type: HttpApi
           Properties:
@@ -263,6 +275,7 @@ Resources:
             - DELETE
           AllowHeaders:
             - content-type
+            - authorization
           MaxAge: 86400
 
   NovaraHttpApi:
