@@ -51,30 +51,50 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt awscli aws-sam-cli
 
-      - name: Configure AWS credentials
+      # Long-term IAM user keys (AKIA...) reject session tokens. Placeholder or
+      # short AWS_SESSION_TOKEN secrets also break configure-aws-credentials
+      # before any later sanitize step can run, so only pass a real STS token.
+      - name: Resolve AWS session token
+        id: aws_token
+        env:
+          RAW_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          RAW_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          access = (os.environ.get("RAW_ACCESS_KEY") or "").strip()
+          token = (os.environ.get("RAW_SESSION_TOKEN") or "").strip()
+          use_token = bool(token) and (not access.startswith("AKIA")) and len(token) >= 100
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"use_token={'true' if use_token else 'false'}\n")
+          print(
+              "Using AWS_SESSION_TOKEN for configure-aws-credentials"
+              if use_token
+              else "Omitting AWS_SESSION_TOKEN (IAM user key or placeholder/empty token)"
+          )
+          if not access:
+              raise SystemExit(
+                  "AWS_ACCESS_KEY_ID secret is empty. "
+                  "Set repository secrets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+              )
+          PY
+
+      - name: Configure AWS credentials (IAM user key)
+        if: steps.aws_token.outputs.use_token != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.NOVARA_AWS_REGION }}
+
+      - name: Configure AWS credentials (temporary session)
+        if: steps.aws_token.outputs.use_token == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.NOVARA_AWS_REGION }}
-
-      # Long-term IAM access keys (AKIA...) reject session tokens. Drop placeholder
-      # or short AWS_SESSION_TOKEN values before sam/aws calls.
-      - name: Sanitize AWS session token for IAM user keys
-        run: |
-          python3 - <<'PY'
-          import os
-          access = (os.environ.get("AWS_ACCESS_KEY_ID") or "").strip()
-          token = (os.environ.get("AWS_SESSION_TOKEN") or "").strip()
-          if token and (access.startswith("AKIA") or len(token) < 100):
-              github_env = os.environ["GITHUB_ENV"]
-              with open(github_env, "a", encoding="utf-8") as fh:
-                  fh.write("AWS_SESSION_TOKEN=\n")
-              print("Cleared AWS_SESSION_TOKEN for IAM user key deploy")
-          else:
-              print("Kept AWS_SESSION_TOKEN as provided")
-          PY
 
       - name: Deploy API + configure Amplify /api rewrite
         run: |

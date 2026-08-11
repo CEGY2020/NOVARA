@@ -94,7 +94,11 @@ if ! sam deploy \
     "MgmtCompaniesTableName=${NOVARA_MGMT_COMPANIES_TABLE:-NOVARAMgmtCompanies}" \
     "LeadsTableName=${NOVARA_LEADS_TABLE:-NOVARALeads}" \
     "UsersTableName=${NOVARA_USERS_TABLE:-NOVARAUsers}"; then
-  echo "WARN: sam deploy failed; continuing so the static Sites UI still publishes."
+  echo "ERROR: sam deploy failed after AWS auth succeeded."
+  echo "Static site will still publish, but /api/users/login and other API routes"
+  echo "may keep serving a stale Lambda until novara-api is redeployed."
+  echo "Check Amplify service-role permissions / NOVARA_AWS_REGION, or run:"
+  echo "  python3 scripts/deploy_novara_api.py"
   restore_template
   exit 0
 fi
