@@ -1171,6 +1171,8 @@ class RouteTests(unittest.TestCase):
         self.assertIn("Needs Follow-up", source)
         self.assertIn("Last Updated", source)
         self.assertIn('id="field-nextFollowUp"', source)
+        self.assertIn('id="field-nextFollowUp-picker"', source)
+        self.assertIn('placeholder="MM/DD/YY"', source)
         self.assertIn("EstimatedSavings", source)
         source_select = source.split('id="field-source"', 1)[1].split("</select>", 1)[0]
         for option in (
@@ -1197,6 +1199,7 @@ class RouteTests(unittest.TestCase):
         self.assertIn('value="Other"', system_select)
         self.assertNotIn('value="DHW">', system_select)
         self.assertIn("phone-format.js", source)
+        self.assertIn("date-format.js", source)
 
     def test_leads_js_followup_urgency_and_filter(self):
         source = Path(__file__).resolve().parent.joinpath("leads.js").read_text(
@@ -1211,11 +1214,24 @@ class RouteTests(unittest.TestCase):
         self.assertIn('followUpFilter === "needs"', source)
         self.assertIn("formatUpdatedAt", source)
         self.assertIn("setLastUpdatedDisplay", source)
+        self.assertIn("setNextFollowUpField", source)
+        self.assertIn("readNextFollowUpIso", source)
+        self.assertIn("NovaraDate", source)
         # Edit mode focuses Next Follow-up so the date is easy to update.
         open_modal = source.split("function openModal", 1)[1].split(
             "function closeModal", 1
         )[0]
         self.assertIn('field-nextFollowUp', open_modal)
+
+    def test_date_format_js_mmddyy_helpers(self):
+        source = Path(__file__).resolve().parent.joinpath("date-format.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("formatDateMMDDYY", source)
+        self.assertIn("isoToDisplay", source)
+        self.assertIn("displayToIso", source)
+        self.assertIn("bindDateInput", source)
+        self.assertIn("NovaraDate", source)
 
     def test_health(self):
         status, payload = novara_api.route_request("GET", "/api/health", {})
