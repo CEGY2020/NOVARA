@@ -4,22 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA | Video Landing Reference</title>
-  <script>
-    /* Resolve asset root for Amplify (/), GitHub Pages (/NOVARA/),
-       and /video-landing/ trailing-slash URLs where relative paths break. */
-    (function () {
-      var path = location.pathname || "/";
-      var root;
-      if (path.indexOf("/NOVARA/") === 0 || path === "/NOVARA") {
-        root = "/NOVARA/";
-      } else if (/\/video-landing\/?$/.test(path)) {
-        root = path.replace(/\/video-landing\/?$/, "/");
-      } else {
-        root = path.replace(/[^/]*$/, "") || "/";
-      }
-      document.write('<base href="' + root + '">');
-    })();
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -32,6 +16,7 @@
     <video
       id="hero-video"
       class="hero-video"
+      src="images/wave-video.mp4"
       autoplay
       muted
       loop
@@ -39,9 +24,7 @@
       webkit-playsinline
       preload="auto"
       poster="images/wave1.jpg"
-    >
-      <source src="images/wave-video.mp4" type="video/mp4">
-    </video>
+    ></video>
     <div class="hero-veil hero-veil-light"></div>
   </div>
 

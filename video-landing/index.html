@@ -4,26 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA | Video Landing Reference</title>
-  <script>
-    /* Resolve asset root for Amplify (/), GitHub Pages (/NOVARA/),
-       and /video-landing/ trailing-slash URLs where relative paths break. */
-    (function () {
-      var path = location.pathname || "/";
-      var root;
-      if (path.indexOf("/NOVARA/") === 0 || path === "/NOVARA") {
-        root = "/NOVARA/";
-      } else if (/\/video-landing\/?$/.test(path)) {
-        root = path.replace(/\/video-landing\/?$/, "/");
-      } else {
-        root = path.replace(/[^/]*$/, "") || "/";
-      }
-      document.write('<base href="' + root + '">');
-    })();
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="landing.css">
+  <!-- Served at /video-landing/ — assets live one level up at site root -->
+  <link rel="stylesheet" href="../landing.css">
 </head>
 <body class="landing-page video-landing">
 
@@ -32,28 +17,27 @@
     <video
       id="hero-video"
       class="hero-video"
+      src="../images/wave-video.mp4"
       autoplay
       muted
       loop
       playsinline
       webkit-playsinline
       preload="auto"
-      poster="images/wave1.jpg"
-    >
-      <source src="images/wave-video.mp4" type="video/mp4">
-    </video>
+      poster="../images/wave1.jpg"
+    ></video>
     <div class="hero-veil hero-veil-light"></div>
   </div>
 
   <div class="hero-content">
     <img
       class="hero-brand-logo"
-      src="images/novara-logo-hero.png"
+      src="../images/novara-logo-hero.png"
       alt="NOVARA"
     >
     <div class="hero-ctas">
-      <a class="btn btn-primary" href="directory.html">GET STARTED</a>
-      <a class="btn btn-ghost" href="login.html">LOG IN</a>
+      <a class="btn btn-primary" href="../directory.html">GET STARTED</a>
+      <a class="btn btn-ghost" href="../login.html">LOG IN</a>
     </div>
   </div>
 </main>
