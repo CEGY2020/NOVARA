@@ -104,6 +104,8 @@ a {
     position: absolute;
     inset: 0;
     z-index: 0;
+    overflow: hidden;
+    background: var(--deep);
 }
 
 .hero-image {
@@ -115,11 +117,17 @@ a {
 }
 
 .hero-video {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
+    min-width: 100%;
+    min-height: 100%;
     object-fit: cover;
     object-position: center center;
     display: block;
+    border: 0;
+    pointer-events: none;
     background: var(--deep);
 }
 
@@ -260,6 +268,17 @@ a {
 
     .hero-video {
         animation: none;
+    }
+
+    .video-landing .hero-video {
+        /* Keep a still frame instead of looping motion when reduced-motion is on */
+        display: none;
+    }
+
+    .video-landing .hero-media {
+        background:
+            center / cover no-repeat url("images/wave1.jpg"),
+            var(--deep);
     }
 }
 
