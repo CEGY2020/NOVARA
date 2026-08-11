@@ -14,6 +14,7 @@
     { id: "owners", label: "Owners", href: "owners.html" },
     { id: "mgmt-companies", label: "Management Companies", href: "mgmt-companies.html" },
     { id: "leads", label: "Leads", href: "leads.html" },
+    { id: "users", label: "Users", href: "users.html" },
     { id: "alarms", label: "Active Alarms", href: "active-alarms.html" },
     { id: "savings", label: "Energy Savings", href: "energy-savings.html" },
     { id: "reports", label: "Reports", href: "reports.html" },
@@ -55,7 +56,23 @@
 
   var currentPage = document.body.getAttribute("data-page") || "";
 
+  function readStoredUser() {
+    if (window.NovaraAuth && NovaraAuth.getCurrentUser) {
+      return NovaraAuth.getCurrentUser();
+    }
+    try {
+      var raw = sessionStorage.getItem("novaraUser");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function readStoredRole() {
+    var user = readStoredUser();
+    if (user && user.role) {
+      return user.role;
+    }
     if (window.NovaraRole && NovaraRole.getSelectedRole) {
       return NovaraRole.getSelectedRole();
     }
@@ -66,6 +83,7 @@
     }
   }
 
+  var currentUser = readStoredUser();
   var role =
     readStoredRole() ||
     document.body.getAttribute("data-role") ||
@@ -142,14 +160,55 @@
 
   function renderUserProfile(root) {
     var title = ROLE_TITLES[role] || "Administrator";
+    var displayName =
+      (currentUser && currentUser.fullName) ||
+      (currentUser && currentUser.email) ||
+      "NOVARA User";
+    var initials = "?";
+    if (window.NovaraAuth && NovaraAuth.initialsFor) {
+      initials = NovaraAuth.initialsFor(currentUser || { fullName: displayName });
+    } else {
+      initials = String(displayName)
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(function (part) {
+          return part.charAt(0).toUpperCase();
+        })
+        .join("") || "?";
+    }
     root.className = "user-profile";
     root.innerHTML =
-      '<div class="user-avatar">SN</div>' +
-      "<div>" +
-      "  <strong>Steve Nold</strong>" +
-      "  <span>" + title + "</span>" +
+      '<div class="user-avatar">' +
+      initials +
       "</div>" +
-      '<a href="login.html" class="logout-btn">Logout</a>';
+      "<div>" +
+      "  <strong>" +
+      displayName +
+      "</strong>" +
+      "  <span>" +
+      title +
+      "</span>" +
+      "</div>" +
+      '<a href="directory.html" class="logout-btn" id="novara-logout-btn">Logout</a>';
+
+    var logoutBtn = root.querySelector("#novara-logout-btn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (window.NovaraAuth && NovaraAuth.logout) {
+          NovaraAuth.logout("directory.html");
+          return;
+        }
+        try {
+          sessionStorage.removeItem("novaraUser");
+          sessionStorage.removeItem("novaraRole");
+        } catch (e) {
+          // no-op
+        }
+        window.location.href = "directory.html";
+      });
+    }
   }
 
   function refreshActive() {

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Users</title>
+  <link rel="stylesheet" href="dashboard.css?v=users-admin-1">
+</head>
+<body data-page="users" data-role="aem">
+
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>Users</h2>
+        <p>Approve or reject pending NOVARA accounts</p>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" class="secondary-btn" id="refresh-users-btn">
+          Refresh
+        </button>
+        <div id="user-profile-root"></div>
+      </div>
+    </header>
+
+    <p id="users-status" class="chart-status" aria-live="polite">Loading users…</p>
+
+    <section class="users-section" aria-labelledby="pending-heading">
+      <h3 id="pending-heading" class="users-section-title">Pending approval</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Company</th>
+            <th>Requested</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="pending-users-tbody">
+          <tr>
+            <td colspan="6">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="users-section" aria-labelledby="all-users-heading">
+      <h3 id="all-users-heading" class="users-section-title">All users</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Company</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="all-users-tbody">
+          <tr>
+            <td colspan="6">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+
+<script src="api-config.js"></script>
+<script src="api-client.js"></script>
+<script src="role.js"></script>
+<script src="auth.js"></script>
+<script src="nav.js"></script>
+<script src="users.js"></script>
+
+</body>
+</html>

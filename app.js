@@ -1,5 +1,14 @@
 // Capture role from directory (?role=) and keep the existing login page.
 var selectedRole = null;
+var loginMessage = document.getElementById("loginMessage");
+var loginSubmit = document.getElementById("loginSubmit");
+
+function setLoginMessage(text, isError) {
+  if (!loginMessage) return;
+  loginMessage.textContent = text || "";
+  loginMessage.classList.toggle("is-error", Boolean(isError));
+  loginMessage.classList.toggle("is-success", Boolean(text) && !isError);
+}
 
 if (window.NovaraRole) {
   selectedRole = NovaraRole.captureRoleFromQuery();
@@ -11,24 +20,64 @@ if (window.NovaraRole) {
   }
 }
 
-// Login form
-document.querySelector("form").addEventListener("submit", function (e) {
-  e.preventDefault();
+// Login form — authenticate against NOVARAUsers; only Active users may enter.
+var loginForm = document.getElementById("loginForm") || document.querySelector("form");
+if (loginForm) {
+  loginForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    setLoginMessage("");
 
-  // TODO: Replace this with AWS Cognito authentication.
-  // For now, continue to the home page for the selected role.
-  var role = window.NovaraRole
-    ? NovaraRole.getSelectedRole() || selectedRole || "aem"
-    : "aem";
+    var email = String((document.getElementById("email") || {}).value || "")
+      .trim()
+      .toLowerCase();
+    var password = String((document.getElementById("password") || {}).value || "");
 
-  if (window.NovaraRole) {
-    NovaraRole.setSelectedRole(role);
-    window.location.href = NovaraRole.getHomeForRole(role);
-    return;
-  }
+    if (!email || !password) {
+      setLoginMessage("Email and password are required.", true);
+      return;
+    }
 
-  window.location.href = "dashboard.html";
-});
+    if (!window.NovaraApi || typeof NovaraApi.loginUser !== "function") {
+      setLoginMessage("API client is unavailable.", true);
+      return;
+    }
+
+    if (loginSubmit) {
+      loginSubmit.disabled = true;
+      loginSubmit.textContent = "Signing in…";
+    }
+
+    NovaraApi.loginUser({ Email: email, Password: password })
+      .then(function (result) {
+        var user = result && result.user;
+        if (!user) {
+          throw new Error("Login succeeded but no user was returned.");
+        }
+
+        if (window.NovaraAuth && NovaraAuth.setCurrentUser) {
+          NovaraAuth.setCurrentUser(user);
+        }
+
+        var role = user.role;
+        if (window.NovaraRole) {
+          role = NovaraRole.setSelectedRole(role) || role || selectedRole || "aem";
+          window.location.href = NovaraRole.getHomeForRole(role);
+          return;
+        }
+
+        window.location.href = "dashboard.html";
+      })
+      .catch(function (err) {
+        setLoginMessage((err && err.message) || "Sign-in failed.", true);
+      })
+      .finally(function () {
+        if (loginSubmit) {
+          loginSubmit.disabled = false;
+          loginSubmit.textContent = "Sign In";
+        }
+      });
+  });
+}
 
 // Show / Hide Password
 const togglePassword = document.getElementById("togglePassword");
