@@ -63,30 +63,48 @@
     }
   }
 
+  // TEMPORARY: allow Users admin without an approved AEM session so the
+  // first accounts can be approved. Set to false after bootstrap to
+  // re-lock this page to AEM-only.
+  var ALLOW_USERS_ADMIN_BOOTSTRAP = true;
+
   function ensureAemAccess() {
-    var role =
+    var loggedIn =
       (window.NovaraAuth &&
         NovaraAuth.getCurrentUser &&
-        (NovaraAuth.getCurrentUser() || {}).role) ||
-      (window.NovaraRole && NovaraRole.getSelectedRole && NovaraRole.getSelectedRole()) ||
+        NovaraAuth.getCurrentUser()) ||
+      null;
+    var role =
+      (loggedIn && loggedIn.role) ||
+      (window.NovaraRole &&
+        NovaraRole.getSelectedRole &&
+        NovaraRole.getSelectedRole()) ||
       document.body.getAttribute("data-role") ||
       "";
-    if (String(role).toLowerCase() !== "aem") {
-      setStatus("Users admin is available to AEM accounts only.", true);
-      if (pendingBody) {
-        pendingBody.innerHTML =
-          '<tr><td colspan="6">AEM access required.</td></tr>';
-      }
-      if (allBody) {
-        allBody.innerHTML =
-          '<tr><td colspan="7">AEM access required.</td></tr>';
-      }
-      if (preapprovedList) {
-        preapprovedList.innerHTML = "<li>AEM access required.</li>";
-      }
-      return false;
+
+    if (String(role).toLowerCase() === "aem") {
+      return true;
     }
-    return true;
+
+    // Bootstrap: no Active session yet — ignore directory role selection
+    // so /users.html remains usable for first-account approval.
+    if (ALLOW_USERS_ADMIN_BOOTSTRAP && !loggedIn) {
+      return true;
+    }
+
+    setStatus("Users admin is available to AEM accounts only.", true);
+    if (pendingBody) {
+      pendingBody.innerHTML =
+        '<tr><td colspan="6">AEM access required.</td></tr>';
+    }
+    if (allBody) {
+      allBody.innerHTML =
+        '<tr><td colspan="7">AEM access required.</td></tr>';
+    }
+    if (preapprovedList) {
+      preapprovedList.innerHTML = "<li>AEM access required.</li>";
+    }
+    return false;
   }
 
   function renderPending(users) {

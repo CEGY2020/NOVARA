@@ -1591,6 +1591,9 @@ class RouteTests(unittest.TestCase):
         )
         self.assertIn('id: "users"', source)
         self.assertIn("users.html", source)
+        # Temporary bootstrap: unauthenticated sessions keep AEM nav/Users.
+        self.assertIn("if (!currentUser)", source)
+        self.assertIn('role = "aem"', source)
 
     def test_users_html_has_pending_table(self):
         source = Path(__file__).resolve().parent.joinpath("users.html").read_text(
@@ -1599,12 +1602,19 @@ class RouteTests(unittest.TestCase):
         users_js = Path(__file__).resolve().parent.joinpath("users.js").read_text(
             encoding="utf-8"
         )
+        login_html = Path(__file__).resolve().parent.joinpath("login.html").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("pending-users-tbody", source)
         self.assertIn("preapproved-list", source)
         self.assertIn("reject-modal", source)
+        self.assertIn("users-bootstrap-banner", source)
         self.assertIn("Approve", users_js)
         self.assertIn("rejectionReason", users_js)
         self.assertIn("addPreapprovedEmail", users_js)
+        self.assertIn("ALLOW_USERS_ADMIN_BOOTSTRAP", users_js)
+        self.assertIn("href=\"users.html\"", login_html)
+        self.assertIn("Approve pending users", login_html)
 
     def test_api_client_exposes_user_methods(self):
         source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(

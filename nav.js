@@ -95,6 +95,13 @@
     role = "aem";
   }
 
+  // TEMPORARY bootstrap: before any approved login exists, keep the AEM
+  // admin sidebar (including Users) so pending accounts can be approved.
+  // Remove this once the first AEM user is Active and you re-lock users.js.
+  if (!currentUser) {
+    role = "aem";
+  }
+
   if (window.NovaraRole && NovaraRole.setSelectedRole) {
     NovaraRole.setSelectedRole(role);
   }
