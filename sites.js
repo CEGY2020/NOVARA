@@ -116,10 +116,12 @@
   function collectPayload() {
     var systemsRaw = fieldValue("field-systems");
     var systems = systemsRaw === "" ? 0 : Number(systemsRaw);
+    var ownerId = fieldValue("field-owner");
     return {
       SiteID: fieldValue("field-siteId"),
       SiteName: fieldValue("field-siteName"),
-      Owner: fieldValue("field-owner"),
+      Owner: ownerId,
+      OwnerID: ownerId,
       MgmtCompany: fieldValue("field-mgmtCompany"),
       Address: fieldValue("field-address"),
       City: fieldValue("field-city"),
@@ -262,7 +264,7 @@
       modalSubtitle.textContent = "Update " + (site.siteId || "site") + " in NOVARASites";
       setFieldValue("field-siteId", site.siteId);
       setFieldValue("field-siteName", site.siteName || site.name);
-      populateOwnerOptions(site.owner);
+      populateOwnerOptions(site.ownerId || site.owner);
       populateMgmtCompanyOptions(site.mgmtCompany);
       setFieldValue("field-address", site.address);
       setFieldValue("field-city", site.city);
@@ -318,11 +320,37 @@
     }
   }
 
+  function siteOwnerId(site) {
+    var value = site && (site.ownerId || site.owner);
+    value = String(value == null ? "" : value).trim();
+    return value;
+  }
+
+  function siteOwnerName(site) {
+    var storedId = siteOwnerId(site);
+    var storedOwner = String((site && site.owner) || "").trim();
+    if (!storedId && !storedOwner) {
+      return "—";
+    }
+    var match = ownersList.find(function (owner) {
+      var id = String(owner.ownerId || "");
+      var name = String(owner.name || owner.ownerName || "").trim();
+      return (
+        (storedId && id === storedId) ||
+        (storedOwner && (id === storedOwner || name === storedOwner))
+      );
+    });
+    if (match) {
+      return match.name || match.ownerName || storedOwner || storedId;
+    }
+    return storedOwner || storedId || "—";
+  }
+
   function renderSites(sites) {
     sitesById = {};
     if (!sites.length) {
       tbody.innerHTML =
-        '<tr><td colspan="5">No sites found in NOVARASites.</td></tr>';
+        '<tr><td colspan="7">No sites found in NOVARASites.</td></tr>';
       return;
     }
 
@@ -333,6 +361,7 @@
         var statusHtml = cls
           ? '<td class="' + cls + '">' + escapeHtml(site.status) + "</td>"
           : "<td>" + escapeHtml(site.status) + "</td>";
+        var ownerId = siteOwnerId(site);
         return (
           '<tr class="site-row" data-site-id="' +
           escapeHtml(site.siteId) +
@@ -342,6 +371,12 @@
           "</td>" +
           "<td>" +
           escapeHtml(site.location) +
+          "</td>" +
+          "<td>" +
+          escapeHtml(siteOwnerName(site)) +
+          "</td>" +
+          "<td>" +
+          escapeHtml(ownerId || "—") +
           "</td>" +
           "<td>" +
           escapeHtml(site.systems) +
@@ -436,7 +471,7 @@
       })
       .catch(function (err) {
         tbody.innerHTML =
-          '<tr><td colspan="5">Unable to load sites.</td></tr>';
+          '<tr><td colspan="7">Unable to load sites.</td></tr>';
         setStatus(err.message || "Failed to load sites", true);
       });
   }
@@ -603,5 +638,12 @@
       mgmtCompaniesList = [];
     }),
     loadSites(),
-  ]);
+  ]).then(function () {
+    var sites = Object.keys(sitesById).map(function (id) {
+      return sitesById[id];
+    });
+    if (sites.length) {
+      renderSites(sites);
+    }
+  });
 })();

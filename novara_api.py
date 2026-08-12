@@ -3067,11 +3067,15 @@ def normalize_site(item: dict) -> dict:
     system_type = normalize_system_type(
         first_present(item, ("SystemType", "systemType", "system_type"), default="")
     )
+    owner = str(first_present(item, ("Owner", "owner"), default="") or "")
+    owner_id = first_present(item, ("OwnerID", "ownerId"), default="")
+    owner_id = str(owner_id or owner or "")
     return {
         "siteId": "" if site_id is None else str(site_id),
         "name": str(name),
         "siteName": str(name),
-        "owner": str(first_present(item, ("Owner", "owner"), default="") or ""),
+        "owner": owner,
+        "ownerId": owner_id,
         "mgmtCompany": str(
             first_present(item, ("MgmtCompany", "mgmtCompany", "mgmt_company"), default="")
             or ""
@@ -3176,10 +3180,18 @@ def parse_site_payload(body: dict | None) -> tuple[dict | None, str | None]:
         if systems < 0:
             return None, "Systems must be zero or greater"
 
+    owner = _as_text(body.get("Owner") if "Owner" in body else body.get("owner"))
+    owner_id = _as_text(
+        body.get("OwnerID") if "OwnerID" in body else body.get("ownerId")
+    )
+    if not owner_id:
+        owner_id = owner
+
     item = {
         "SiteID": site_id,
         "SiteName": site_name,
-        "Owner": _as_text(body.get("Owner") if "Owner" in body else body.get("owner")),
+        "Owner": owner,
+        "OwnerID": owner_id,
         "MgmtCompany": _as_text(
             body.get("MgmtCompany")
             if "MgmtCompany" in body

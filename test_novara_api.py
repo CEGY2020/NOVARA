@@ -212,6 +212,84 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(site["owner"], "Crystal Asset Management")
         self.assertEqual(site["status"], "Online")
 
+    def test_normalize_site_exposes_stored_owner_id(self):
+        """Owner ID on the site list comes from OwnerID, falling back to Owner."""
+        from_owner_id = novara_api.normalize_site(
+            {
+                "SiteID": "SITE001",
+                "SiteName": "Vista Springs",
+                "Owner": "Crystal Asset Management",
+                "OwnerID": "OWN015",
+            }
+        )
+        self.assertEqual(from_owner_id["owner"], "Crystal Asset Management")
+        self.assertEqual(from_owner_id["ownerId"], "OWN015")
+
+        from_owner_field = novara_api.normalize_site(
+            {
+                "SiteID": "SITE002",
+                "SiteName": "Highlander",
+                "Owner": "OWN001",
+            }
+        )
+        self.assertEqual(from_owner_field["ownerId"], "OWN001")
+
+        numeric_id = novara_api.normalize_site(
+            {
+                "SiteID": "SITE003",
+                "SiteName": "Numeric Owner",
+                "OwnerID": "15",
+            }
+        )
+        self.assertEqual(numeric_id["ownerId"], "15")
+
+    def test_parse_site_payload_stores_owner_id(self):
+        item, error = novara_api.parse_site_payload(
+            {
+                "SiteID": "SITE001",
+                "SiteName": "Vista Springs",
+                "Owner": "OWN015",
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["Owner"], "OWN015")
+        self.assertEqual(item["OwnerID"], "OWN015")
+
+        item, error = novara_api.parse_site_payload(
+            {
+                "SiteID": "SITE001",
+                "SiteName": "Vista Springs",
+                "Owner": "Crystal Asset Management",
+                "OwnerID": "15",
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["Owner"], "Crystal Asset Management")
+        self.assertEqual(item["OwnerID"], "15")
+
+    def test_sites_table_includes_owner_id_column(self):
+        """Sites list shows stored OwnerID next to the Owner name."""
+        html = Path(__file__).resolve().parent.joinpath("sites.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("<th>Owner</th>", html)
+        self.assertIn("<th>Owner ID</th>", html)
+        owner_at = html.find("<th>Owner</th>")
+        owner_id_at = html.find("<th>Owner ID</th>")
+        self.assertNotEqual(owner_at, -1)
+        self.assertNotEqual(owner_id_at, -1)
+        self.assertLess(
+            owner_at,
+            owner_id_at,
+            "Owner ID column should sit next to the Owner name column",
+        )
+        self.assertIn("siteOwnerId", source)
+        self.assertIn("site.ownerId || site.owner", source)
+        self.assertIn("OwnerID: ownerId", source)
+
     def test_lambda_event_readings(self):
         fake = {
             "points": [{"t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1}],
@@ -345,7 +423,7 @@ class RouteTests(unittest.TestCase):
         self.assertIn("populateMgmtCompanyOptions", source)
         self.assertIn("owner.ownerId", source)
         self.assertIn("company.mgmtCompanyId", source)
-        self.assertIn("populateOwnerOptions(site.owner)", source)
+        self.assertIn("populateOwnerOptions(site.ownerId || site.owner)", source)
         self.assertIn("populateMgmtCompanyOptions(site.mgmtCompany)", source)
 
     def test_systems_route(self):
