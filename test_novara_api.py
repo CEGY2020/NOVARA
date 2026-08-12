@@ -835,6 +835,60 @@ class RouteTests(unittest.TestCase):
         self.assertIn("api.deleteSystem", source)
         self.assertIn("nextSystemId", source)
         self.assertIn("SYS", source)
+        self.assertIn("closeModal()", save_system)
+        self.assertIn("loadSystems()", save_system)
+
+    def test_systems_table_includes_site_and_site_id_columns(self):
+        """Systems list shows Site name next to stored SiteID, like Sites/Owner ID."""
+        html = Path(__file__).resolve().parent.joinpath("systems.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("systems.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("<th>System ID</th>", html)
+        self.assertIn("<th>Site</th>", html)
+        self.assertIn("<th>Site ID</th>", html)
+        self.assertIn("<th>System Name</th>", html)
+        self.assertIn("<th>System Type</th>", html)
+        self.assertIn("<th>Status</th>", html)
+        self.assertIn('id="add-system-btn"', html)
+        self.assertIn("+ Add System", html)
+        site_at = html.find("<th>Site</th>")
+        site_id_at = html.find("<th>Site ID</th>")
+        name_at = html.find("<th>System Name</th>")
+        self.assertLess(site_at, site_id_at)
+        self.assertLess(site_id_at, name_at)
+        self.assertIn("systemSiteId", source)
+        self.assertIn("systemSiteName", source)
+
+    def test_systems_form_uses_site_dropdown_and_site_id_display(self):
+        """Site is a name dropdown that stores SiteID, with a readonly SiteID field."""
+        html = Path(__file__).resolve().parent.joinpath("systems.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("systems.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('<select id="field-siteId" name="SiteID" required>', html)
+        self.assertIn(">Site <em>*</em></span>", html)
+        self.assertIn('id="field-siteIdDisplay"', html)
+        self.assertIn(
+            "readonly",
+            html.split('id="field-siteIdDisplay"', 1)[1].split(">", 1)[0],
+        )
+        self.assertIn('id="field-systemId"', html)
+        self.assertIn("readonly", html.split('id="field-systemId"', 1)[1].split(">", 1)[0])
+        self.assertIn("nextSystemId", source)
+        self.assertIn("populateSiteOptions", source)
+        self.assertIn("syncLookupIdDisplay", source)
+        self.assertIn("resolveLookupId", source)
+        self.assertIn("siteSelect.addEventListener(\"change\"", source)
+        self.assertIn("api.getSites()", source)
+        self.assertIn("siteOptionLabel", source)
+        self.assertNotIn(' + " (" + id + ")"', source)
+        self.assertIn("openSystemModal", source)
+        self.assertIn('openSystemModal("edit"', source)
 
     def test_derive_site_status_from_systems(self):
         self.assertIsNone(novara_api.derive_site_status_from_systems([]))

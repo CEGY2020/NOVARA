@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Systems</title>
-  <link rel="stylesheet" href="dashboard.css?v=photos-1">
+  <link rel="stylesheet" href="dashboard.css?v=systems-form-1">
 </head>
 <body data-page="systems">
 
@@ -31,8 +31,9 @@
       <thead>
         <tr>
           <th>System ID</th>
-          <th>System Name</th>
           <th>Site</th>
+          <th>Site ID</th>
+          <th>System Name</th>
           <th>System Type</th>
           <th>Status</th>
           <th>Equipment</th>
@@ -41,7 +42,7 @@
       </thead>
       <tbody id="systems-tbody">
         <tr>
-          <td colspan="7">Loading…</td>
+          <td colspan="8">Loading…</td>
         </tr>
       </tbody>
     </table>
@@ -68,14 +69,18 @@
           <small class="field-hint" id="system-id-hint">Auto-generated sequentially (SYS001…)</small>
         </label>
         <label class="form-field">
-          <span>SiteID <em>*</em></span>
+          <span>SystemName <em>*</em></span>
+          <input type="text" id="field-systemName" name="SystemName" required maxlength="120" autocomplete="off">
+        </label>
+        <label class="form-field">
+          <span>Site <em>*</em></span>
           <select id="field-siteId" name="SiteID" required>
             <option value="">Select site…</option>
           </select>
         </label>
-        <label class="form-field form-field-wide">
-          <span>SystemName <em>*</em></span>
-          <input type="text" id="field-systemName" name="SystemName" required maxlength="120" autocomplete="off">
+        <label class="form-field">
+          <span>SiteID</span>
+          <input type="text" id="field-siteIdDisplay" readonly aria-readonly="true">
         </label>
         <label class="form-field">
           <span>SystemType <em>*</em></span>
@@ -163,11 +168,11 @@
   </div>
 </div>
 
-<script src="api-config.js?v=photos-1"></script>
-<script src="api-client.js?v=photos-1"></script>
-<script src="auth.js?v=photos-1"></script>
-<script src="nav.js?v=photos-1"></script>
-<script src="photos-ui.js?v=photos-1"></script>
-<script src="systems.js?v=photos-1"></script>
+<script src="api-config.js?v=systems-form-1"></script>
+<script src="api-client.js?v=systems-form-1"></script>
+<script src="auth.js?v=systems-form-1"></script>
+<script src="nav.js?v=systems-form-1"></script>
+<script src="photos-ui.js?v=systems-form-1"></script>
+<script src="systems.js?v=systems-form-1"></script>
 </body>
 </html>
