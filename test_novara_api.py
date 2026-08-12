@@ -425,6 +425,16 @@ class RouteTests(unittest.TestCase):
         self.assertIn("company.mgmtCompanyId", source)
         self.assertIn("populateOwnerOptions(site.ownerId || site.owner)", source)
         self.assertIn("populateMgmtCompanyOptions(site.mgmtCompany)", source)
+        self.assertIn('id="field-ownerIdDisplay"', html)
+        self.assertIn('id="field-mgmtCompanyIdDisplay"', html)
+        self.assertIn("readonly", html.split('id="field-ownerIdDisplay"', 1)[1].split(">", 1)[0])
+        self.assertIn(
+            "readonly",
+            html.split('id="field-mgmtCompanyIdDisplay"', 1)[1].split(">", 1)[0],
+        )
+        self.assertIn("syncLookupIdDisplay", source)
+        self.assertIn("ownerSelect.addEventListener(\"change\"", source)
+        self.assertIn("mgmtCompanySelect.addEventListener(\"change\"", source)
 
     def test_systems_route(self):
         fake = {

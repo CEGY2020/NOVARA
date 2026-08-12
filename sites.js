@@ -13,7 +13,9 @@
   var cancelBtn = document.getElementById("site-cancel-btn");
   var siteIdInput = document.getElementById("field-siteId");
   var ownerSelect = document.getElementById("field-owner");
+  var ownerIdDisplay = document.getElementById("field-ownerIdDisplay");
   var mgmtCompanySelect = document.getElementById("field-mgmtCompany");
+  var mgmtCompanyIdDisplay = document.getElementById("field-mgmtCompanyIdDisplay");
 
   var sitesById = {};
   var ownersList = [];
@@ -160,6 +162,11 @@
     }
   }
 
+  function syncLookupIdDisplay(selectEl, displayEl) {
+    if (!displayEl) return;
+    displayEl.value = selectEl && selectEl.value ? String(selectEl.value) : "";
+  }
+
   function resolveLookupId(list, selectedValue, idKey, nameKeys) {
     var value = String(selectedValue == null ? "" : selectedValue).trim();
     if (!value) return "";
@@ -208,6 +215,7 @@
     if (selectedId) {
       ownerSelect.value = selectedId;
     }
+    syncLookupIdDisplay(ownerSelect, ownerIdDisplay);
   }
 
   function populateMgmtCompanyOptions(selectedCompany) {
@@ -240,6 +248,7 @@
     if (selectedId) {
       mgmtCompanySelect.value = selectedId;
     }
+    syncLookupIdDisplay(mgmtCompanySelect, mgmtCompanyIdDisplay);
   }
 
   function openModal(mode, site) {
@@ -592,6 +601,16 @@
   }
   if (form) {
     form.addEventListener("submit", saveSite);
+  }
+  if (ownerSelect) {
+    ownerSelect.addEventListener("change", function () {
+      syncLookupIdDisplay(ownerSelect, ownerIdDisplay);
+    });
+  }
+  if (mgmtCompanySelect) {
+    mgmtCompanySelect.addEventListener("change", function () {
+      syncLookupIdDisplay(mgmtCompanySelect, mgmtCompanyIdDisplay);
+    });
   }
 
   tbody.addEventListener("click", function (event) {
