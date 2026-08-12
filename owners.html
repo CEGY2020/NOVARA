@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Owners</title>
-  <link rel="stylesheet" href="dashboard.css?v=owners-crud-1">
+  <link rel="stylesheet" href="dashboard.css?v=owners-status-1">
 </head>
 <body data-page="owners">
 
@@ -25,6 +25,15 @@
       </div>
     </header>
 
+    <div class="view-tabs" role="tablist" aria-label="Owner status">
+      <button type="button" class="view-tab is-active" role="tab" id="owners-filter-active" data-status="Active" aria-selected="true">
+        Active
+      </button>
+      <button type="button" class="view-tab" role="tab" id="owners-filter-inactive" data-status="Inactive" aria-selected="false">
+        Inactive
+      </button>
+    </div>
+
     <p id="owners-status" class="chart-status" aria-live="polite">Loading owners…</p>
 
     <table class="data-table">
@@ -35,12 +44,13 @@
           <th>Location</th>
           <th>Contact</th>
           <th>Phone</th>
+          <th>Status</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody id="owners-tbody">
         <tr>
-          <td colspan="6">Loading…</td>
+          <td colspan="7">Loading…</td>
         </tr>
       </tbody>
     </table>
@@ -114,10 +124,10 @@
   </div>
 </div>
 
-<script src="api-config.js?v=owners-phone-1"></script>
-<script src="api-client.js?v=owners-phone-1"></script>
-<script src="nav.js?v=owners-phone-1"></script>
-<script src="phone-format.js?v=owners-phone-1"></script>
-<script src="owners.js?v=owners-phone-1"></script>
+<script src="api-config.js?v=owners-status-1"></script>
+<script src="api-client.js?v=owners-status-1"></script>
+<script src="nav.js?v=owners-status-1"></script>
+<script src="phone-format.js?v=owners-status-1"></script>
+<script src="owners.js?v=owners-status-1"></script>
 </body>
 </html>

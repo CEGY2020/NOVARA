@@ -14,6 +14,10 @@
   var ownerIdInput = document.getElementById("field-ownerId");
 
   var ownersById = {};
+  var allOwners = [];
+  var statusFilter = "Active";
+  var editingStatus = "Active";
+  var actionBusy = false;
   /** Authoritative create|edit mode. Do not rely only on #owner-mode — form.reset() restores its default. */
   var currentMode = "create";
 
@@ -89,7 +93,32 @@
       ContactEmail: fieldValue("field-contactEmail"),
       ContactPhone: formatPhoneValue(fieldValue("field-contactPhone")),
       Notes: fieldValue("field-notes"),
+      Status: editingStatus || "Active",
     };
+  }
+
+  function ownerWritePayload(owner, status) {
+    return {
+      OwnerID: owner.ownerId,
+      Name: owner.name || owner.ownerName || "",
+      Address: owner.address || "",
+      City: owner.city || "",
+      State: owner.state || "",
+      Zip: owner.zip || "",
+      ContactName: owner.contactName || "",
+      ContactEmail: owner.contactEmail || "",
+      ContactPhone: formatPhoneValue(owner.contactPhone || ""),
+      Notes: owner.notes || "",
+      Status: status || owner.status || "Active",
+    };
+  }
+
+  function ownerStatus(owner) {
+    var value = String((owner && owner.status) || "Active").trim();
+    if (value.toLowerCase() === "inactive") {
+      return "Inactive";
+    }
+    return "Active";
   }
 
   /** Next sequential OwnerID from NOVARAOwners rows matching OWN###. */
@@ -137,6 +166,7 @@
     setOwnerIdHint(mode);
 
     if (mode === "edit" && owner) {
+      editingStatus = ownerStatus(owner);
       modalTitle.textContent = "Edit Owner";
       modalSubtitle.textContent =
         "Update " + (owner.ownerId || "owner") + " in NOVARAOwners";
@@ -154,6 +184,7 @@
       );
       setFieldValue("field-notes", owner.notes || "");
     } else {
+      editingStatus = "Active";
       modalTitle.textContent = "Add Owner";
       modalSubtitle.textContent = "Create a new owner in NOVARAOwners";
       setFieldValue("field-ownerId", nextOwnerId());
@@ -180,17 +211,39 @@
 
   function renderOwners(owners) {
     ownersById = {};
-    if (!owners.length) {
+    allOwners = owners || [];
+    allOwners.forEach(function (owner) {
+      if (owner && owner.ownerId) {
+        ownersById[owner.ownerId] = owner;
+      }
+    });
+
+    var filtered = allOwners.filter(function (owner) {
+      return ownerStatus(owner) === statusFilter;
+    });
+
+    if (!filtered.length) {
+      var emptyLabel =
+        statusFilter === "Inactive"
+          ? "No inactive owners found in NOVARAOwners."
+          : "No active owners found in NOVARAOwners.";
       tbody.innerHTML =
-        '<tr><td colspan="6">No owners found in NOVARAOwners.</td></tr>';
+        '<tr><td colspan="7">' + escapeHtml(emptyLabel) + "</td></tr>";
       return;
     }
 
-    tbody.innerHTML = owners
+    tbody.innerHTML = filtered
       .map(function (owner) {
-        ownersById[owner.ownerId] = owner;
         var contact =
           owner.contactName || owner.contactEmail || "—";
+        var status = ownerStatus(owner);
+        var statusClass =
+          status === "Inactive" ? "status-inactive" : "status-active";
+        var toggleLabel = status === "Inactive" ? "Activate" : "Deactivate";
+        var toggleClass =
+          status === "Inactive"
+            ? "link-btn activate-owner-btn"
+            : "link-btn deactivate-owner-btn";
         return (
           '<tr class="owner-row" data-owner-id="' +
           escapeHtml(owner.ownerId) +
@@ -211,14 +264,47 @@
           escapeHtml(formatPhoneValue(owner.contactPhone) || "—") +
           "</td>" +
           "<td>" +
+          '<span class="status-badge ' +
+          statusClass +
+          '">' +
+          escapeHtml(status) +
+          "</span>" +
+          "</td>" +
+          "<td>" +
           '<button type="button" class="link-btn edit-owner-btn" data-owner-id="' +
           escapeHtml(owner.ownerId) +
           '">Edit</button>' +
+          ' <button type="button" class="' +
+          toggleClass +
+          '" data-owner-id="' +
+          escapeHtml(owner.ownerId) +
+          '">' +
+          toggleLabel +
+          "</button>" +
+          ' <button type="button" class="link-btn danger-link-btn delete-owner-btn" data-owner-id="' +
+          escapeHtml(owner.ownerId) +
+          '">Delete</button>' +
           "</td>" +
           "</tr>"
         );
       })
       .join("");
+  }
+
+  function setStatusFilter(nextStatus) {
+    statusFilter = nextStatus === "Inactive" ? "Inactive" : "Active";
+    var tabs = document.querySelectorAll(".view-tab[data-status]");
+    tabs.forEach(function (tab) {
+      var isActive = tab.getAttribute("data-status") === statusFilter;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    renderOwners(allOwners);
+    var count = allOwners.filter(function (owner) {
+      return ownerStatus(owner) === statusFilter;
+    }).length;
+    var label = statusFilter === "Inactive" ? "inactive owner" : "active owner";
+    setStatus(count + " " + label + (count === 1 ? "" : "s"), false);
   }
 
   function loadOwners() {
@@ -240,18 +326,23 @@
       .then(function (data) {
         var owners = (data && data.owners) || [];
         renderOwners(owners);
+        var visible = owners.filter(function (owner) {
+          return ownerStatus(owner) === statusFilter;
+        });
         if (!owners.length) {
           setStatus("No owners found in NOVARAOwners.", false);
         } else {
+          var label =
+            statusFilter === "Inactive" ? "inactive owner" : "active owner";
           setStatus(
-            owners.length + " owner" + (owners.length === 1 ? "" : "s"),
+            visible.length + " " + label + (visible.length === 1 ? "" : "s"),
             false
           );
         }
       })
       .catch(function (err) {
         tbody.innerHTML =
-          '<tr><td colspan="6">Unable to load owners.</td></tr>';
+          '<tr><td colspan="7">Unable to load owners.</td></tr>';
         setStatus(err.message || "Failed to load owners", true);
       });
   }
@@ -297,6 +388,14 @@
       return request
         .then(function () {
           closeModal();
+          if (mode === "create") {
+            statusFilter = "Active";
+            document.querySelectorAll(".view-tab[data-status]").forEach(function (tab) {
+              var isActive = tab.getAttribute("data-status") === "Active";
+              tab.classList.toggle("is-active", isActive);
+              tab.setAttribute("aria-selected", isActive ? "true" : "false");
+            });
+          }
           return loadOwners();
         })
         .catch(function (err) {
@@ -326,6 +425,71 @@
     }
 
     submit(payload, true);
+  }
+
+  function setOwnerStatus(ownerId, nextStatus) {
+    if (actionBusy) return;
+    var owner = ownersById[ownerId];
+    if (!owner) return;
+    var api = window.NovaraApi;
+    if (!api || !api.updateOwner) {
+      setStatus("API client is unavailable.", true);
+      return;
+    }
+
+    var label = nextStatus === "Inactive" ? "Deactivating" : "Activating";
+    actionBusy = true;
+    setStatus(label + " " + ownerId + "…", false);
+    api
+      .updateOwner(ownerWritePayload(owner, nextStatus))
+      .then(function () {
+        return loadOwners();
+      })
+      .catch(function (err) {
+        setStatus(err.message || "Failed to update owner status", true);
+      })
+      .finally(function () {
+        actionBusy = false;
+      });
+  }
+
+  function deleteOwner(ownerId) {
+    if (actionBusy) return;
+    var owner = ownersById[ownerId];
+    if (!owner) return;
+    var name = owner.name || owner.ownerName || ownerId;
+    var confirmed = window.confirm(
+      "Delete owner " +
+        ownerId +
+        " (" +
+        name +
+        ")?\n\nThis permanently removes the owner. Sites must be reassigned first."
+    );
+    if (!confirmed) return;
+
+    var api = window.NovaraApi;
+    if (!api || !api.deleteOwner) {
+      setStatus("API client is unavailable.", true);
+      return;
+    }
+
+    actionBusy = true;
+    setStatus("Deleting " + ownerId + "…", false);
+    api
+      .deleteOwner(ownerId)
+      .then(function () {
+        return loadOwners();
+      })
+      .catch(function (err) {
+        setStatus(
+          err.message ||
+            "This owner is still linked to one or more sites. Reassign those sites first.",
+          true
+        );
+      })
+      .finally(function () {
+        actionBusy = false;
+      });
   }
 
   if (addBtn) {
@@ -375,6 +539,33 @@
       if (editId && ownersById[editId]) {
         openModal("edit", ownersById[editId]);
       }
+      return;
+    }
+    var deactivateBtn = event.target.closest(".deactivate-owner-btn");
+    if (deactivateBtn) {
+      event.stopPropagation();
+      var deactivateId = deactivateBtn.getAttribute("data-owner-id");
+      if (deactivateId) {
+        setOwnerStatus(deactivateId, "Inactive");
+      }
+      return;
+    }
+    var activateBtn = event.target.closest(".activate-owner-btn");
+    if (activateBtn) {
+      event.stopPropagation();
+      var activateId = activateBtn.getAttribute("data-owner-id");
+      if (activateId) {
+        setOwnerStatus(activateId, "Active");
+      }
+      return;
+    }
+    var deleteBtn = event.target.closest(".delete-owner-btn");
+    if (deleteBtn) {
+      event.stopPropagation();
+      var deleteId = deleteBtn.getAttribute("data-owner-id");
+      if (deleteId) {
+        deleteOwner(deleteId);
+      }
     }
   });
 
@@ -393,6 +584,12 @@
     if (event.key === "Escape" && modal && !modal.hidden) {
       closeModal();
     }
+  });
+
+  document.querySelectorAll(".view-tab[data-status]").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      setStatusFilter(tab.getAttribute("data-status"));
+    });
   });
 
   loadOwners();

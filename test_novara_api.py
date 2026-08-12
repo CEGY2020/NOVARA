@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import novara_api
 import scripts.write_api_config as write_api_config
@@ -1066,6 +1066,21 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(item["Name"], "Summit Holdings")
         self.assertEqual(item["ContactEmail"], "sam@example.com")
         self.assertEqual(item["Notes"], "Preferred billing contact")
+        self.assertEqual(item["Status"], "Active")
+
+    def test_parse_owner_payload_accepts_inactive_status(self):
+        item, error = novara_api.parse_owner_payload(
+            {"OwnerID": "OWN002", "Name": "Summit Holdings", "Status": "Inactive"}
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["Status"], "Inactive")
+
+    def test_parse_owner_payload_rejects_invalid_status(self):
+        item, error = novara_api.parse_owner_payload(
+            {"OwnerID": "OWN002", "Name": "Summit Holdings", "Status": "Paused"}
+        )
+        self.assertIsNone(item)
+        self.assertIn("Status", error)
 
     def test_normalize_owner(self):
         owner = novara_api.normalize_owner(
@@ -1082,6 +1097,17 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(owner["name"], "Crystal Asset Management")
         self.assertEqual(owner["location"], "Denver, CO")
         self.assertEqual(owner["contactName"], "Jane Doe")
+        self.assertEqual(owner["status"], "Active")
+
+    def test_normalize_owner_preserves_inactive_status(self):
+        owner = novara_api.normalize_owner(
+            {
+                "OwnerID": "OWN001",
+                "Name": "Crystal Asset Management",
+                "Status": "Inactive",
+            }
+        )
+        self.assertEqual(owner["status"], "Inactive")
 
     def test_owners_js_keeps_edit_mode_after_form_reset(self):
         source = Path(__file__).resolve().parent.joinpath("owners.js").read_text(
@@ -1106,6 +1132,28 @@ class RouteTests(unittest.TestCase):
         self.assertIn("api.updateOwner", save_owner)
         self.assertIn("api.createOwner", save_owner)
 
+    def test_owners_page_has_status_filter_and_actions(self):
+        html = Path(__file__).resolve().parent.joinpath("owners.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("owners.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id="owners-filter-active"', html)
+        self.assertIn('id="owners-filter-inactive"', html)
+        self.assertIn("<th>Status</th>", html)
+        self.assertIn("deactivate-owner-btn", source)
+        self.assertIn("activate-owner-btn", source)
+        self.assertIn("delete-owner-btn", source)
+        self.assertIn('setOwnerStatus(deactivateId, "Inactive")', source)
+        self.assertIn('setOwnerStatus(activateId, "Active")', source)
+        self.assertIn("api.deleteOwner", source)
+        self.assertIn(
+            "This owner is still linked to one or more sites. Reassign those sites first.",
+            source,
+        )
+        self.assertIn('statusFilter = "Active"', source)
+
     def test_api_client_update_owner_uses_path_id(self):
         source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
             encoding="utf-8"
@@ -1118,6 +1166,95 @@ class RouteTests(unittest.TestCase):
             update_owner = source.split("updateOwner:", 1)[1][:400]
         self.assertIn("/api/owners/", update_owner)
         self.assertIn("encodeURIComponent", update_owner)
+
+    def test_api_client_exposes_delete_owner(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("deleteOwner:", source)
+        delete_owner = source.split("deleteOwner:", 1)[1][:400]
+        self.assertIn("/api/owners/", delete_owner)
+        self.assertIn('"DELETE"', delete_owner)
+
+    def test_delete_owner_route(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARAOwners",
+            "deleted": True,
+            "ownerId": "OWN001",
+        }
+        with patch.object(novara_api, "delete_owner", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/owners/OWN001", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["deleted"])
+        mocked.assert_called_once_with("OWN001")
+
+    def test_delete_owner_route_blocks_linked_sites(self):
+        with patch.object(
+            novara_api,
+            "delete_owner",
+            side_effect=ValueError(novara_api.OWNER_LINKED_SITES_ERROR),
+        ):
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/owners/OWN001", {}
+            )
+        self.assertEqual(status, 409)
+        self.assertEqual(
+            payload["error"],
+            "This owner is still linked to one or more sites. Reassign those sites first.",
+        )
+
+    def test_delete_owner_checks_linked_sites(self):
+        fake_table = MagicMock()
+        fake_table.get_item.return_value = {
+            "Item": {"OwnerID": "OWN001", "Name": "Acme"}
+        }
+        with patch.object(novara_api, "ensure_owners_table", return_value="NOVARAOwners"):
+            with patch.object(novara_api, "dynamodb_table", return_value=fake_table):
+                with patch.object(
+                    novara_api,
+                    "scan_sites",
+                    return_value={
+                        "sites": [
+                            {
+                                "siteId": "SITE001",
+                                "ownerId": "OWN001",
+                                "owner": "OWN001",
+                            }
+                        ]
+                    },
+                ):
+                    with self.assertRaises(ValueError) as ctx:
+                        novara_api.delete_owner("OWN001")
+        self.assertEqual(str(ctx.exception), novara_api.OWNER_LINKED_SITES_ERROR)
+        fake_table.delete_item.assert_not_called()
+
+    def test_delete_owner_when_no_sites_linked(self):
+        fake_table = MagicMock()
+        fake_table.get_item.return_value = {
+            "Item": {"OwnerID": "OWN001", "Name": "Acme"}
+        }
+        with patch.object(novara_api, "ensure_owners_table", return_value="NOVARAOwners"):
+            with patch.object(novara_api, "dynamodb_table", return_value=fake_table):
+                with patch.object(
+                    novara_api, "scan_sites", return_value={"sites": []}
+                ):
+                    result = novara_api.delete_owner("OWN001")
+        self.assertTrue(result["deleted"])
+        self.assertEqual(result["ownerId"], "OWN001")
+        fake_table.delete_item.assert_called_once()
+
+    def test_sites_owner_dropdown_only_lists_active_owners(self):
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        populate = source.split("function populateOwnerOptions", 1)[1].split(
+            "function populateMgmtCompanyOptions", 1
+        )[0]
+        self.assertIn("ownerIsActive", source)
+        self.assertIn("ownerIsActive(owner)", populate)
 
     def test_mgmt_companies_route(self):
         fake = {

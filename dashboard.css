@@ -1477,7 +1477,8 @@ a.sales-home-link {
     color: #0f6b4c;
 }
 
-.status-badge.status-rejected {
+.status-badge.status-rejected,
+.status-badge.status-inactive {
     background: #fdecec;
     color: #b42318;
 }

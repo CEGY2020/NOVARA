@@ -28,6 +28,11 @@ PHOTOS_LOCAL_DIR = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), ".novara-photos"),
 )
 OWNERS_TABLE_NAME = os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners")
+OWNER_STATUSES = ("Active", "Inactive")
+DEFAULT_OWNER_STATUS = "Active"
+OWNER_LINKED_SITES_ERROR = (
+    "This owner is still linked to one or more sites. Reassign those sites first."
+)
 MGMT_COMPANIES_TABLE_NAME = os.environ.get(
     "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
 )
@@ -1354,6 +1359,9 @@ def normalize_owner(item: dict) -> dict:
         default="",
     )
     notes = first_present(item, ("Notes", "notes"), default="")
+    status = normalize_owner_status(
+        first_present(item, ("Status", "status"), default="")
+    )
     updated_at = first_present(
         item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
     )
@@ -1373,8 +1381,20 @@ def normalize_owner(item: dict) -> dict:
         "contactEmail": str(contact_email or ""),
         "contactPhone": str(contact_phone or ""),
         "notes": str(notes or ""),
+        "status": status,
         "updatedAt": str(updated_at or ""),
     }
+
+
+def normalize_owner_status(value, *, default: str = DEFAULT_OWNER_STATUS) -> str:
+    """Return Active or Inactive; missing/unknown values use default."""
+    text = _as_text(value)
+    if not text:
+        return default
+    for status in OWNER_STATUSES:
+        if text.lower() == status.lower():
+            return status
+    return default
 
 
 def scan_owners() -> dict:
@@ -1450,6 +1470,14 @@ def parse_owner_payload(body: dict | None) -> tuple[dict | None, str | None]:
         else body.get("contactPhone")
     )
     notes = _as_text(body.get("Notes") if "Notes" in body else body.get("notes"))
+    raw_status = body.get("Status") if "Status" in body else body.get("status")
+    if raw_status is None or _as_text(raw_status) == "":
+        status = DEFAULT_OWNER_STATUS
+    else:
+        parsed_status = normalize_owner_status(raw_status, default="")
+        if not parsed_status:
+            return None, "Status must be Active or Inactive"
+        status = parsed_status
 
     if contact_email and "@" not in contact_email:
         return None, "ContactEmail must be a valid email address"
@@ -1465,6 +1493,7 @@ def parse_owner_payload(body: dict | None) -> tuple[dict | None, str | None]:
         "ContactEmail": contact_email,
         "ContactPhone": contact_phone,
         "Notes": notes,
+        "Status": status,
         "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     return item, None
@@ -1497,6 +1526,51 @@ def save_owner(item: dict, *, mode: str = "upsert") -> dict:
         "ok": True,
         "table": OWNERS_TABLE_NAME,
         "owner": normalize_owner(item),
+    }
+
+
+def owner_has_linked_sites(owner_id: str) -> bool:
+    """True when one or more NOVARASites rows still reference this OwnerID."""
+    target = _as_text(owner_id)
+    if not target:
+        return False
+    sites = scan_sites(include_system_counts=False).get("sites") or []
+    return any(site_belongs_to_owner(site, target) for site in sites)
+
+
+def delete_owner(owner_id: str) -> dict:
+    """Permanently delete an owner when no sites still reference OwnerID."""
+    from botocore.exceptions import ClientError
+
+    owner_id = _as_text(owner_id)
+    if not owner_id:
+        raise ValueError("OwnerID is required")
+
+    ensure_owners_table()
+    table = dynamodb_table(OWNERS_TABLE_NAME)
+    existing = table.get_item(Key={"OwnerID": owner_id}).get("Item")
+    if not existing:
+        raise LookupError(f"OwnerID '{owner_id}' was not found")
+
+    if owner_has_linked_sites(owner_id):
+        raise ValueError(OWNER_LINKED_SITES_ERROR)
+
+    try:
+        table.delete_item(
+            Key={"OwnerID": owner_id},
+            ConditionExpression="attribute_exists(OwnerID)",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            raise LookupError(f"OwnerID '{owner_id}' was not found") from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": OWNERS_TABLE_NAME,
+        "deleted": True,
+        "ownerId": owner_id,
     }
 
 
@@ -4045,6 +4119,27 @@ def handle_owner_write_request(
         }
 
 
+def handle_owner_delete_request(owner_id: str | None) -> tuple[int, dict]:
+    owner_id = _as_text(owner_id)
+    if not owner_id:
+        return 400, {"error": "OwnerID is required"}
+    try:
+        return 200, delete_owner(owner_id)
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except ValueError as exc:
+        message = str(exc)
+        if message == OWNER_LINKED_SITES_ERROR:
+            return 409, {"error": message}
+        return 400, {"error": message}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to delete owner from DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_mgmt_companies_request() -> tuple[int, dict]:
     try:
         return 200, scan_mgmt_companies()
@@ -4514,6 +4609,8 @@ def route_request(
         return 405, {"error": "Method not allowed"}
     owner_path_id = _owner_id_from_path(normalized)
     if owner_path_id is not None:
+        if method == "DELETE":
+            return handle_owner_delete_request(owner_path_id)
         if method == "PUT":
             return handle_owner_write_request(
                 body, mode="update", owner_id=owner_path_id

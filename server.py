@@ -227,6 +227,11 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_system_delete_request(system_path_id)
             self._send_json(status, payload)
             return
+        owner_path_id = novara_api._owner_id_from_path(parsed.path)
+        if owner_path_id is not None:
+            status, payload = novara_api.handle_owner_delete_request(owner_path_id)
+            self._send_json(status, payload)
+            return
         photo_path_id = novara_api._photo_id_from_path(parsed.path)
         if photo_path_id is not None:
             status, payload = novara_api.handle_photo_delete_request(photo_path_id)
