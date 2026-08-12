@@ -19,7 +19,7 @@ Systems page: [http://localhost:8000/systems.html](http://localhost:8000/systems
 
 Site and System edit modals include a Photos gallery. Photos are stored in S3 (bucket from `NOVARA_PHOTOS_BUCKET`) with metadata in `NOVARAPhotos`. When no bucket is configured locally, files are stored under `.novara-photos/` and served from `/api/photos/{photoId}/content`.
 
-Owners page: [http://localhost:8000/owners.html](http://localhost:8000/owners.html) → `GET/POST/PUT /api/owners` from `NOVARAOwners` (table is created automatically if missing).
+Owners page: [http://localhost:8000/owners.html](http://localhost:8000/owners.html) → `GET/POST/PUT /api/owners` and `DELETE /api/owners/{id}` from `NOVARAOwners` (table is created automatically if missing).
 
 Management Companies page: [http://localhost:8000/mgmt-companies.html](http://localhost:8000/mgmt-companies.html) → `GET/POST/PUT /api/mgmt-companies` from `NOVARAMgmtCompanies` (table is created automatically if missing).
 
@@ -154,6 +154,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `POST /api/owners` | Create owner in `NOVARAOwners` (JSON body) |
 | `PUT /api/owners` | Update existing owner in `NOVARAOwners` (JSON body) |
 | `PUT /api/owners/{id}` | Update owner by `OwnerID` path (JSON body) |
+| `DELETE /api/owners/{id}` | Hard-delete owner from `NOVARAOwners` when no Sites still reference that `OwnerID` |
 | `GET /api/mgmt-companies` | `NOVARAMgmtCompanies` |
 | `POST /api/mgmt-companies` | Create management company in `NOVARAMgmtCompanies` (JSON body) |
 | `PUT /api/mgmt-companies` | Update existing management company in `NOVARAMgmtCompanies` (JSON body) |

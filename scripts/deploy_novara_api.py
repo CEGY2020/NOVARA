@@ -322,6 +322,30 @@ def main(argv: list[str] | None = None) -> int:
             print("ERROR: PUT /api/owners/{id} did not return ok", file=sys.stderr)
             return 1
 
+    print(f"DELETE {update_url}")
+    delete_req = urllib.request.Request(
+        update_url,
+        method="DELETE",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(delete_req, timeout=30) as resp:
+            deleted = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} {deleted}")
+            if not deleted.get("ok") or not deleted.get("deleted"):
+                print(
+                    "ERROR: DELETE /api/owners/{id} did not return deleted",
+                    file=sys.stderr,
+                )
+                return 1
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")
+        print(
+            f"ERROR: DELETE /api/owners/{id} failed: {exc.code} {err_body}",
+            file=sys.stderr,
+        )
+        return 1
+
     # Verify Management Companies create + path update persist to NOVARAMgmtCompanies.
     mgmt_smoke_id = "MGT_SMOKE_DEPLOY"
     mgmt_create_url = f"{api_url}/api/mgmt-companies"

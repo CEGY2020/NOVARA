@@ -1553,6 +1553,7 @@ def delete_owner(owner_id: str) -> dict:
         raise LookupError(f"OwnerID '{owner_id}' was not found")
 
     if owner_has_linked_sites(owner_id):
+        _LOGGER.warning("Refusing to delete owner %s: still linked to sites", owner_id)
         raise ValueError(OWNER_LINKED_SITES_ERROR)
 
     try:
@@ -1564,8 +1565,10 @@ def delete_owner(owner_id: str) -> dict:
         code = (exc.response.get("Error") or {}).get("Code")
         if code == "ConditionalCheckFailedException":
             raise LookupError(f"OwnerID '{owner_id}' was not found") from exc
+        _LOGGER.exception("DynamoDB delete_item failed for owner %s", owner_id)
         raise
 
+    _LOGGER.info("Deleted owner %s from %s", owner_id, OWNERS_TABLE_NAME)
     return {
         "ok": True,
         "table": OWNERS_TABLE_NAME,
@@ -4077,7 +4080,7 @@ def _owner_id_from_path(path: str) -> str | None:
     for marker in ("/api/owners/", "/owners/"):
         if marker not in normalized:
             continue
-        owner_id = normalized.split(marker, 1)[1]
+        owner_id = unquote(normalized.split(marker, 1)[1])
         if owner_id and "/" not in owner_id:
             return owner_id
     return None
@@ -4126,14 +4129,17 @@ def handle_owner_delete_request(owner_id: str | None) -> tuple[int, dict]:
     try:
         return 200, delete_owner(owner_id)
     except LookupError as exc:
+        _LOGGER.warning("Owner delete failed for %s: %s", owner_id, exc)
         return 404, {"error": str(exc)}
     except ValueError as exc:
         message = str(exc)
+        _LOGGER.warning("Owner delete rejected for %s: %s", owner_id, message)
         if message == OWNER_LINKED_SITES_ERROR:
             return 409, {"error": message}
         return 400, {"error": message}
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
+        _LOGGER.exception("Owner delete failed for %s", owner_id)
         return 500, {
             "error": "Failed to delete owner from DynamoDB",
             "detail": str(exc),

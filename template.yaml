@@ -274,6 +274,12 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/owners/{ownerId}
             Method: PUT
+        OwnersDeleteById:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/owners/{ownerId}
+            Method: DELETE
         MgmtCompaniesGet:
           Type: HttpApi
           Properties:
