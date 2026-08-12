@@ -75,6 +75,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--settings-table",
+        default=os.environ.get("NOVARA_SETTINGS_TABLE", "NOVARASettings"),
+    )
+    parser.add_argument(
+        "--utility-bills-table",
+        default=os.environ.get(
+            "NOVARA_UTILITY_BILLS_TABLE", "NOVARAUtilityBills"
+        ),
+    )
+    parser.add_argument(
         "--admin-alert-email",
         default=os.environ.get("NOVARA_ADMIN_ALERT_EMAIL", "steve@cegy.us"),
     )
@@ -146,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
             f"LeadsTableName={args.leads_table}",
             f"UsersTableName={args.users_table}",
             f"PreapprovedTableName={args.preapproved_table}",
+            f"SettingsTableName={args.settings_table}",
+            f"UtilityBillsTableName={args.utility_bills_table}",
             f"AdminAlertEmail={args.admin_alert_email}",
             f"SesFromEmail={args.ses_from_email}",
             f"AppBaseUrl={args.app_base_url}",
@@ -257,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         "/api/mgmt-companies",
         "/api/leads",
         "/api/users",
+        "/api/settings/utilityapi",
+        "/api/utility-bills",
         "/api/readings?siteId=SITE001&days=7",
     ):
         url = f"{api_url}{path}"

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Settings</title>
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=utilityapi-1">
 </head>
 <body data-page="settings">
 
@@ -75,9 +75,54 @@
         </div>
       </div>
     </section>
+
+    <section class="page-panel" id="utilityapi-settings">
+      <h3>UtilityAPI</h3>
+      <p>Store credentials for a future utility bill and usage sync. Live API calls are not enabled yet.</p>
+      <form id="utilityapi-form" class="settings-form" novalidate>
+        <div class="settings-list" style="margin-top: 18px;">
+          <div class="settings-row">
+            <div>
+              <strong>API key / token</strong>
+              <small id="utilityapi-key-hint">Stored securely. Leave blank to keep the saved key.</small>
+            </div>
+            <input type="password" id="field-utilityapi-key" name="ApiKey" maxlength="256" autocomplete="off" placeholder="Enter API key" spellcheck="false">
+          </div>
+          <div class="settings-row">
+            <div>
+              <strong>Base URL</strong>
+              <small>UtilityAPI REST endpoint</small>
+            </div>
+            <input type="url" id="field-utilityapi-base-url" name="BaseUrl" maxlength="300" autocomplete="off" placeholder="https://utilityapi.com/api/v2">
+          </div>
+          <div class="settings-row">
+            <div>
+              <strong>Account ID</strong>
+              <small>Optional UtilityAPI account identifier</small>
+            </div>
+            <input type="text" id="field-utilityapi-account-id" name="AccountId" maxlength="120" autocomplete="off" placeholder="Optional">
+          </div>
+          <div class="settings-row">
+            <div>
+              <strong>Authorization ID</strong>
+              <small>Optional authorization ID(s) to sync later</small>
+            </div>
+            <input type="text" id="field-utilityapi-authorization-id" name="AuthorizationId" maxlength="500" autocomplete="off" placeholder="Optional, comma-separated">
+          </div>
+        </div>
+        <p id="utilityapi-form-error" class="form-error" role="alert" hidden></p>
+        <p id="utilityapi-form-status" class="chart-status" aria-live="polite"></p>
+        <div class="settings-actions">
+          <button type="submit" class="primary-btn" id="utilityapi-save-btn">Save UtilityAPI settings</button>
+        </div>
+      </form>
+    </section>
   </main>
 </div>
 
-<script src="nav.js"></script>
+<script src="api-config.js?v=utilityapi-1"></script>
+<script src="api-client.js?v=utilityapi-1"></script>
+<script src="nav.js?v=utilityapi-1"></script>
+<script src="settings.js?v=utilityapi-1"></script>
 </body>
 </html>

@@ -420,6 +420,10 @@ body {
     box-shadow: var(--panel-shadow);
 }
 
+.data-table[hidden] {
+    display: none;
+}
+
 .data-table th {
     background: var(--table-header);
     color: white;
@@ -1209,7 +1213,9 @@ a.sales-home-link {
 
 .settings-row select,
 .settings-row input[type="text"],
-.settings-row input[type="email"] {
+.settings-row input[type="email"],
+.settings-row input[type="password"],
+.settings-row input[type="url"] {
     min-width: 220px;
     padding: 10px 12px;
     border: 1px solid #cfd8de;
@@ -1217,6 +1223,16 @@ a.sales-home-link {
     font-size: 14px;
     color: var(--text);
     background: #fff;
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+}
+
+.settings-form .chart-status {
+    margin-top: 12px;
 }
 
 .graph-placeholder {
@@ -1641,7 +1657,9 @@ a.sales-home-link {
 
     .settings-row select,
     .settings-row input[type="text"],
-    .settings-row input[type="email"] {
+    .settings-row input[type="email"],
+    .settings-row input[type="password"],
+    .settings-row input[type="url"] {
         width: 100%;
         min-width: 0;
     }

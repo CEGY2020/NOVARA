@@ -41,6 +41,10 @@ USERS_TABLE_NAME = os.environ.get("NOVARA_USERS_TABLE", "NOVARAUsers")
 PREAPPROVED_TABLE_NAME = os.environ.get(
     "NOVARA_PREAPPROVED_TABLE", "NOVARAPreapprovedEmails"
 )
+SETTINGS_TABLE_NAME = os.environ.get("NOVARA_SETTINGS_TABLE", "NOVARASettings")
+UTILITY_BILLS_TABLE_NAME = os.environ.get(
+    "NOVARA_UTILITY_BILLS_TABLE", "NOVARAUtilityBills"
+)
 DEFAULT_SITE_ID = "SITE001"
 MAX_POINTS = int(os.environ.get("NOVARA_MAX_CHART_POINTS", "720"))
 ADMIN_ALERT_EMAIL = (
@@ -126,7 +130,19 @@ PASSWORD_HASH_ITERATIONS = 120_000
 # Browser sessions stay valid for 30 days (Remember me / localStorage).
 SESSION_TTL_SECONDS = int(os.environ.get("NOVARA_SESSION_TTL_SECONDS", str(30 * 24 * 3600)))
 _USER_ID_PATTERN = re.compile(r"^USR(\d+)$", re.IGNORECASE)
+_BILL_ID_PATTERN = re.compile(r"^BILL(\d+)$", re.IGNORECASE)
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+UTILITYAPI_SETTING_KEY = "utilityapi"
+DEFAULT_UTILITYAPI_BASE_URL = "https://utilityapi.com/api/v2"
+UTILITY_USAGE_UNITS = (
+    "kWh",
+    "therms",
+    "CCF",
+    "MCF",
+    "gallons",
+    "kW",
+    "other",
+)
 
 _systems_table_ready = False
 _photos_table_ready = False
@@ -135,6 +151,8 @@ _mgmt_companies_table_ready = False
 _leads_table_ready = False
 _users_table_ready = False
 _preapproved_table_ready = False
+_settings_table_ready = False
+_utility_bills_table_ready = False
 _readings_table_ready = False
 # Multi-system readings use TimestampUTC sort keys like 2026-08-05T07:00:00Z#SYS001
 _READING_SORT_SYSTEM_RE = re.compile(r"#(SYS\d+)$", re.IGNORECASE)
@@ -2082,6 +2100,653 @@ def save_lead(item: dict, *, mode: str = "upsert") -> dict:
         "ok": True,
         "table": LEADS_TABLE_NAME,
         "lead": normalize_lead(write_item),
+    }
+
+
+def ensure_settings_table() -> str:
+    """Create NOVARASettings if missing (pay-per-request, SettingKey hash)."""
+    global _settings_table_ready
+    if _settings_table_ready:
+        return SETTINGS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=SETTINGS_TABLE_NAME)
+        _settings_table_ready = True
+        return SETTINGS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=SETTINGS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "SettingKey", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "SettingKey", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=SETTINGS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _settings_table_ready = True
+    return SETTINGS_TABLE_NAME
+
+
+def mask_secret(value: str | None) -> str:
+    """Return a display-safe mask; never echo the full secret."""
+    text = _as_text(value)
+    if not text:
+        return ""
+    if len(text) <= 4:
+        return "••••"
+    return "••••" + text[-4:]
+
+
+def looks_like_masked_secret(value: str | None) -> bool:
+    text = _as_text(value)
+    if not text:
+        return False
+    return text.startswith("•") or text.startswith("*")
+
+
+def _default_utilityapi_settings() -> dict:
+    return {
+        "apiKeyConfigured": False,
+        "apiKeyMasked": "",
+        "baseUrl": DEFAULT_UTILITYAPI_BASE_URL,
+        "accountId": "",
+        "authorizationId": "",
+        "updatedAt": "",
+    }
+
+
+def normalize_utilityapi_settings(item: dict | None) -> dict:
+    """Public settings shape — API key is never included in full."""
+    data = _default_utilityapi_settings()
+    if not isinstance(item, dict):
+        return data
+    api_key = first_present(item, ("ApiKey", "apiKey", "Token", "token"), default="")
+    api_key_text = _as_text(api_key)
+    base_url = first_present(
+        item, ("BaseUrl", "baseUrl", "base_url"), default=DEFAULT_UTILITYAPI_BASE_URL
+    )
+    account_id = first_present(
+        item, ("AccountId", "accountId", "account_id"), default=""
+    )
+    authorization_id = first_present(
+        item,
+        (
+            "AuthorizationId",
+            "authorizationId",
+            "authorization_id",
+            "AuthorizationIDs",
+            "authorizationIds",
+        ),
+        default="",
+    )
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    data["apiKeyConfigured"] = bool(api_key_text)
+    data["apiKeyMasked"] = mask_secret(api_key_text)
+    data["baseUrl"] = _as_text(base_url) or DEFAULT_UTILITYAPI_BASE_URL
+    data["accountId"] = _as_text(account_id)
+    data["authorizationId"] = _as_text(authorization_id)
+    data["updatedAt"] = _as_text(updated_at)
+    return data
+
+
+def get_utilityapi_settings_item() -> dict | None:
+    ensure_settings_table()
+    table = dynamodb_table(SETTINGS_TABLE_NAME)
+    response = table.get_item(Key={"SettingKey": UTILITYAPI_SETTING_KEY})
+    item = response.get("Item")
+    return json_safe(item) if item else None
+
+
+def get_utilityapi_settings() -> dict:
+    item = get_utilityapi_settings_item()
+    return {
+        "ok": True,
+        "table": SETTINGS_TABLE_NAME,
+        "settings": normalize_utilityapi_settings(item),
+    }
+
+
+def get_utilityapi_api_key() -> str:
+    """Internal helper for a future live UtilityAPI client. Not exposed over HTTP."""
+    item = get_utilityapi_settings_item() or {}
+    return _as_text(
+        first_present(item, ("ApiKey", "apiKey", "Token", "token"), default="")
+    )
+
+
+def parse_utilityapi_settings_payload(
+    body: dict | None, existing: dict | None = None
+) -> tuple[dict | None, str | None]:
+    """Validate UtilityAPI settings. Blank/masked apiKey keeps the stored secret."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    existing = existing if isinstance(existing, dict) else {}
+    existing_key = _as_text(
+        first_present(existing, ("ApiKey", "apiKey", "Token", "token"), default="")
+    )
+
+    submitted_key = _as_text(
+        body.get("ApiKey")
+        if "ApiKey" in body
+        else body.get("apiKey")
+        if "apiKey" in body
+        else body.get("Token")
+        if "Token" in body
+        else body.get("token")
+    )
+    clear_flag = body.get("ClearApiKey")
+    if clear_flag is None:
+        clear_flag = body.get("clearApiKey")
+    clear_api_key = bool(clear_flag) and str(clear_flag).strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+
+    if clear_api_key:
+        api_key = ""
+    elif not submitted_key or looks_like_masked_secret(submitted_key):
+        api_key = existing_key
+    else:
+        if len(submitted_key) > 256:
+            return None, "ApiKey must be 256 characters or fewer"
+        api_key = submitted_key
+
+    base_url = _as_text(
+        body.get("BaseUrl") if "BaseUrl" in body else body.get("baseUrl")
+    )
+    if not base_url:
+        base_url = _as_text(
+            first_present(
+                existing,
+                ("BaseUrl", "baseUrl", "base_url"),
+                default=DEFAULT_UTILITYAPI_BASE_URL,
+            )
+        ) or DEFAULT_UTILITYAPI_BASE_URL
+    if len(base_url) > 300:
+        return None, "BaseUrl must be 300 characters or fewer"
+    if base_url and not (
+        base_url.startswith("https://") or base_url.startswith("http://")
+    ):
+        return None, "BaseUrl must start with https:// or http://"
+
+    account_id = _as_text(
+        body.get("AccountId") if "AccountId" in body else body.get("accountId")
+    )
+    if "AccountId" not in body and "accountId" not in body:
+        account_id = _as_text(
+            first_present(existing, ("AccountId", "accountId", "account_id"), default="")
+        )
+    if len(account_id) > 120:
+        return None, "AccountId must be 120 characters or fewer"
+
+    authorization_id = _as_text(
+        body.get("AuthorizationId")
+        if "AuthorizationId" in body
+        else body.get("authorizationId")
+        if "authorizationId" in body
+        else body.get("AuthorizationIDs")
+        if "AuthorizationIDs" in body
+        else body.get("authorizationIds")
+    )
+    if (
+        "AuthorizationId" not in body
+        and "authorizationId" not in body
+        and "AuthorizationIDs" not in body
+        and "authorizationIds" not in body
+    ):
+        authorization_id = _as_text(
+            first_present(
+                existing,
+                (
+                    "AuthorizationId",
+                    "authorizationId",
+                    "authorization_id",
+                    "AuthorizationIDs",
+                    "authorizationIds",
+                ),
+                default="",
+            )
+        )
+    if len(authorization_id) > 500:
+        return None, "AuthorizationId must be 500 characters or fewer"
+
+    item = {
+        "SettingKey": UTILITYAPI_SETTING_KEY,
+        "ApiKey": api_key,
+        "BaseUrl": base_url,
+        "AccountId": account_id,
+        "AuthorizationId": authorization_id,
+        "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    return item, None
+
+
+def save_utilityapi_settings(item: dict) -> dict:
+    ensure_settings_table()
+    table = dynamodb_table(SETTINGS_TABLE_NAME)
+    write_item = {k: v for k, v in item.items() if v is not None}
+    table.put_item(Item=write_item)
+    return {
+        "ok": True,
+        "table": SETTINGS_TABLE_NAME,
+        "settings": normalize_utilityapi_settings(write_item),
+    }
+
+
+def ensure_utility_bills_table() -> str:
+    """Create NOVARAUtilityBills if missing (pay-per-request, RecordID hash)."""
+    global _utility_bills_table_ready
+    if _utility_bills_table_ready:
+        return UTILITY_BILLS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=UTILITY_BILLS_TABLE_NAME)
+        _utility_bills_table_ready = True
+        return UTILITY_BILLS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=UTILITY_BILLS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "RecordID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "RecordID", "KeyType": "HASH"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=UTILITY_BILLS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _utility_bills_table_ready = True
+    return UTILITY_BILLS_TABLE_NAME
+
+
+def _scan_utility_bill_items() -> list[dict]:
+    ensure_utility_bills_table()
+    table = dynamodb_table(UTILITY_BILLS_TABLE_NAME)
+    items: list[dict] = []
+    scan_kwargs: dict = {}
+    while True:
+        response = table.scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return items
+
+
+def next_utility_bill_id(existing_items: list[dict] | None = None) -> str:
+    items = existing_items if existing_items is not None else _scan_utility_bill_items()
+    max_num = 0
+    for item in items:
+        record_id = first_present(
+            item, ("RecordID", "recordId", "record_id", "id")
+        )
+        if not record_id:
+            continue
+        match = _BILL_ID_PATTERN.match(str(record_id).strip())
+        if match:
+            max_num = max(max_num, int(match.group(1)))
+    return f"BILL{max_num + 1:03d}"
+
+
+def _serialize_raw_data(value) -> str:
+    if value is None or value == "":
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(json_safe(value), separators=(",", ":"))
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _parse_raw_data(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, (dict, list)):
+        return json_safe(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text[:1] in "{[":
+        try:
+            return json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return text
+    return text
+
+
+def normalize_utility_bill(item: dict) -> dict:
+    record_id = first_present(
+        item, ("RecordID", "recordId", "record_id", "id")
+    )
+    site_id = first_present(item, ("SiteID", "siteId", "site_id"), default="")
+    utility_account_id = first_present(
+        item,
+        (
+            "UtilityAccountID",
+            "utilityAccountId",
+            "utility_account_id",
+            "AccountNumber",
+            "accountNumber",
+        ),
+        default="",
+    )
+    authorization_id = first_present(
+        item,
+        ("AuthorizationID", "AuthorizationId", "authorizationId", "authorization_id"),
+        default="",
+    )
+    period_start = first_present(
+        item,
+        ("PeriodStart", "periodStart", "period_start", "BillStart", "billStart"),
+        default="",
+    )
+    period_end = first_present(
+        item,
+        ("PeriodEnd", "periodEnd", "period_end", "BillEnd", "billEnd"),
+        default="",
+    )
+    usage_amount = first_present(
+        item, ("UsageAmount", "usageAmount", "usage_amount", "Usage"), default=None
+    )
+    if usage_amount is not None and usage_amount != "":
+        usage_amount = json_safe(usage_amount)
+    else:
+        usage_amount = None
+    usage_unit = first_present(
+        item, ("UsageUnit", "usageUnit", "usage_unit", "Unit"), default=""
+    )
+    cost = first_present(
+        item, ("Cost", "cost", "AmountBilled", "amountBilled"), default=None
+    )
+    if cost is not None and cost != "":
+        cost = json_safe(cost)
+    else:
+        cost = None
+    currency = first_present(item, ("Currency", "currency"), default="USD")
+    raw_data = _parse_raw_data(
+        first_present(item, ("RawData", "rawData", "raw_data", "Summary"), default="")
+    )
+    last_synced = first_present(
+        item,
+        ("LastSyncedAt", "lastSyncedAt", "last_synced_at", "SyncedAt"),
+        default="",
+    )
+    updated_at = first_present(
+        item, ("UpdatedAt", "updatedAt", "updated_at"), default=""
+    )
+    return {
+        "recordId": "" if record_id is None else str(record_id),
+        "siteId": str(site_id or ""),
+        "utilityAccountId": str(utility_account_id or ""),
+        "authorizationId": str(authorization_id or ""),
+        "periodStart": str(period_start or ""),
+        "periodEnd": str(period_end or ""),
+        "usageAmount": usage_amount,
+        "usageUnit": str(usage_unit or ""),
+        "cost": cost,
+        "currency": str(currency or "USD") or "USD",
+        "rawData": raw_data,
+        "lastSyncedAt": str(last_synced or ""),
+        "updatedAt": str(updated_at or ""),
+    }
+
+
+def scan_utility_bills(*, site_id: str | None = None) -> dict:
+    site_filter = _as_text(site_id)
+    items = _scan_utility_bill_items()
+    bills = [normalize_utility_bill(json_safe(item)) for item in items]
+    if site_filter:
+        bills = [
+            row
+            for row in bills
+            if str(row.get("siteId") or "").strip().upper() == site_filter.upper()
+        ]
+    bills.sort(
+        key=lambda row: (
+            str(row.get("periodEnd") or ""),
+            str(row.get("recordId") or ""),
+        ),
+        reverse=True,
+    )
+    return {
+        "table": UTILITY_BILLS_TABLE_NAME,
+        "count": len(bills),
+        "siteId": site_filter or None,
+        "bills": bills,
+    }
+
+
+def parse_utility_bill_payload(
+    body: dict | None, *, require_record_id: bool = False
+) -> tuple[dict | None, str | None]:
+    """Validate a utility bill / usage record for storage (no live UtilityAPI call)."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    record_id = _as_text(
+        body.get("RecordID") if "RecordID" in body else body.get("recordId")
+    )
+    if require_record_id and not record_id:
+        return None, "RecordID is required"
+    if record_id and len(record_id) > 64:
+        return None, "RecordID must be 64 characters or fewer"
+
+    site_id = _as_text(body.get("SiteID") if "SiteID" in body else body.get("siteId"))
+    if not site_id:
+        return None, "SiteID is required"
+    if len(site_id) > 64:
+        return None, "SiteID must be 64 characters or fewer"
+
+    utility_account_id = _as_text(
+        body.get("UtilityAccountID")
+        if "UtilityAccountID" in body
+        else body.get("utilityAccountId")
+        if "utilityAccountId" in body
+        else body.get("AccountNumber")
+        if "AccountNumber" in body
+        else body.get("accountNumber")
+    )
+    if len(utility_account_id) > 120:
+        return None, "UtilityAccountID must be 120 characters or fewer"
+
+    authorization_id = _as_text(
+        body.get("AuthorizationID")
+        if "AuthorizationID" in body
+        else body.get("AuthorizationId")
+        if "AuthorizationId" in body
+        else body.get("authorizationId")
+    )
+    if len(authorization_id) > 120:
+        return None, "AuthorizationID must be 120 characters or fewer"
+
+    period_start = _as_text(
+        body.get("PeriodStart")
+        if "PeriodStart" in body
+        else body.get("periodStart")
+        if "periodStart" in body
+        else body.get("BillStart")
+        if "BillStart" in body
+        else body.get("billStart")
+    )
+    period_end = _as_text(
+        body.get("PeriodEnd")
+        if "PeriodEnd" in body
+        else body.get("periodEnd")
+        if "periodEnd" in body
+        else body.get("BillEnd")
+        if "BillEnd" in body
+        else body.get("billEnd")
+    )
+    for label, value in (("PeriodStart", period_start), ("PeriodEnd", period_end)):
+        if value:
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError:
+                return None, f"{label} must be a date in YYYY-MM-DD format"
+
+    usage_raw = (
+        body.get("UsageAmount")
+        if "UsageAmount" in body
+        else body.get("usageAmount")
+        if "usageAmount" in body
+        else body.get("Usage")
+    )
+    usage_amount = None
+    if usage_raw is not None and usage_raw != "":
+        try:
+            usage_amount = Decimal(str(usage_raw).strip())
+        except (TypeError, ValueError, ArithmeticError):
+            return None, "UsageAmount must be a number"
+
+    usage_unit = _as_text(
+        body.get("UsageUnit")
+        if "UsageUnit" in body
+        else body.get("usageUnit")
+        if "usageUnit" in body
+        else body.get("Unit")
+    )
+    if usage_unit and len(usage_unit) > 32:
+        return None, "UsageUnit must be 32 characters or fewer"
+
+    cost_raw = (
+        body.get("Cost")
+        if "Cost" in body
+        else body.get("cost")
+        if "cost" in body
+        else body.get("AmountBilled")
+        if "AmountBilled" in body
+        else body.get("amountBilled")
+    )
+    cost = None
+    if cost_raw is not None and cost_raw != "":
+        try:
+            cost = Decimal(str(cost_raw).strip())
+        except (TypeError, ValueError, ArithmeticError):
+            return None, "Cost must be a number"
+
+    currency = _as_text(
+        body.get("Currency") if "Currency" in body else body.get("currency")
+    ) or "USD"
+    if len(currency) > 8:
+        return None, "Currency must be 8 characters or fewer"
+
+    raw_source = (
+        body.get("RawData")
+        if "RawData" in body
+        else body.get("rawData")
+        if "rawData" in body
+        else body.get("Summary")
+    )
+    raw_data = _serialize_raw_data(raw_source)
+    if len(raw_data) > 350_000:
+        return None, "RawData is too large to store"
+
+    last_synced = _as_text(
+        body.get("LastSyncedAt")
+        if "LastSyncedAt" in body
+        else body.get("lastSyncedAt")
+    )
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not last_synced:
+        last_synced = now
+
+    item = {
+        "RecordID": record_id,
+        "SiteID": site_id,
+        "UtilityAccountID": utility_account_id,
+        "AuthorizationID": authorization_id,
+        "PeriodStart": period_start,
+        "PeriodEnd": period_end,
+        "UsageUnit": usage_unit,
+        "Currency": currency,
+        "RawData": raw_data,
+        "LastSyncedAt": last_synced,
+        "UpdatedAt": now,
+    }
+    if usage_amount is not None:
+        item["UsageAmount"] = usage_amount
+    if cost is not None:
+        item["Cost"] = cost
+    return item, None
+
+
+def save_utility_bill(item: dict, *, mode: str = "upsert") -> dict:
+    """Write a utility bill record. mode: create | update | upsert."""
+    from botocore.exceptions import ClientError
+
+    ensure_utility_bills_table()
+    write_item = {k: v for k, v in item.items() if v is not None}
+    record_id = _as_text(write_item.get("RecordID"))
+    if not record_id:
+        if mode == "update":
+            raise ValueError("RecordID is required")
+        record_id = next_utility_bill_id()
+        write_item["RecordID"] = record_id
+
+    table = dynamodb_table(UTILITY_BILLS_TABLE_NAME)
+    kwargs = {"Item": write_item}
+    if mode == "create":
+        kwargs["ConditionExpression"] = "attribute_not_exists(RecordID)"
+    elif mode == "update":
+        kwargs["ConditionExpression"] = "attribute_exists(RecordID)"
+
+    try:
+        table.put_item(**kwargs)
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            if mode == "create":
+                raise ValueError(f"RecordID '{record_id}' already exists") from exc
+            if mode == "update":
+                raise LookupError(f"RecordID '{record_id}' was not found") from exc
+        raise
+
+    return {
+        "ok": True,
+        "table": UTILITY_BILLS_TABLE_NAME,
+        "bill": normalize_utility_bill(write_item),
     }
 
 
@@ -4260,6 +4925,79 @@ def handle_lead_write_request(
         }
 
 
+def handle_utilityapi_settings_request() -> tuple[int, dict]:
+    try:
+        return 200, get_utilityapi_settings()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load UtilityAPI settings from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_utilityapi_settings_write_request(body: dict | None) -> tuple[int, dict]:
+    try:
+        existing = get_utilityapi_settings_item()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load UtilityAPI settings from DynamoDB",
+            "detail": str(exc),
+        }
+    item, error = parse_utilityapi_settings_payload(body, existing)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_utilityapi_settings(item)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save UtilityAPI settings to DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_utility_bills_request(
+    params: dict[str, list[str]] | None = None,
+) -> tuple[int, dict]:
+    params = params or {}
+    site_values = params.get("siteId") or params.get("SiteID") or []
+    site_id = site_values[0] if site_values else None
+    try:
+        return 200, scan_utility_bills(site_id=site_id)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load utility bills from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_utility_bill_write_request(
+    body: dict | None,
+    *,
+    mode: str,
+) -> tuple[int, dict]:
+    item, error = parse_utility_bill_payload(
+        body, require_record_id=(mode == "update")
+    )
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_utility_bill(item, mode=mode)
+    except ValueError as exc:
+        return 409, {"error": str(exc)}
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to save utility bill to DynamoDB",
+            "detail": str(exc),
+        }
+
+
 def handle_users_request(params: dict[str, list[str]] | None = None) -> tuple[int, dict]:
     params = params or {}
     status_values = params.get("status") or params.get("Status") or []
@@ -4514,6 +5252,8 @@ def handle_health_request() -> tuple[int, dict]:
         "leadsTable": LEADS_TABLE_NAME,
         "usersTable": USERS_TABLE_NAME,
         "preapprovedTable": PREAPPROVED_TABLE_NAME,
+        "settingsTable": SETTINGS_TABLE_NAME,
+        "utilityBillsTable": UTILITY_BILLS_TABLE_NAME,
     }
 
 
@@ -4650,6 +5390,30 @@ def route_request(
             )
         return 405, {"error": "Method not allowed"}
     if (
+        normalized.endswith("/api/settings/utilityapi")
+        or normalized == "/settings/utilityapi"
+        or normalized.endswith("/api/utilityapi/settings")
+        or normalized == "/utilityapi/settings"
+    ):
+        if method == "GET":
+            return handle_utilityapi_settings_request()
+        if method == "PUT":
+            return handle_utilityapi_settings_write_request(body)
+        return 405, {"error": "Method not allowed"}
+    if (
+        normalized.endswith("/api/utility-bills")
+        or normalized == "/utility-bills"
+        or normalized.endswith("/api/bills")
+        or normalized == "/bills"
+    ):
+        if method == "GET":
+            return handle_utility_bills_request(params)
+        if method == "POST":
+            return handle_utility_bill_write_request(body, mode="create")
+        if method == "PUT":
+            return handle_utility_bill_write_request(body, mode="update")
+        return 405, {"error": "Method not allowed"}
+    if (
         normalized.endswith("/api/users/signup")
         or normalized == "/users/signup"
         or normalized.endswith("/api/user/signup")
@@ -4719,7 +5483,8 @@ def route_request(
             "Supported routes include /api/sites, /api/systems, /api/photos, "
             "/api/owners, /api/mgmt-companies, /api/leads, /api/users, "
             "/api/users/signup, /api/users/login, /api/users/session, "
-            "/api/users/preapproved, /api/readings, /api/savings, and /api/health. "
+            "/api/users/preapproved, /api/settings/utilityapi, "
+            "/api/utility-bills, /api/readings, /api/savings, and /api/health. "
             "Redeploy novara-api if a known route returns this."
         ),
     }

@@ -36,6 +36,8 @@ jobs:
       NOVARA_MGMT_COMPANIES_TABLE: ${{ vars.NOVARA_MGMT_COMPANIES_TABLE || 'NOVARAMgmtCompanies' }}
       NOVARA_LEADS_TABLE: ${{ vars.NOVARA_LEADS_TABLE || 'NOVARALeads' }}
       NOVARA_USERS_TABLE: ${{ vars.NOVARA_USERS_TABLE || 'NOVARAUsers' }}
+      NOVARA_SETTINGS_TABLE: ${{ vars.NOVARA_SETTINGS_TABLE || 'NOVARASettings' }}
+      NOVARA_UTILITY_BILLS_TABLE: ${{ vars.NOVARA_UTILITY_BILLS_TABLE || 'NOVARAUtilityBills' }}
       AWS_APP_ID: ${{ vars.AWS_APP_ID || secrets.AWS_APP_ID }}
     steps:
       - name: Checkout

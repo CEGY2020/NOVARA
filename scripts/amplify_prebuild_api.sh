@@ -95,6 +95,8 @@ if ! sam deploy \
     "LeadsTableName=${NOVARA_LEADS_TABLE:-NOVARALeads}" \
     "UsersTableName=${NOVARA_USERS_TABLE:-NOVARAUsers}" \
     "PreapprovedTableName=${NOVARA_PREAPPROVED_TABLE:-NOVARAPreapprovedEmails}" \
+    "SettingsTableName=${NOVARA_SETTINGS_TABLE:-NOVARASettings}" \
+    "UtilityBillsTableName=${NOVARA_UTILITY_BILLS_TABLE:-NOVARAUtilityBills}" \
     "AdminAlertEmail=${NOVARA_ADMIN_ALERT_EMAIL:-steve@cegy.us}" \
     "SesFromEmail=${NOVARA_SES_FROM_EMAIL:-${NOVARA_ADMIN_ALERT_EMAIL:-steve@cegy.us}}" \
     "AppBaseUrl=${NOVARA_APP_BASE_URL:-}"; then
