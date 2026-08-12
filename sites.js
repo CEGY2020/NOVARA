@@ -293,6 +293,11 @@
     return value;
   }
 
+  function ownerIsActive(owner) {
+    var status = String((owner && owner.status) || "Active").trim();
+    return status.toLowerCase() !== "inactive";
+  }
+
   function populateOwnerOptions(selectedOwner) {
     if (!ownerSelect) return;
     var list = ownersList;
@@ -310,6 +315,14 @@
       "name",
       "ownerName",
     ]);
+    if (!(isOwnerScoped() && scopedId)) {
+      list = list.filter(function (owner) {
+        if (ownerIsActive(owner)) {
+          return true;
+        }
+        return selectedId && String(owner.ownerId || "") === selectedId;
+      });
+    }
     var options =
       '<option value="">Select owner…</option>' +
       list

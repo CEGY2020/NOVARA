@@ -292,6 +292,20 @@
         owner
       );
     },
+    deleteOwner: function (ownerId) {
+      var id =
+        typeof ownerId === "string" || typeof ownerId === "number"
+          ? ownerId
+          : ownerId && (ownerId.OwnerID || ownerId.ownerId);
+      if (!id) {
+        return Promise.reject(new Error("OwnerID is required"));
+      }
+      return sendJson(
+        "/api/owners/" + encodeURIComponent(String(id)),
+        "DELETE",
+        null
+      );
+    },
     getMgmtCompanies: function () {
       return fetchJson("/api/mgmt-companies");
     },
