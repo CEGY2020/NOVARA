@@ -13,6 +13,8 @@ import secrets
 import traceback
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from email import policy
+from email.parser import BytesParser
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlencode
 
@@ -765,13 +767,89 @@ def _safe_filename(name: str) -> str:
 
 def _normalize_photo_content_type(value: str | None) -> str:
     content_type = _as_text(value).lower()
+    # Strip parameters such as "image/jpeg; charset=binary".
+    if ";" in content_type:
+        content_type = content_type.split(";", 1)[0].strip()
     if content_type == "image/jpg":
         content_type = "image/jpeg"
     if content_type not in PHOTO_CONTENT_TYPES:
         return ""
-    if content_type == "image/jpg":
-        return "image/jpeg"
     return content_type
+
+
+def _guess_photo_content_type(
+    filename: str | None = None, content_type: str | None = None
+) -> str:
+    """Prefer an explicit MIME type; fall back to the file extension."""
+    normalized = _normalize_photo_content_type(content_type)
+    if normalized:
+        return normalized
+    ext = os.path.splitext(_as_text(filename))[1].lower()
+    by_ext = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".heic": "image/heic",
+        ".heif": "image/heif",
+    }
+    return by_ext.get(ext, "")
+
+
+def _header_content_type(headers: dict | None) -> str:
+    if not isinstance(headers, dict):
+        return ""
+    for key, value in headers.items():
+        if str(key).lower() == "content-type":
+            return _as_text(value)
+    return ""
+
+
+def is_multipart_content_type(content_type: str | None) -> bool:
+    return "multipart/form-data" in _as_text(content_type).lower()
+
+
+def parse_multipart_form(
+    body: bytes, content_type: str
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """Parse multipart/form-data into text fields and file parts."""
+    ctype = _as_text(content_type)
+    if not is_multipart_content_type(ctype):
+        raise ValueError("Content-Type must be multipart/form-data")
+    if not isinstance(body, (bytes, bytearray)):
+        body = b""
+    header = f"Content-Type: {ctype}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8")
+    message = BytesParser(policy=policy.default).parsebytes(header + bytes(body))
+    fields: dict[str, str] = {}
+    files: list[dict[str, Any]] = []
+    if not message.is_multipart():
+        return fields, files
+    for part in message.iter_parts():
+        disposition = part.get_content_disposition()
+        if disposition not in (None, "form-data", "inline", "attachment"):
+            continue
+        name = part.get_param("name", header="content-disposition") or ""
+        name = str(name).strip()
+        filename = part.get_filename()
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            payload = b""
+        elif isinstance(payload, str):
+            payload = payload.encode("utf-8")
+        if filename:
+            files.append(
+                {
+                    "name": name or "file",
+                    "filename": str(filename),
+                    "content_type": part.get_content_type() or "",
+                    "data": bytes(payload),
+                }
+            )
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        fields[name] = bytes(payload).decode(charset, errors="replace")
+    return fields, files
 
 
 def _new_photo_id() -> str:
@@ -983,6 +1061,58 @@ def save_photo(item: dict) -> dict:
         "uploadUrl": upload_url,
         "uploadHeaders": {"Content-Type": content_type},
         "uploadMethod": "PUT",
+    }
+
+
+def store_photo_object(
+    s3_key: str, body: bytes, content_type: str | None = None
+) -> dict:
+    """Store image bytes in S3 or local fallback storage."""
+    s3_key = _as_text(s3_key).lstrip("/")
+    if not s3_key or ".." in s3_key.split("/"):
+        raise ValueError("Invalid S3Key")
+    payload = body or b""
+    content_type = _guess_photo_content_type(content_type=content_type) or (
+        _as_text(content_type) or "application/octet-stream"
+    )
+    if photos_storage_mode() == "s3":
+        if not PHOTOS_BUCKET_NAME:
+            raise RuntimeError("NOVARA_PHOTOS_BUCKET is not configured")
+        s3_client().put_object(
+            Bucket=PHOTOS_BUCKET_NAME,
+            Key=s3_key,
+            Body=payload,
+            ContentType=content_type,
+        )
+        return {
+            "ok": True,
+            "storage": "s3",
+            "s3Key": s3_key,
+            "bytes": len(payload),
+            "contentType": content_type,
+        }
+    return store_local_photo_bytes(s3_key, payload, content_type)
+
+
+def save_photo_with_file(
+    item: dict, file_bytes: bytes, *, content_type: str | None = None
+) -> dict:
+    """Persist metadata and immediately store the uploaded image bytes."""
+    ensure_photos_table()
+    s3_key = _as_text(item.get("S3Key"))
+    if not s3_key:
+        raise ValueError("S3Key is required")
+    stored = store_photo_object(s3_key, file_bytes or b"", content_type)
+    table = dynamodb_table(PHOTOS_TABLE_NAME)
+    table.put_item(Item=item)
+    photo = normalize_photo(item)
+    return {
+        "ok": True,
+        "table": PHOTOS_TABLE_NAME,
+        "storage": stored.get("storage") or photos_storage_mode(),
+        "photo": photo,
+        "uploaded": True,
+        "bytes": stored.get("bytes", len(file_bytes or b"")),
     }
 
 
@@ -3504,6 +3634,7 @@ def handle_photos_request(params: dict[str, list[str]]) -> tuple[int, dict]:
 
 
 def handle_photo_create_request(body: dict | None) -> tuple[int, dict]:
+    """JSON create: metadata only + uploadUrl for a follow-up PUT."""
     item, error = parse_photo_payload(body)
     if error:
         return 400, {"error": error}
@@ -3515,6 +3646,79 @@ def handle_photo_create_request(body: dict | None) -> tuple[int, dict]:
             "error": "Failed to create photo metadata",
             "detail": str(exc),
         }
+
+
+def handle_photo_multipart_create(
+    fields: dict[str, str] | None,
+    files: list[dict[str, Any]] | None,
+) -> tuple[int, dict]:
+    """
+    Multipart create: accept file(s) + PhotoType + Caption + SiteID + optional SystemID.
+
+    Stores each file immediately (S3 or local) and writes NOVARAPhotos metadata.
+    """
+    fields = fields or {}
+    files = [
+        part
+        for part in (files or [])
+        if isinstance(part, dict) and (part.get("data") is not None)
+    ]
+    if not files:
+        return 400, {
+            "error": (
+                "At least one image file is required "
+                "(form field name: file, files, or photo)"
+            )
+        }
+
+    created: list[dict] = []
+    for part in files:
+        filename = _as_text(part.get("filename")) or "photo.jpg"
+        content_type = _guess_photo_content_type(
+            filename, part.get("content_type")
+        )
+        if not content_type:
+            return 400, {
+                "error": (
+                    "Each file must be an image type "
+                    "(jpeg, png, gif, webp, heic)"
+                )
+            }
+        payload = {
+            "SiteID": fields.get("SiteID") or fields.get("siteId"),
+            "SystemID": fields.get("SystemID") or fields.get("systemId"),
+            "PhotoType": fields.get("PhotoType") or fields.get("photoType"),
+            "Caption": fields.get("Caption") or fields.get("caption"),
+            "UploadedBy": fields.get("UploadedBy") or fields.get("uploadedBy"),
+            "ContentType": content_type,
+            "FileName": filename,
+        }
+        item, error = parse_photo_payload(payload)
+        if error:
+            return 400, {"error": error}
+        try:
+            result = save_photo_with_file(
+                item,
+                bytes(part.get("data") or b""),
+                content_type=content_type,
+            )
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return 500, {
+                "error": "Failed to upload photo",
+                "detail": str(exc),
+            }
+        created.append(result["photo"])
+
+    return 200, {
+        "ok": True,
+        "table": PHOTOS_TABLE_NAME,
+        "storage": photos_storage_mode(),
+        "count": len(created),
+        "photos": created,
+        "photo": created[0],
+        "uploaded": True,
+    }
 
 
 def handle_photo_delete_request(photo_id: str | None) -> tuple[int, dict]:
@@ -4344,6 +4548,27 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
             traceback.print_exc()
             return api_response(
                 500, {"error": "Failed to load photo content", "detail": str(exc)}
+            )
+
+    # Multipart photo upload (POST /api/photos with multipart/form-data).
+    content_type = _header_content_type(headers)
+    if (
+        method == "POST"
+        and (normalized.endswith("/api/photos") or normalized == "/photos")
+        and is_multipart_content_type(content_type)
+    ):
+        try:
+            fields, files = parse_multipart_form(
+                _request_raw_body(event), content_type
+            )
+            status, payload = handle_photo_multipart_create(fields, files)
+            return api_response(status, payload)
+        except ValueError as exc:
+            return api_response(400, {"error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return api_response(
+                500, {"error": "Failed to parse multipart upload", "detail": str(exc)}
             )
 
     try:

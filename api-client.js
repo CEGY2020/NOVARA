@@ -212,6 +212,52 @@
     createPhoto: function (photo) {
       return sendJson("/api/photos", "POST", photo);
     },
+    /**
+     * Upload one photo via multipart/form-data to POST /api/photos.
+     * fields: { SiteID, SystemID?, PhotoType, Caption?, UploadedBy? }
+     * file: File/Blob
+     */
+    uploadPhoto: function (fields, file) {
+      var data = fields || {};
+      var form = new FormData();
+      var siteId = data.SiteID || data.siteId || "";
+      var systemId = data.SystemID || data.systemId || "";
+      var photoType = data.PhotoType || data.photoType || "Other";
+      var caption = data.Caption || data.caption || "";
+      var uploadedBy = data.UploadedBy || data.uploadedBy || "";
+      if (!siteId) {
+        return Promise.reject(new Error("SiteID is required"));
+      }
+      if (!file) {
+        return Promise.reject(new Error("An image file is required"));
+      }
+      form.append("SiteID", String(siteId));
+      if (systemId) {
+        form.append("SystemID", String(systemId));
+      }
+      form.append("PhotoType", String(photoType));
+      if (caption) {
+        form.append("Caption", String(caption));
+      }
+      if (uploadedBy) {
+        form.append("UploadedBy", String(uploadedBy));
+      }
+      form.append(
+        "file",
+        file,
+        (file && file.name) || data.FileName || data.fileName || "photo.jpg"
+      );
+      var url = buildUrl("/api/photos");
+      // Do not set Content-Type; the browser adds the multipart boundary.
+      return fetch(url, {
+        method: "POST",
+        headers: authHeaders(),
+        body: form,
+        cache: "no-store",
+      }).then(function (response) {
+        return parseResponse(response, "/api/photos");
+      });
+    },
     deletePhoto: function (photoId) {
       var id =
         typeof photoId === "string" || typeof photoId === "number"

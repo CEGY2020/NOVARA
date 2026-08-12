@@ -243,7 +243,7 @@
         return;
       }
       var api = global.NovaraApi;
-      if (!api || !api.createPhoto || !api.uploadPhotoFile) {
+      if (!api || !(api.uploadPhoto || (api.createPhoto && api.uploadPhotoFile))) {
         setStatus("Photo API is unavailable.", true);
         return;
       }
@@ -266,32 +266,41 @@
       }
       setStatus("Uploading " + files.length + " photo" + (files.length === 1 ? "" : "s") + "…", false);
 
+      function uploadOne(file) {
+        var payload = {
+          SiteID: context.siteId,
+          PhotoType: photoType,
+          Caption: caption,
+          ContentType: file.type || "image/jpeg",
+          FileName: file.name || "photo.jpg",
+          UploadedBy: uploadedBy,
+        };
+        if (context.systemId) {
+          payload.SystemID = context.systemId;
+        }
+        // Prefer single-request multipart upload.
+        if (typeof api.uploadPhoto === "function") {
+          return api.uploadPhoto(payload, file);
+        }
+        // Legacy fallback: JSON metadata + PUT bytes to uploadUrl.
+        return api.createPhoto(payload).then(function (result) {
+          var uploadUrl = result && result.uploadUrl;
+          var headers = (result && result.uploadHeaders) || {
+            "Content-Type": file.type || "image/jpeg",
+          };
+          if (!uploadUrl) {
+            throw new Error("Upload URL was not returned by the API");
+          }
+          return api.uploadPhotoFile(uploadUrl, file, headers);
+        });
+      }
+
       var chain = Promise.resolve();
       var uploaded = 0;
       files.forEach(function (file) {
         chain = chain.then(function () {
-          var payload = {
-            SiteID: context.siteId,
-            PhotoType: photoType,
-            Caption: caption,
-            ContentType: file.type || "image/jpeg",
-            FileName: file.name || "photo.jpg",
-            UploadedBy: uploadedBy,
-          };
-          if (context.systemId) {
-            payload.SystemID = context.systemId;
-          }
-          return api.createPhoto(payload).then(function (result) {
-            var uploadUrl = result && result.uploadUrl;
-            var headers = (result && result.uploadHeaders) || {
-              "Content-Type": file.type || "image/jpeg",
-            };
-            if (!uploadUrl) {
-              throw new Error("Upload URL was not returned by the API");
-            }
-            return api.uploadPhotoFile(uploadUrl, file, headers).then(function () {
-              uploaded += 1;
-            });
+          return uploadOne(file).then(function () {
+            uploaded += 1;
           });
         });
       });

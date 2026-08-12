@@ -47,6 +47,10 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems"),
     )
     parser.add_argument(
+        "--photos-table",
+        default=os.environ.get("NOVARA_PHOTOS_TABLE", "NOVARAPhotos"),
+    )
+    parser.add_argument(
         "--owners-table",
         default=os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners"),
     )
@@ -136,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             f"ReadingsTableName={args.readings_table}",
             f"SitesTableName={args.sites_table}",
             f"SystemsTableName={args.systems_table}",
+            f"PhotosTableName={args.photos_table}",
             f"OwnersTableName={args.owners_table}",
             f"MgmtCompaniesTableName={args.mgmt_companies_table}",
             f"LeadsTableName={args.leads_table}",
