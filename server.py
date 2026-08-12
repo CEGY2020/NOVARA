@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/owners/mgmt-companies/leads/users APIs."""
+"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/photos/owners/mgmt-companies/leads/users APIs."""
 
 from __future__ import annotations
 
@@ -32,6 +32,27 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        photo_content_id = novara_api._photo_content_id_from_path(parsed.path)
+        if photo_content_id is not None:
+            try:
+                data, content_type, file_name = novara_api.read_photo_content(
+                    photo_content_id
+                )
+            except LookupError as exc:
+                self._send_json(404, {"error": str(exc)})
+                return
+            except Exception as exc:  # noqa: BLE001
+                self._send_json(
+                    500, {"error": "Failed to load photo content", "detail": str(exc)}
+                )
+                return
+            self._send_bytes(
+                200,
+                data,
+                content_type=content_type,
+                file_name=file_name,
+            )
+            return
         if parsed.path == "/api/readings":
             params = parse_qs(parsed.query)
             status, payload = novara_api.handle_readings_request(params)
@@ -49,6 +70,23 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/systems":
             status, payload = novara_api.handle_systems_request()
             self._send_json(status, payload)
+            return
+        if parsed.path == "/api/photos":
+            params = parse_qs(parsed.query)
+            status, payload = novara_api.handle_photos_request(params)
+            self._send_json(status, payload)
+            return
+        photo_path_id = novara_api._photo_id_from_path(parsed.path)
+        if photo_path_id is not None:
+            item = novara_api.get_photo_item(photo_path_id)
+            if not item:
+                self._send_json(
+                    404, {"error": f"PhotoID '{photo_path_id}' was not found"}
+                )
+                return
+            self._send_json(
+                200, {"ok": True, "photo": novara_api.normalize_photo(item)}
+            )
             return
         if parsed.path == "/api/owners":
             status, payload = novara_api.handle_owners_request()
@@ -108,10 +146,35 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             status, payload = novara_api.handle_preapproved_add_request(body)
             self._send_json(status, payload)
             return
+        if parsed.path == "/api/photos":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_photo_create_request(body)
+            self._send_json(status, payload)
+            return
         self._handle_json_write("create")
 
     def do_PUT(self):
         parsed = urlparse(self.path)
+        upload_key = novara_api._local_upload_key_from_path(parsed.path)
+        if upload_key is not None:
+            raw = self._read_raw_body()
+            content_type = self.headers.get("Content-Type", "")
+            try:
+                payload = novara_api.store_local_photo_bytes(
+                    upload_key, raw, content_type
+                )
+            except ValueError as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            except Exception as exc:  # noqa: BLE001
+                self._send_json(
+                    500, {"error": "Failed to store photo", "detail": str(exc)}
+                )
+                return
+            self._send_json(200, payload)
+            return
         user_status_id = novara_api._user_status_path_id(parsed.path)
         if user_status_id is not None:
             body = self._read_json_body()
@@ -136,6 +199,11 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         system_path_id = novara_api._system_id_from_path(parsed.path)
         if system_path_id is not None:
             status, payload = novara_api.handle_system_delete_request(system_path_id)
+            self._send_json(status, payload)
+            return
+        photo_path_id = novara_api._photo_id_from_path(parsed.path)
+        if photo_path_id is not None:
+            status, payload = novara_api.handle_photo_delete_request(photo_path_id)
             self._send_json(status, payload)
             return
         self.send_error(404)
@@ -223,12 +291,15 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
-    def _read_json_body(self):
+    def _read_raw_body(self) -> bytes:
         try:
             length = int(self.headers.get("Content-Length") or "0")
         except ValueError:
             length = 0
-        raw = self.rfile.read(length) if length > 0 else b""
+        return self.rfile.read(length) if length > 0 else b""
+
+    def _read_json_body(self):
+        raw = self._read_raw_body()
         try:
             return json.loads(raw.decode("utf-8") or "{}")
         except json.JSONDecodeError:
@@ -245,6 +316,28 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(
+        self,
+        status: int,
+        data: bytes,
+        *,
+        content_type: str = "application/octet-stream",
+        file_name: str | None = None,
+    ):
+        payload = data or b""
+        self.send_response(status)
+        self.send_header("Content-Type", content_type or "application/octet-stream")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "private, max-age=300")
+        if file_name:
+            safe = novara_api._safe_filename(file_name)
+            self.send_header(
+                "Content-Disposition", 'inline; filename="%s"' % safe
+            )
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(payload)
+
     def log_message(self, fmt, *args):
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))
 
@@ -257,13 +350,15 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", DEFAULT_PORT), NovaraHandler)
     print(
         "NOVARA server on http://0.0.0.0:%s "
-        "(readings=%s savings=demo sites=%s systems=%s owners=%s "
+        "(readings=%s savings=demo sites=%s systems=%s photos=%s/%s owners=%s "
         "mgmtCompanies=%s leads=%s users=%s preapproved=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
             novara_api.SITES_TABLE_NAME,
             novara_api.SYSTEMS_TABLE_NAME,
+            novara_api.PHOTOS_TABLE_NAME,
+            novara_api.photos_storage_mode(),
             novara_api.OWNERS_TABLE_NAME,
             novara_api.MGMT_COMPANIES_TABLE_NAME,
             novara_api.LEADS_TABLE_NAME,

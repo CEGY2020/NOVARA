@@ -19,6 +19,12 @@ from urllib.parse import parse_qs, unquote, urlencode
 TABLE_NAME = os.environ.get("NOVARA_READINGS_TABLE", "NOVARAReadings")
 SITES_TABLE_NAME = os.environ.get("NOVARA_SITES_TABLE", "NOVARASites")
 SYSTEMS_TABLE_NAME = os.environ.get("NOVARA_SYSTEMS_TABLE", "NOVARASystems")
+PHOTOS_TABLE_NAME = os.environ.get("NOVARA_PHOTOS_TABLE", "NOVARAPhotos")
+PHOTOS_BUCKET_NAME = (os.environ.get("NOVARA_PHOTOS_BUCKET") or "").strip()
+PHOTOS_LOCAL_DIR = os.environ.get(
+    "NOVARA_PHOTOS_LOCAL_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".novara-photos"),
+)
 OWNERS_TABLE_NAME = os.environ.get("NOVARA_OWNERS_TABLE", "NOVARAOwners")
 MGMT_COMPANIES_TABLE_NAME = os.environ.get(
     "NOVARA_MGMT_COMPANIES_TABLE", "NOVARAMgmtCompanies"
@@ -43,6 +49,22 @@ SYSTEM_TYPES = ("DHW", "Pool", "HVAC")
 SITE_STATUSES = ("Online", "Offline", "Needs Review")
 SYSTEM_RECORD_TYPES = ("DHW", "Pool", "HVAC", "Boiler")
 SYSTEM_RECORD_STATUSES = ("Online", "Offline", "Needs Review", "Maintenance")
+PHOTO_TYPES = ("Property", "System", "Equipment", "Nameplate", "Other")
+PHOTO_CONTENT_TYPES = (
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+)
+PRESIGNED_UPLOAD_TTL_SECONDS = int(
+    os.environ.get("NOVARA_PHOTOS_UPLOAD_TTL", "900")
+)
+PRESIGNED_VIEW_TTL_SECONDS = int(
+    os.environ.get("NOVARA_PHOTOS_VIEW_TTL", "3600")
+)
 LEAD_SOURCES = (
     "Carlos",
     "Cam",
@@ -100,6 +122,7 @@ _USER_ID_PATTERN = re.compile(r"^USR(\d+)$", re.IGNORECASE)
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _systems_table_ready = False
+_photos_table_ready = False
 _owners_table_ready = False
 _mgmt_companies_table_ready = False
 _leads_table_ready = False
@@ -108,6 +131,7 @@ _preapproved_table_ready = False
 _readings_table_ready = False
 # Multi-system readings use TimestampUTC sort keys like 2026-08-05T07:00:00Z#SYS001
 _READING_SORT_SYSTEM_RE = re.compile(r"#(SYS\d+)$", re.IGNORECASE)
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def sanitize_aws_env() -> None:
@@ -648,6 +672,488 @@ def delete_system(system_id: str) -> dict:
         "systemId": system_id,
         "siteId": site_id,
     }
+
+
+def photos_storage_mode() -> str:
+    """Return 's3' when a bucket is configured, otherwise 'local'."""
+    return "s3" if PHOTOS_BUCKET_NAME else "local"
+
+
+def s3_client():
+    import boto3
+
+    sanitize_aws_env()
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    if region:
+        region = region.strip()
+    if not region:
+        raise RuntimeError(
+            "AWS_REGION (or AWS_DEFAULT_REGION) must be set to use S3 photo storage."
+        )
+    return boto3.client("s3", region_name=region)
+
+
+def ensure_photos_table() -> str:
+    """Create NOVARAPhotos if missing (pay-per-request, PhotoID hash + SiteID GSI)."""
+    global _photos_table_ready
+    if _photos_table_ready:
+        return PHOTOS_TABLE_NAME
+
+    from botocore.exceptions import ClientError
+
+    client = dynamodb_resource().meta.client
+    try:
+        client.describe_table(TableName=PHOTOS_TABLE_NAME)
+        _photos_table_ready = True
+        return PHOTOS_TABLE_NAME
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceNotFoundException":
+            raise
+
+    try:
+        client.create_table(
+            TableName=PHOTOS_TABLE_NAME,
+            AttributeDefinitions=[
+                {"AttributeName": "PhotoID", "AttributeType": "S"},
+                {"AttributeName": "SiteID", "AttributeType": "S"},
+                {"AttributeName": "SystemID", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "PhotoID", "KeyType": "HASH"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "SiteID-index",
+                    "KeySchema": [
+                        {"AttributeName": "SiteID", "KeyType": "HASH"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                },
+                {
+                    "IndexName": "SystemID-index",
+                    "KeySchema": [
+                        {"AttributeName": "SystemID", "KeyType": "HASH"},
+                    ],
+                    "Projection": {"ProjectionType": "ALL"},
+                },
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code != "ResourceInUseException":
+            raise
+
+    waiter = client.get_waiter("table_exists")
+    waiter.wait(
+        TableName=PHOTOS_TABLE_NAME,
+        WaiterConfig={"Delay": 2, "MaxAttempts": 30},
+    )
+    _photos_table_ready = True
+    return PHOTOS_TABLE_NAME
+
+
+def _safe_filename(name: str) -> str:
+    text = _as_text(name) or "photo"
+    text = text.replace("\\", "/").split("/")[-1]
+    text = _SAFE_FILENAME_RE.sub("-", text).strip(".-")
+    if not text:
+        text = "photo"
+    return text[:120]
+
+
+def _normalize_photo_content_type(value: str | None) -> str:
+    content_type = _as_text(value).lower()
+    if content_type == "image/jpg":
+        content_type = "image/jpeg"
+    if content_type not in PHOTO_CONTENT_TYPES:
+        return ""
+    if content_type == "image/jpg":
+        return "image/jpeg"
+    return content_type
+
+
+def _new_photo_id() -> str:
+    return "PHO" + secrets.token_hex(6).upper()
+
+
+def _photo_s3_key(site_id: str, system_id: str, photo_id: str, filename: str) -> str:
+    safe_name = _safe_filename(filename)
+    if system_id:
+        return f"sites/{site_id}/systems/{system_id}/{photo_id}/{safe_name}"
+    return f"sites/{site_id}/{photo_id}/{safe_name}"
+
+
+def _local_photo_path(s3_key: str) -> str:
+    # Keep relative keys under the local photos directory.
+    relative = s3_key.replace("\\", "/").lstrip("/")
+    return os.path.join(PHOTOS_LOCAL_DIR, relative)
+
+
+def _ensure_local_photo_dir(path: str) -> None:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
+def _photo_public_url(s3_key: str, photo_id: str) -> str:
+    if photos_storage_mode() == "s3":
+        region = (
+            os.environ.get("AWS_REGION")
+            or os.environ.get("AWS_DEFAULT_REGION")
+            or "us-east-1"
+        ).strip()
+        return f"https://{PHOTOS_BUCKET_NAME}.s3.{region}.amazonaws.com/{s3_key}"
+    return f"/api/photos/{photo_id}/content"
+
+
+def _presigned_upload_url(s3_key: str, content_type: str) -> str:
+    if photos_storage_mode() != "s3":
+        return f"/api/photos/upload/{s3_key}"
+    client = s3_client()
+    return client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": PHOTOS_BUCKET_NAME,
+            "Key": s3_key,
+            "ContentType": content_type,
+        },
+        ExpiresIn=PRESIGNED_UPLOAD_TTL_SECONDS,
+    )
+
+
+def _presigned_view_url(s3_key: str, photo_id: str) -> str:
+    if photos_storage_mode() != "s3":
+        return f"/api/photos/{photo_id}/content"
+    client = s3_client()
+    return client.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": PHOTOS_BUCKET_NAME,
+            "Key": s3_key,
+        },
+        ExpiresIn=PRESIGNED_VIEW_TTL_SECONDS,
+    )
+
+
+def normalize_photo(item: dict, *, include_view_url: bool = True) -> dict:
+    photo_id = first_present(item, ("PhotoID", "photoId", "photo_id", "id"))
+    site_id = first_present(item, ("SiteID", "siteId", "site_id"), default="")
+    system_id = first_present(
+        item, ("SystemID", "systemId", "system_id"), default=""
+    )
+    photo_type = first_present(
+        item, ("PhotoType", "photoType", "photo_type"), default="Other"
+    )
+    caption = first_present(item, ("Caption", "caption"), default="")
+    s3_key = first_present(item, ("S3Key", "s3Key", "s3_key", "Key"), default="")
+    uploaded_at = first_present(
+        item, ("UploadedAt", "uploadedAt", "uploaded_at"), default=""
+    )
+    uploaded_by = first_present(
+        item, ("UploadedBy", "uploadedBy", "uploaded_by"), default=""
+    )
+    content_type = first_present(
+        item, ("ContentType", "contentType", "content_type"), default=""
+    )
+    file_name = first_present(
+        item, ("FileName", "fileName", "file_name", "Filename"), default=""
+    )
+    stored_url = first_present(item, ("Url", "URL", "url"), default="")
+    view_url = stored_url
+    if include_view_url and s3_key:
+        try:
+            view_url = _presigned_view_url(str(s3_key), str(photo_id or ""))
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+            view_url = stored_url or _photo_public_url(
+                str(s3_key), str(photo_id or "")
+            )
+    return {
+        "photoId": "" if photo_id is None else str(photo_id),
+        "siteId": "" if site_id is None else str(site_id),
+        "systemId": "" if system_id is None else str(system_id),
+        "photoType": str(photo_type or "Other"),
+        "caption": str(caption or ""),
+        "s3Key": str(s3_key or ""),
+        "url": str(view_url or ""),
+        "uploadedAt": str(uploaded_at or ""),
+        "uploadedBy": str(uploaded_by or ""),
+        "contentType": str(content_type or ""),
+        "fileName": str(file_name or ""),
+    }
+
+
+def parse_photo_payload(body: dict | None) -> tuple[dict | None, str | None]:
+    """Validate and normalize an incoming photo create payload."""
+    if not isinstance(body, dict):
+        return None, "JSON body is required"
+
+    site_id = _as_text(body.get("SiteID") if "SiteID" in body else body.get("siteId"))
+    system_id = _as_text(
+        body.get("SystemID") if "SystemID" in body else body.get("systemId")
+    )
+    photo_type = _as_text(
+        body.get("PhotoType") if "PhotoType" in body else body.get("photoType")
+    )
+    caption = _as_text(body.get("Caption") if "Caption" in body else body.get("caption"))
+    uploaded_by = _as_text(
+        body.get("UploadedBy") if "UploadedBy" in body else body.get("uploadedBy")
+    )
+    content_type = _normalize_photo_content_type(
+        body.get("ContentType")
+        if "ContentType" in body
+        else body.get("contentType")
+    )
+    file_name = _safe_filename(
+        body.get("FileName")
+        if "FileName" in body
+        else body.get("fileName") or body.get("filename") or "photo.jpg"
+    )
+
+    if not site_id:
+        return None, "SiteID is required"
+    if len(site_id) > 64:
+        return None, "SiteID must be 64 characters or fewer"
+    if system_id and len(system_id) > 64:
+        return None, "SystemID must be 64 characters or fewer"
+    if not photo_type:
+        photo_type = "Other"
+    if photo_type not in PHOTO_TYPES:
+        return None, "PhotoType must be one of: " + ", ".join(PHOTO_TYPES)
+    if len(caption) > 500:
+        return None, "Caption must be 500 characters or fewer"
+    if not content_type:
+        return None, "ContentType must be an image type (jpeg, png, gif, webp, heic)"
+
+    linked_site = get_site_item(site_id)
+    if linked_site is None:
+        return None, f"SiteID '{site_id}' was not found in {SITES_TABLE_NAME}"
+
+    if system_id:
+        linked_system = get_system_item(system_id)
+        if linked_system is None:
+            return None, f"SystemID '{system_id}' was not found in {SYSTEMS_TABLE_NAME}"
+        linked_site_id = str(linked_system.get("siteId") or "")
+        if linked_site_id and linked_site_id != site_id:
+            return None, (
+                f"SystemID '{system_id}' belongs to SiteID '{linked_site_id}', "
+                f"not '{site_id}'"
+            )
+        # Prefer the system's parent site when provided inconsistently.
+        site_id = linked_site_id or site_id
+
+    photo_id = _new_photo_id()
+    s3_key = _photo_s3_key(site_id, system_id, photo_id, file_name)
+    uploaded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    item = {
+        "PhotoID": photo_id,
+        "SiteID": site_id,
+        "SystemID": system_id,
+        "PhotoType": photo_type,
+        "Caption": caption,
+        "S3Key": s3_key,
+        "Url": _photo_public_url(s3_key, photo_id),
+        "UploadedAt": uploaded_at,
+        "UploadedBy": uploaded_by,
+        "ContentType": content_type,
+        "FileName": file_name,
+    }
+    # DynamoDB GSI keys cannot be empty strings — omit SystemID when unset.
+    if not system_id:
+        item.pop("SystemID", None)
+    return item, None
+
+
+def save_photo(item: dict) -> dict:
+    """Persist photo metadata and return upload instructions."""
+    ensure_photos_table()
+    table = dynamodb_table(PHOTOS_TABLE_NAME)
+    table.put_item(Item=item)
+    content_type = str(item.get("ContentType") or "image/jpeg")
+    s3_key = str(item.get("S3Key") or "")
+    upload_url = _presigned_upload_url(s3_key, content_type)
+    photo = normalize_photo(item)
+    return {
+        "ok": True,
+        "table": PHOTOS_TABLE_NAME,
+        "storage": photos_storage_mode(),
+        "photo": photo,
+        "uploadUrl": upload_url,
+        "uploadHeaders": {"Content-Type": content_type},
+        "uploadMethod": "PUT",
+    }
+
+
+def list_photos(
+    *,
+    site_id: str | None = None,
+    system_id: str | None = None,
+) -> dict:
+    """List photos filtered by SiteID and/or SystemID."""
+    ensure_photos_table()
+    table = dynamodb_table(PHOTOS_TABLE_NAME)
+    site_id = _as_text(site_id)
+    system_id = _as_text(system_id)
+
+    items: list[dict] = []
+    if system_id:
+        query_kwargs: dict[str, Any] = {
+            "IndexName": "SystemID-index",
+            "KeyConditionExpression": "SystemID = :system_id",
+            "ExpressionAttributeValues": {":system_id": system_id},
+        }
+        if site_id:
+            query_kwargs["FilterExpression"] = "SiteID = :site_id"
+            query_kwargs["ExpressionAttributeValues"][":site_id"] = site_id
+        while True:
+            response = table.query(**query_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            query_kwargs["ExclusiveStartKey"] = last_key
+    elif site_id:
+        query_kwargs = {
+            "IndexName": "SiteID-index",
+            "KeyConditionExpression": "SiteID = :site_id",
+            "ExpressionAttributeValues": {":site_id": site_id},
+        }
+        while True:
+            response = table.query(**query_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            query_kwargs["ExclusiveStartKey"] = last_key
+    else:
+        scan_kwargs: dict[str, Any] = {}
+        while True:
+            response = table.scan(**scan_kwargs)
+            items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            scan_kwargs["ExclusiveStartKey"] = last_key
+
+    photos = [normalize_photo(json_safe(item)) for item in items]
+    photos.sort(
+        key=lambda row: (
+            str(row.get("uploadedAt") or ""),
+            str(row.get("photoId") or ""),
+        ),
+        reverse=True,
+    )
+    return {
+        "table": PHOTOS_TABLE_NAME,
+        "storage": photos_storage_mode(),
+        "count": len(photos),
+        "siteId": site_id,
+        "systemId": system_id,
+        "photos": photos,
+    }
+
+
+def get_photo_item(photo_id: str) -> dict | None:
+    photo_id = _as_text(photo_id)
+    if not photo_id:
+        return None
+    ensure_photos_table()
+    table = dynamodb_table(PHOTOS_TABLE_NAME)
+    response = table.get_item(Key={"PhotoID": photo_id})
+    item = response.get("Item")
+    if not item:
+        return None
+    return json_safe(item)
+
+
+def delete_photo(photo_id: str) -> dict:
+    """Delete photo metadata and best-effort remove the stored object."""
+    from botocore.exceptions import ClientError
+
+    photo_id = _as_text(photo_id)
+    if not photo_id:
+        raise ValueError("PhotoID is required")
+
+    existing = get_photo_item(photo_id)
+    if not existing:
+        raise LookupError(f"PhotoID '{photo_id}' was not found")
+
+    s3_key = _as_text(existing.get("S3Key"))
+    table = dynamodb_table(PHOTOS_TABLE_NAME)
+    try:
+        table.delete_item(
+            Key={"PhotoID": photo_id},
+            ConditionExpression="attribute_exists(PhotoID)",
+        )
+    except ClientError as exc:
+        code = (exc.response.get("Error") or {}).get("Code")
+        if code == "ConditionalCheckFailedException":
+            raise LookupError(f"PhotoID '{photo_id}' was not found") from exc
+        raise
+
+    if s3_key:
+        try:
+            if photos_storage_mode() == "s3":
+                s3_client().delete_object(Bucket=PHOTOS_BUCKET_NAME, Key=s3_key)
+            else:
+                local_path = _local_photo_path(s3_key)
+                if os.path.isfile(local_path):
+                    os.remove(local_path)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+
+    return {
+        "ok": True,
+        "table": PHOTOS_TABLE_NAME,
+        "deleted": True,
+        "photoId": photo_id,
+        "siteId": _as_text(existing.get("SiteID")),
+        "systemId": _as_text(existing.get("SystemID")),
+    }
+
+
+def store_local_photo_bytes(s3_key: str, body: bytes, content_type: str | None = None) -> dict:
+    """Write uploaded bytes to local photo storage (dev fallback)."""
+    s3_key = _as_text(s3_key).lstrip("/")
+    if not s3_key or ".." in s3_key.split("/"):
+        raise ValueError("Invalid S3Key")
+    path = _local_photo_path(s3_key)
+    _ensure_local_photo_dir(path)
+    with open(path, "wb") as handle:
+        handle.write(body or b"")
+    return {
+        "ok": True,
+        "storage": "local",
+        "s3Key": s3_key,
+        "bytes": len(body or b""),
+        "contentType": _as_text(content_type),
+    }
+
+
+def read_photo_content(photo_id: str) -> tuple[bytes, str, str]:
+    """Return (bytes, content_type, filename) for a photo object."""
+    item = get_photo_item(photo_id)
+    if not item:
+        raise LookupError(f"PhotoID '{photo_id}' was not found")
+    s3_key = _as_text(item.get("S3Key"))
+    content_type = _as_text(item.get("ContentType")) or "application/octet-stream"
+    file_name = _as_text(item.get("FileName")) or "photo"
+    if not s3_key:
+        raise LookupError(f"PhotoID '{photo_id}' has no stored object key")
+
+    if photos_storage_mode() == "s3":
+        response = s3_client().get_object(Bucket=PHOTOS_BUCKET_NAME, Key=s3_key)
+        data = response["Body"].read()
+        content_type = response.get("ContentType") or content_type
+        return data, content_type, file_name
+
+    path = _local_photo_path(s3_key)
+    if not os.path.isfile(path):
+        raise LookupError(f"Photo file for '{photo_id}' was not found")
+    with open(path, "rb") as handle:
+        return handle.read(), content_type, file_name
 
 
 def ensure_owners_table() -> str:
@@ -2984,6 +3490,104 @@ def handle_system_delete_request(system_id: str | None) -> tuple[int, dict]:
         }
 
 
+def handle_photos_request(params: dict[str, list[str]]) -> tuple[int, dict]:
+    site_id = first_query_value(params, ("siteId", "SiteID", "site_id"))
+    system_id = first_query_value(params, ("systemId", "SystemID", "system_id"))
+    try:
+        return 200, list_photos(site_id=site_id, system_id=system_id)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to load photos from DynamoDB",
+            "detail": str(exc),
+        }
+
+
+def handle_photo_create_request(body: dict | None) -> tuple[int, dict]:
+    item, error = parse_photo_payload(body)
+    if error:
+        return 400, {"error": error}
+    try:
+        return 200, save_photo(item)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to create photo metadata",
+            "detail": str(exc),
+        }
+
+
+def handle_photo_delete_request(photo_id: str | None) -> tuple[int, dict]:
+    photo_id = _as_text(photo_id)
+    if not photo_id:
+        return 400, {"error": "PhotoID is required"}
+    try:
+        return 200, delete_photo(photo_id)
+    except LookupError as exc:
+        return 404, {"error": str(exc)}
+    except ValueError as exc:
+        return 400, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        return 500, {
+            "error": "Failed to delete photo",
+            "detail": str(exc),
+        }
+
+
+def _photo_id_from_path(path: str) -> str | None:
+    """Extract PhotoID from /api/photos/{id} (not /content or /upload)."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/photos/", "/photos/"):
+        if marker not in normalized:
+            continue
+        remainder = normalized.split(marker, 1)[1]
+        if not remainder or "/" in remainder:
+            return None
+        return unquote(remainder).strip()
+    return None
+
+
+def _photo_content_id_from_path(path: str) -> str | None:
+    """Extract PhotoID from /api/photos/{id}/content."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/photos/", "/photos/"):
+        if marker not in normalized:
+            continue
+        remainder = normalized.split(marker, 1)[1]
+        if not remainder.endswith("/content"):
+            continue
+        photo_id = remainder[: -len("/content")]
+        if photo_id and "/" not in photo_id:
+            return unquote(photo_id).strip()
+    return None
+
+
+def _local_upload_key_from_path(path: str) -> str | None:
+    """Extract S3 key from /api/photos/upload/{key...}."""
+    normalized = path if path.startswith("/") else f"/{path}"
+    for marker in ("/api/photos/upload/", "/photos/upload/"):
+        if marker not in normalized:
+            continue
+        key = normalized.split(marker, 1)[1]
+        key = unquote(key).lstrip("/")
+        if not key or ".." in key.split("/"):
+            return None
+        return key
+    return None
+
+
+def first_query_value(params: dict[str, list[str]], keys: tuple[str, ...]) -> str:
+    for key in keys:
+        values = params.get(key)
+        if not values:
+            continue
+        value = _as_text(values[0] if isinstance(values, list) else values)
+        if value:
+            return value
+    return ""
+
+
 def handle_owners_request() -> tuple[int, dict]:
     try:
         return 200, scan_owners()
@@ -3409,6 +4013,9 @@ def handle_health_request() -> tuple[int, dict]:
         "table": TABLE_NAME,
         "sitesTable": SITES_TABLE_NAME,
         "systemsTable": SYSTEMS_TABLE_NAME,
+        "photosTable": PHOTOS_TABLE_NAME,
+        "photosBucket": PHOTOS_BUCKET_NAME or None,
+        "photosStorage": photos_storage_mode(),
         "ownersTable": OWNERS_TABLE_NAME,
         "mgmtCompaniesTable": MGMT_COMPANIES_TABLE_NAME,
         "leadsTable": LEADS_TABLE_NAME,
@@ -3466,6 +4073,38 @@ def route_request(
             payload = dict(body or {}) if isinstance(body, dict) else {}
             payload["SystemID"] = system_path_id
             return handle_system_write_request(payload, mode="update")
+        return 405, {"error": "Method not allowed"}
+    if normalized.endswith("/api/photos") or normalized == "/photos":
+        if method == "GET":
+            return handle_photos_request(params)
+        if method == "POST":
+            return handle_photo_create_request(body)
+        return 405, {"error": "Method not allowed"}
+    photo_content_id = _photo_content_id_from_path(normalized)
+    if photo_content_id is not None:
+        # Binary content is handled by the HTTP adapters; JSON route returns metadata.
+        if method != "GET":
+            return 405, {"error": "Method not allowed"}
+        item = get_photo_item(photo_content_id)
+        if not item:
+            return 404, {"error": f"PhotoID '{photo_content_id}' was not found"}
+        return 200, {
+            "ok": True,
+            "photo": normalize_photo(item),
+            "contentPath": True,
+        }
+    photo_path_id = _photo_id_from_path(normalized)
+    if photo_path_id is not None:
+        if method == "DELETE":
+            return handle_photo_delete_request(photo_path_id)
+        if method == "GET":
+            item = get_photo_item(photo_path_id)
+            if not item:
+                return 404, {"error": f"PhotoID '{photo_path_id}' was not found"}
+            return 200, {
+                "ok": True,
+                "photo": normalize_photo(item),
+            }
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/owners") or normalized == "/owners":
         if method == "GET":
@@ -3582,11 +4221,11 @@ def route_request(
         "path": path,
         "method": method,
         "hint": (
-            "Supported routes include /api/sites, /api/systems, /api/owners, "
-            "/api/mgmt-companies, /api/leads, /api/users, /api/users/signup, "
-            "/api/users/login, /api/users/session, /api/users/preapproved, "
-            "/api/readings, /api/savings, and /api/health. Redeploy novara-api "
-            "if a known route returns this."
+            "Supported routes include /api/sites, /api/systems, /api/photos, "
+            "/api/owners, /api/mgmt-companies, /api/leads, /api/users, "
+            "/api/users/signup, /api/users/login, /api/users/session, "
+            "/api/users/preapproved, /api/readings, /api/savings, and /api/health. "
+            "Redeploy novara-api if a known route returns this."
         ),
     }
 
@@ -3608,6 +4247,45 @@ def api_response(status: int, payload: dict, *, cors: bool = True) -> dict:
     }
 
 
+def binary_api_response(
+    status: int,
+    data: bytes,
+    *,
+    content_type: str = "application/octet-stream",
+    file_name: str | None = None,
+    cors: bool = True,
+) -> dict:
+    headers = {
+        "Content-Type": content_type or "application/octet-stream",
+        "Cache-Control": "private, max-age=300",
+    }
+    if file_name:
+        headers["Content-Disposition"] = f'inline; filename="{_safe_filename(file_name)}"'
+    if cors:
+        headers["Access-Control-Allow-Origin"] = "*"
+        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+    return {
+        "statusCode": status,
+        "headers": headers,
+        "body": base64.b64encode(data or b"").decode("ascii"),
+        "isBase64Encoded": True,
+    }
+
+
+def _request_raw_body(event: dict) -> bytes:
+    body = event.get("body")
+    if body is None:
+        return b""
+    if isinstance(body, bytes):
+        return body
+    if event.get("isBase64Encoded"):
+        return base64.b64decode(body)
+    if isinstance(body, str):
+        return body.encode("utf-8")
+    return b""
+
+
 def handle_lambda_event(event: dict, _context=None) -> dict:
     """API Gateway HTTP API / REST / Lambda Function URL entrypoint."""
     sanitize_aws_env()
@@ -3622,6 +4300,52 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
     path = _request_path(event)
     params = _query_params(event)
     headers = event.get("headers") or {}
+    normalized = path if path.startswith("/") else f"/{path}"
+    while "//" in normalized:
+        normalized = normalized.replace("//", "/")
+    normalized = normalized.rstrip("/") or "/"
+
+    # Local-storage photo binary upload (PUT /api/photos/upload/{key}).
+    upload_key = _local_upload_key_from_path(normalized)
+    if upload_key is not None:
+        if method == "OPTIONS":
+            return api_response(204, {})
+        if method != "PUT":
+            return api_response(405, {"error": "Method not allowed"})
+        try:
+            content_type = ""
+            for key, value in headers.items():
+                if str(key).lower() == "content-type":
+                    content_type = _as_text(value)
+                    break
+            result = store_local_photo_bytes(
+                upload_key, _request_raw_body(event), content_type
+            )
+            return api_response(200, result)
+        except ValueError as exc:
+            return api_response(400, {"error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return api_response(
+                500, {"error": "Failed to store photo", "detail": str(exc)}
+            )
+
+    # Photo binary download (GET /api/photos/{id}/content).
+    photo_content_id = _photo_content_id_from_path(normalized)
+    if photo_content_id is not None and method == "GET":
+        try:
+            data, content_type, file_name = read_photo_content(photo_content_id)
+            return binary_api_response(
+                200, data, content_type=content_type, file_name=file_name
+            )
+        except LookupError as exc:
+            return api_response(404, {"error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return api_response(
+                500, {"error": "Failed to load photo content", "detail": str(exc)}
+            )
+
     try:
         body = _request_body(event)
     except json.JSONDecodeError:

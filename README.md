@@ -17,6 +17,8 @@ Sites page: [http://localhost:8000/sites.html](http://localhost:8000/sites.html)
 
 Systems page: [http://localhost:8000/systems.html](http://localhost:8000/systems.html) → `GET/POST/PUT /api/systems` from `NOVARASystems` (table is created automatically if missing).
 
+Site and System edit modals include a Photos gallery. Photos are stored in S3 (bucket from `NOVARA_PHOTOS_BUCKET`) with metadata in `NOVARAPhotos`. When no bucket is configured locally, files are stored under `.novara-photos/` and served from `/api/photos/{photoId}/content`.
+
 Owners page: [http://localhost:8000/owners.html](http://localhost:8000/owners.html) → `GET/POST/PUT /api/owners` from `NOVARAOwners` (table is created automatically if missing).
 
 Management Companies page: [http://localhost:8000/mgmt-companies.html](http://localhost:8000/mgmt-companies.html) → `GET/POST/PUT /api/mgmt-companies` from `NOVARAMgmtCompanies` (table is created automatically if missing).
@@ -143,6 +145,11 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `PUT /api/systems` | Update existing system in `NOVARASystems` (JSON body) |
 | `PUT /api/systems/{id}` | Update system by `SystemID` path (JSON body) |
 | `DELETE /api/systems/{id}` | Delete system; refreshes linked site `Systems` count + status |
+| `GET /api/photos?siteId=&systemId=` | `NOVARAPhotos` (optional filters; view URLs are presigned or local content paths) |
+| `POST /api/photos` | Create photo metadata + return S3/local upload URL (JSON body) |
+| `GET /api/photos/{id}` | One photo metadata record |
+| `DELETE /api/photos/{id}` | Delete photo metadata + stored object |
+| `GET /api/photos/{id}/content` | Binary image bytes (local storage / fallback) |
 | `GET /api/owners` | `NOVARAOwners` |
 | `POST /api/owners` | Create owner in `NOVARAOwners` (JSON body) |
 | `PUT /api/owners` | Update existing owner in `NOVARAOwners` (JSON body) |
@@ -160,6 +167,8 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner` (`OwnerID` from `NOVARAOwners`), `MgmtCompany` (`MgmtCompanyID` from `NOVARAMgmtCompanies`), `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
 
 Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional). Creating, updating, or deleting a system refreshes the linked site’s `Systems` count and derives site `Status` from linked systems (`Offline` > `Needs Review`/`Maintenance` > `Online`).
+
+Photos create body fields: `SiteID` (required), `SystemID` (optional; must belong to the site), `PhotoType` (`Property`/`System`/`Equipment`/`Nameplate`/`Other`), `Caption` (optional), `ContentType` (image MIME type), `FileName`, `UploadedBy` (optional). Response includes `uploadUrl` for a `PUT` of the raw image bytes.
 
 Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 

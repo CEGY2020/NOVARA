@@ -1,4 +1,4 @@
-/* Shared NOVARA JSON API client for readings + savings + sites + systems + owners + mgmt companies + leads + users. */
+/* Shared NOVARA JSON API client for readings + savings + sites + systems + photos + owners + mgmt companies + leads + users. */
 (function (global) {
   function apiBase() {
     var base = global.NOVARA_API_BASE;
@@ -101,6 +101,50 @@
     });
   }
 
+  function resolveUploadUrl(uploadUrl) {
+    var url = String(uploadUrl || "");
+    if (!url) {
+      return "";
+    }
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    return buildUrl(url);
+  }
+
+  function uploadBinary(uploadUrl, file, headers) {
+    var url = resolveUploadUrl(uploadUrl);
+    var requestHeaders = {};
+    if (headers && typeof headers === "object") {
+      Object.keys(headers).forEach(function (key) {
+        requestHeaders[key] = headers[key];
+      });
+    }
+    if (!requestHeaders["Content-Type"] && file && file.type) {
+      requestHeaders["Content-Type"] = file.type;
+    }
+    return fetch(url, {
+      method: "PUT",
+      headers: requestHeaders,
+      body: file,
+      cache: "no-store",
+    }).then(function (response) {
+      if (!response.ok) {
+        return response.text().then(function (text) {
+          var detail = text;
+          try {
+            var parsed = JSON.parse(text || "{}");
+            detail = parsed.detail || parsed.error || text;
+          } catch (e) {
+            // keep raw text
+          }
+          throw new Error(detail || "Upload failed (" + response.status + ")");
+        });
+      }
+      return { ok: true };
+    });
+  }
+
   global.NovaraApi = {
     base: apiBase,
     url: buildUrl,
@@ -157,6 +201,33 @@
         "DELETE",
         null
       );
+    },
+    getPhotos: function (filters) {
+      var opts = filters || {};
+      return fetchJson("/api/photos", {
+        siteId: opts.siteId || opts.SiteID || "",
+        systemId: opts.systemId || opts.SystemID || "",
+      });
+    },
+    createPhoto: function (photo) {
+      return sendJson("/api/photos", "POST", photo);
+    },
+    deletePhoto: function (photoId) {
+      var id =
+        typeof photoId === "string" || typeof photoId === "number"
+          ? photoId
+          : photoId && (photoId.PhotoID || photoId.photoId);
+      if (!id) {
+        return Promise.reject(new Error("PhotoID is required"));
+      }
+      return sendJson(
+        "/api/photos/" + encodeURIComponent(String(id)),
+        "DELETE",
+        null
+      );
+    },
+    uploadPhotoFile: function (uploadUrl, file, headers) {
+      return uploadBinary(uploadUrl, file, headers);
     },
     getOwners: function () {
       return fetchJson("/api/owners");
