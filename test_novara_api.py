@@ -2216,6 +2216,8 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["leadsTable"], "NOVARALeads")
         self.assertEqual(payload["usersTable"], "NOVARAUsers")
         self.assertEqual(payload["preapprovedTable"], "NOVARAPreapprovedEmails")
+        self.assertEqual(payload["settingsTable"], "NOVARASettings")
+        self.assertEqual(payload["utilityBillsTable"], "NOVARAUtilityBills")
 
     def test_photos_list_route(self):
         fake = {
@@ -2540,6 +2542,307 @@ class RouteTests(unittest.TestCase):
                 "window.NOVARA_API_BASE = 'https://example.execute-api.[REDACTED].amazonaws.com'",
                 text,
             )
+
+    def test_mask_secret_never_returns_full_value(self):
+        self.assertEqual(novara_api.mask_secret(""), "")
+        self.assertEqual(novara_api.mask_secret("abcd"), "••••")
+        self.assertEqual(novara_api.mask_secret("utility-secret-key"), "••••-key")
+        self.assertTrue(novara_api.looks_like_masked_secret("••••-key"))
+        self.assertFalse(novara_api.looks_like_masked_secret("utility-secret-key"))
+
+    def test_normalize_utilityapi_settings_masks_key(self):
+        settings = novara_api.normalize_utilityapi_settings(
+            {
+                "SettingKey": "utilityapi",
+                "ApiKey": "super-secret-token",
+                "BaseUrl": "https://utilityapi.com/api/v2",
+                "AccountId": "acct-1",
+                "AuthorizationId": "auth-9",
+            }
+        )
+        self.assertTrue(settings["apiKeyConfigured"])
+        self.assertEqual(settings["apiKeyMasked"], "••••oken")
+        self.assertNotIn("ApiKey", settings)
+        self.assertNotIn("apiKey", settings)
+        self.assertNotEqual(settings["apiKeyMasked"], "super-secret-token")
+        self.assertEqual(settings["accountId"], "acct-1")
+        self.assertEqual(settings["authorizationId"], "auth-9")
+
+    def test_parse_utilityapi_settings_keeps_existing_key_when_blank(self):
+        existing = {
+            "ApiKey": "stored-token-1234",
+            "BaseUrl": "https://utilityapi.com/api/v2",
+            "AccountId": "acct-1",
+            "AuthorizationId": "auth-9",
+        }
+        item, error = novara_api.parse_utilityapi_settings_payload(
+            {"BaseUrl": "https://utilityapi.com/api/v2", "AccountId": "acct-2"},
+            existing,
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["ApiKey"], "stored-token-1234")
+        self.assertEqual(item["AccountId"], "acct-2")
+        self.assertEqual(item["AuthorizationId"], "auth-9")
+
+        masked, masked_error = novara_api.parse_utilityapi_settings_payload(
+            {"ApiKey": "••••1234", "AuthorizationId": "auth-10"},
+            existing,
+        )
+        self.assertIsNone(masked_error)
+        self.assertEqual(masked["ApiKey"], "stored-token-1234")
+        self.assertEqual(masked["AuthorizationId"], "auth-10")
+
+        cleared, cleared_error = novara_api.parse_utilityapi_settings_payload(
+            {"clearApiKey": True},
+            existing,
+        )
+        self.assertIsNone(cleared_error)
+        self.assertEqual(cleared["ApiKey"], "")
+
+        replaced, replaced_error = novara_api.parse_utilityapi_settings_payload(
+            {"ApiKey": "new-token-value"},
+            existing,
+        )
+        self.assertIsNone(replaced_error)
+        self.assertEqual(replaced["ApiKey"], "new-token-value")
+
+    def test_parse_utilityapi_settings_rejects_bad_base_url(self):
+        item, error = novara_api.parse_utilityapi_settings_payload(
+            {"BaseUrl": "not-a-url"}
+        )
+        self.assertIsNone(item)
+        self.assertIn("BaseUrl", error)
+
+    def test_utilityapi_settings_get_route(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARASettings",
+            "settings": {
+                "apiKeyConfigured": True,
+                "apiKeyMasked": "••••abcd",
+                "baseUrl": "https://utilityapi.com/api/v2",
+                "accountId": "",
+                "authorizationId": "",
+                "updatedAt": "2026-08-12T00:00:00Z",
+            },
+        }
+        with patch.object(novara_api, "get_utilityapi_settings", return_value=fake):
+            status, payload = novara_api.route_request(
+                "GET", "/api/settings/utilityapi", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["settings"]["apiKeyConfigured"])
+        self.assertEqual(payload["settings"]["apiKeyMasked"], "••••abcd")
+        self.assertNotIn("apiKey", payload["settings"])
+
+    def test_utilityapi_settings_put_route(self):
+        body = {
+            "ApiKey": "new-secret",
+            "BaseUrl": "https://utilityapi.com/api/v2",
+            "AccountId": "acct-1",
+            "AuthorizationId": "auth-1",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARASettings",
+            "settings": {
+                "apiKeyConfigured": True,
+                "apiKeyMasked": "••••h-1",
+                "baseUrl": body["BaseUrl"],
+                "accountId": "acct-1",
+                "authorizationId": "auth-1",
+            },
+        }
+        with patch.object(novara_api, "get_utilityapi_settings_item", return_value=None):
+            with patch.object(
+                novara_api, "save_utilityapi_settings", return_value=fake
+            ) as mocked:
+                status, payload = novara_api.route_request(
+                    "PUT", "/api/settings/utilityapi", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        saved = mocked.call_args.args[0]
+        self.assertEqual(saved["ApiKey"], "new-secret")
+        self.assertNotIn("new-secret", json.dumps(payload))
+
+    def test_utility_bills_list_route(self):
+        fake = {
+            "table": "NOVARAUtilityBills",
+            "count": 0,
+            "siteId": None,
+            "bills": [],
+        }
+        with patch.object(novara_api, "scan_utility_bills", return_value=fake):
+            status, payload = novara_api.route_request("GET", "/api/utility-bills", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["bills"], [])
+
+    def test_utility_bills_list_filters_site(self):
+        fake = {
+            "table": "NOVARAUtilityBills",
+            "count": 1,
+            "siteId": "SITE001",
+            "bills": [{"recordId": "BILL001", "siteId": "SITE001"}],
+        }
+        with patch.object(
+            novara_api, "scan_utility_bills", return_value=fake
+        ) as mocked:
+            status, payload = novara_api.route_request(
+                "GET", "/api/utility-bills", {"siteId": ["SITE001"]}
+            )
+        self.assertEqual(status, 200)
+        mocked.assert_called_once_with(site_id="SITE001")
+        self.assertEqual(payload["bills"][0]["recordId"], "BILL001")
+
+    def test_create_utility_bill_route(self):
+        body = {
+            "SiteID": "SITE001",
+            "UtilityAccountID": "UA-100",
+            "PeriodStart": "2026-07-01",
+            "PeriodEnd": "2026-07-31",
+            "UsageAmount": 1200,
+            "UsageUnit": "kWh",
+            "Cost": 180.5,
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAUtilityBills",
+            "bill": {"recordId": "BILL001", "siteId": "SITE001"},
+        }
+        with patch.object(novara_api, "save_utility_bill", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "POST", "/api/utility-bills", {}, body
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["mode"], "create")
+
+    def test_create_utility_bill_requires_site(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/utility-bills", {}, {"UsageAmount": 10}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("SiteID", payload["error"])
+
+    def test_normalize_utility_bill(self):
+        bill = novara_api.normalize_utility_bill(
+            {
+                "RecordID": "BILL001",
+                "SiteID": "SITE001",
+                "UtilityAccountID": "UA-100",
+                "PeriodStart": "2026-07-01",
+                "PeriodEnd": "2026-07-31",
+                "UsageAmount": Decimal("1200.5"),
+                "UsageUnit": "kWh",
+                "Cost": Decimal("180.50"),
+                "Currency": "USD",
+                "RawData": '{"kwh": 1200.5}',
+                "LastSyncedAt": "2026-08-12T00:00:00Z",
+            }
+        )
+        self.assertEqual(bill["recordId"], "BILL001")
+        self.assertEqual(bill["siteId"], "SITE001")
+        self.assertEqual(bill["utilityAccountId"], "UA-100")
+        self.assertEqual(bill["usageAmount"], 1200.5)
+        self.assertEqual(bill["usageUnit"], "kWh")
+        self.assertEqual(bill["cost"], 180.5)
+        self.assertEqual(bill["rawData"], {"kwh": 1200.5})
+        self.assertEqual(bill["lastSyncedAt"], "2026-08-12T00:00:00Z")
+
+    def test_parse_utility_bill_payload(self):
+        item, error = novara_api.parse_utility_bill_payload(
+            {
+                "SiteID": "SITE001",
+                "UtilityAccountID": "UA-100",
+                "PeriodStart": "2026-07-01",
+                "PeriodEnd": "2026-07-31",
+                "UsageAmount": "1500",
+                "UsageUnit": "therms",
+                "Cost": "99.10",
+                "RawData": {"summary": "ok"},
+            }
+        )
+        self.assertIsNone(error)
+        self.assertEqual(item["SiteID"], "SITE001")
+        self.assertEqual(item["UsageUnit"], "therms")
+        self.assertEqual(item["UsageAmount"], Decimal("1500"))
+        self.assertEqual(item["Cost"], Decimal("99.10"))
+        self.assertIn("summary", item["RawData"])
+
+        bad, bad_error = novara_api.parse_utility_bill_payload(
+            {"SiteID": "SITE001", "PeriodStart": "July 1"}
+        )
+        self.assertIsNone(bad)
+        self.assertIn("PeriodStart", bad_error)
+
+    def test_next_utility_bill_id(self):
+        self.assertEqual(novara_api.next_utility_bill_id([]), "BILL001")
+        self.assertEqual(
+            novara_api.next_utility_bill_id(
+                [{"RecordID": "BILL002"}, {"RecordID": "BILL010"}]
+            ),
+            "BILL011",
+        )
+
+    def test_nav_includes_utility_data(self):
+        source = Path(__file__).resolve().parent.joinpath("nav.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('id: "bills"', source)
+        self.assertIn("bills.html", source)
+        self.assertIn("Utility Data", source)
+
+    def test_bills_page_has_empty_list(self):
+        html = Path(__file__).resolve().parent.joinpath("bills.html").read_text(
+            encoding="utf-8"
+        )
+        js = Path(__file__).resolve().parent.joinpath("bills.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('data-page="bills"', html)
+        self.assertIn("bills-tbody", html)
+        self.assertIn("bills-empty-state", html)
+        self.assertIn("No utility bills have been synced yet", html)
+        self.assertIn("getUtilityBills", js)
+        self.assertNotIn("utilityapi.com/api", js)
+
+    def test_settings_page_has_utilityapi_form(self):
+        html = Path(__file__).resolve().parent.joinpath("settings.html").read_text(
+            encoding="utf-8"
+        )
+        js = Path(__file__).resolve().parent.joinpath("settings.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("utilityapi-form", html)
+        self.assertIn("field-utilityapi-key", html)
+        self.assertIn('type="password"', html)
+        self.assertIn("field-utilityapi-base-url", html)
+        self.assertIn("field-utilityapi-account-id", html)
+        self.assertIn("field-utilityapi-authorization-id", html)
+        self.assertIn("getUtilityApiSettings", js)
+        self.assertIn("saveUtilityApiSettings", js)
+        self.assertIn("Leave blank to keep the saved key", js)
+
+    def test_api_client_exposes_utility_methods(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("getUtilityApiSettings", source)
+        self.assertIn("saveUtilityApiSettings", source)
+        self.assertIn("getUtilityBills", source)
+        self.assertIn("createUtilityBill", source)
+        self.assertIn("/api/settings/utilityapi", source)
+        self.assertIn("/api/utility-bills", source)
+
+    def test_unknown_api_path_mentions_utility_routes(self):
+        status, payload = novara_api.route_request("POST", "/api/missing", {})
+        self.assertEqual(status, 404)
+        self.assertIn("/api/settings/utilityapi", payload.get("hint", ""))
+        self.assertIn("/api/utility-bills", payload.get("hint", ""))
 
 
 if __name__ == "__main__":

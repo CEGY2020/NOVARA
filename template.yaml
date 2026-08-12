@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/photos, /api/owners, /api/mgmt-companies, /api/leads, /api/users)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/photos, /api/owners, /api/mgmt-companies, /api/leads, /api/users, /api/settings/utilityapi, /api/utility-bills)
 
 Parameters:
   ReadingsTableName:
@@ -30,6 +30,12 @@ Parameters:
   PreapprovedTableName:
     Type: String
     Default: NOVARAPreapprovedEmails
+  SettingsTableName:
+    Type: String
+    Default: NOVARASettings
+  UtilityBillsTableName:
+    Type: String
+    Default: NOVARAUtilityBills
   AdminAlertEmail:
     Type: String
     Default: steve@cegy.us
@@ -85,7 +91,7 @@ Resources:
       FunctionName: novara-api
       Handler: lambda_function.handler
       CodeUri: .
-      Description: NOVARA readings/sites/systems/photos/owners/mgmt-companies/leads/users JSON API backed by DynamoDB + S3
+      Description: NOVARA readings/sites/systems/photos/owners/mgmt-companies/leads/users/settings/utility-bills JSON API backed by DynamoDB + S3
       Environment:
         Variables:
           NOVARA_READINGS_TABLE: !Ref ReadingsTableName
@@ -98,6 +104,8 @@ Resources:
           NOVARA_LEADS_TABLE: !Ref LeadsTableName
           NOVARA_USERS_TABLE: !Ref UsersTableName
           NOVARA_PREAPPROVED_TABLE: !Ref PreapprovedTableName
+          NOVARA_SETTINGS_TABLE: !Ref SettingsTableName
+          NOVARA_UTILITY_BILLS_TABLE: !Ref UtilityBillsTableName
           NOVARA_ADMIN_ALERT_EMAIL: !Ref AdminAlertEmail
           NOVARA_SES_FROM_EMAIL: !Ref SesFromEmail
           NOVARA_APP_BASE_URL: !Ref AppBaseUrl
@@ -125,6 +133,8 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SettingsTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UtilityBillsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ReadingsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SitesTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SystemsTableName}/index/*
@@ -134,6 +144,8 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SettingsTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UtilityBillsTableName}/index/*
             - Effect: Allow
               Action:
                 - s3:PutObject
@@ -376,6 +388,36 @@ Resources:
             ApiId: !Ref NovaraHttpApi
             Path: /api/users/preapproved/{email}
             Method: DELETE
+        UtilityApiSettingsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/settings/utilityapi
+            Method: GET
+        UtilityApiSettingsPut:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/settings/utilityapi
+            Method: PUT
+        UtilityBillsGet:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/utility-bills
+            Method: GET
+        UtilityBillsCreate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/utility-bills
+            Method: POST
+        UtilityBillsUpdate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NovaraHttpApi
+            Path: /api/utility-bills
+            Method: PUT
         Health:
           Type: HttpApi
           Properties:
@@ -460,3 +502,9 @@ Outputs:
   UsersEndpoint:
     Description: Users endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/users"
+  UtilityApiSettingsEndpoint:
+    Description: UtilityAPI settings endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/settings/utilityapi"
+  UtilityBillsEndpoint:
+    Description: Utility bills endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/utility-bills"

@@ -25,6 +25,8 @@ Management Companies page: [http://localhost:8000/mgmt-companies.html](http://lo
 
 Leads page: [http://localhost:8000/leads.html](http://localhost:8000/leads.html) → `GET/POST/PUT /api/leads` from `NOVARALeads` (table is created automatically if missing).
 
+Utility Data page: [http://localhost:8000/bills.html](http://localhost:8000/bills.html) → `GET /api/utility-bills` from `NOVARAUtilityBills` (table is created automatically if missing). UtilityAPI credentials are stored from [Settings](http://localhost:8000/settings.html) via `GET/PUT /api/settings/utilityapi` in `NOVARASettings`. Live UtilityAPI sync is not implemented yet.
+
 ### Readings response shape
 
 ```json
@@ -162,6 +164,11 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `POST /api/leads` | Create lead in `NOVARALeads` (JSON body) |
 | `PUT /api/leads` | Update existing lead in `NOVARALeads` (JSON body) |
 | `PUT /api/leads/{id}` | Update lead by `LeadID` path (JSON body) |
+| `GET /api/settings/utilityapi` | UtilityAPI config from `NOVARASettings` (API key is masked; full token is never returned) |
+| `PUT /api/settings/utilityapi` | Save UtilityAPI API key, base URL, account ID, and authorization ID(s) |
+| `GET /api/utility-bills[?siteId=SITE001]` | Utility bill / usage records from `NOVARAUtilityBills` |
+| `POST /api/utility-bills` | Create a stored bill record (JSON body; used later by sync) |
+| `PUT /api/utility-bills` | Update an existing bill record (`RecordID` required) |
 | `GET /api/health` | health check |
 
 Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Owner` (`OwnerID` from `NOVARAOwners`), `MgmtCompany` (`MgmtCompanyID` from `NOVARAMgmtCompanies`), `Address`, `City`, `State`, `Zip`, `SystemType` (`DHW`/`Pool`/`HVAC`), `Status` (`Online`/`Offline`/`Needs Review`), `Systems` (number; display count is derived from linked systems).
@@ -177,6 +184,10 @@ Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (requir
 Management Companies create/update body fields: `MgmtCompanyID` (required, `MGT###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 
 Leads create/update body fields: `LeadID` (required, `LD###`), `CompanyName` / `SiteName` (required), `ContactName`, `ContactEmail`, `ContactPhone`, `Source` (`Carlos`/`Cam`/`Cold Call`/`Katia`/`PHEEP`/`Steve`/`Referral`/`Website`/`Rinnai`/`Trade Show`/`Other`), `SystemType` (`DHW NG`/`DHW kW`/`Pool`/`HVAC`/`Other`; legacy `DHW` is accepted and stored as `DHW NG`), `Stage` (`New Lead`/`Contacted`/`Qualified`/`Proposal Sent`/`Won`/`Lost`), `NextFollowUp` (`YYYY-MM-DD`), `AssignedTo`, `EstimatedSavings` (number, optional), `Notes` (optional).
+
+UtilityAPI settings body fields: `ApiKey` / `Token` (optional on update; omit or leave blank to keep the stored key; `clearApiKey: true` removes it), `BaseUrl` (default `https://utilityapi.com/api/v2`), `AccountId` (optional), `AuthorizationId` (optional; comma-separated IDs are accepted). GET responses include `apiKeyConfigured` and `apiKeyMasked` only — the full key is never returned.
+
+Utility bill create/update body fields: `RecordID` (optional on create, auto `BILL###`; required on update), `SiteID` (required), `UtilityAccountID`, `AuthorizationID`, `PeriodStart` / `PeriodEnd` (`YYYY-MM-DD`), `UsageAmount` (number), `UsageUnit` (`kWh`, `therms`, etc.), `Cost`, `Currency` (default `USD`), `RawData` (JSON object or string summary from UtilityAPI), `LastSyncedAt` (ISO-8601 UTC).
 
 Frontend pages load `api-config.js` + `api-client.js`. When `window.NOVARA_API_BASE` is set, browsers call the absolute API URL (CORS enabled). When empty, they use same-origin `/api/...` (local server or Amplify reverse-proxy rewrite).
 
@@ -207,7 +218,7 @@ Recommended Amplify app settings:
 
 - Service role with permission to deploy CloudFormation/Lambda/API Gateway/IAM/S3 (or set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`)
 - Env vars: `NOVARA_AWS_REGION=us-west-2` (if the Amplify app region differs from the DynamoDB region)
-- Optional: `NOVARA_READINGS_TABLE`, `NOVARA_SITES_TABLE`, `NOVARA_API_STACK`
+- Optional: `NOVARA_READINGS_TABLE`, `NOVARA_SITES_TABLE`, `NOVARA_SETTINGS_TABLE`, `NOVARA_UTILITY_BILLS_TABLE`, `NOVARA_API_STACK`
 
 ### GitHub Actions
 

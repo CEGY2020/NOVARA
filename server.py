@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/photos/owners/mgmt-companies/leads/users APIs."""
+"""NOVARA local server: static files + DynamoDB readings/savings/sites/systems/photos/owners/mgmt-companies/leads/users/settings/utility-bills APIs."""
 
 from __future__ import annotations
 
@@ -100,6 +100,18 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/leads":
             status, payload = novara_api.handle_leads_request()
+            self._send_json(status, payload)
+            return
+        if parsed.path in (
+            "/api/settings/utilityapi",
+            "/api/utilityapi/settings",
+        ):
+            status, payload = novara_api.handle_utilityapi_settings_request()
+            self._send_json(status, payload)
+            return
+        if parsed.path in ("/api/utility-bills", "/api/bills"):
+            params = parse_qs(parsed.query)
+            status, payload = novara_api.handle_utility_bills_request(params)
             self._send_json(status, payload)
             return
         if parsed.path == "/api/users":
@@ -323,6 +335,27 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             )
             self._send_json(status, payload)
             return
+        if parsed.path in (
+            "/api/settings/utilityapi",
+            "/api/utilityapi/settings",
+        ) and mode == "update":
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_utilityapi_settings_write_request(
+                body
+            )
+            self._send_json(status, payload)
+            return
+        if parsed.path in ("/api/utility-bills", "/api/bills"):
+            body = self._read_json_body()
+            if body is None:
+                return
+            status, payload = novara_api.handle_utility_bill_write_request(
+                body, mode=mode
+            )
+            self._send_json(status, payload)
+            return
         self.send_error(404)
 
     def _read_raw_body(self) -> bytes:
@@ -385,7 +418,7 @@ def main():
     print(
         "NOVARA server on http://0.0.0.0:%s "
         "(readings=%s savings=demo sites=%s systems=%s photos=%s/%s owners=%s "
-        "mgmtCompanies=%s leads=%s users=%s preapproved=%s)"
+        "mgmtCompanies=%s leads=%s users=%s preapproved=%s settings=%s utilityBills=%s)"
         % (
             DEFAULT_PORT,
             novara_api.TABLE_NAME,
@@ -398,6 +431,8 @@ def main():
             novara_api.LEADS_TABLE_NAME,
             novara_api.USERS_TABLE_NAME,
             novara_api.PREAPPROVED_TABLE_NAME,
+            novara_api.SETTINGS_TABLE_NAME,
+            novara_api.UTILITY_BILLS_TABLE_NAME,
         )
     )
     try:

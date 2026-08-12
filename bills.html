@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Utility Data</title>
+  <link rel="stylesheet" href="dashboard.css?v=utilityapi-1">
+</head>
+<body data-page="bills">
+
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2>Utility Data</h2>
+        <p>Utility bills and usage records from UtilityAPI</p>
+      </div>
+      <div id="user-profile-root"></div>
+    </header>
+
+    <p id="bills-status" class="chart-status" aria-live="polite">Loading utility data…</p>
+
+    <p id="bills-empty-state" class="chart-empty-state list-empty-state" hidden>
+      No utility bills have been synced yet. Configure UtilityAPI in Settings, then records will appear here after sync is enabled.
+    </p>
+
+    <table class="data-table" id="bills-table">
+      <thead>
+        <tr>
+          <th>Record ID</th>
+          <th>Site</th>
+          <th>Utility Account</th>
+          <th>Period</th>
+          <th>Usage</th>
+          <th>Cost</th>
+          <th>Last Synced</th>
+        </tr>
+      </thead>
+      <tbody id="bills-tbody">
+        <tr>
+          <td colspan="7">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<script src="api-config.js?v=utilityapi-1"></script>
+<script src="api-client.js?v=utilityapi-1"></script>
+<script src="nav.js?v=utilityapi-1"></script>
+<script src="bills.js?v=utilityapi-1"></script>
+</body>
+</html>

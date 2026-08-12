@@ -1,4 +1,4 @@
-/* Shared NOVARA JSON API client for readings + savings + sites + systems + photos + owners + mgmt companies + leads + users. */
+/* Shared NOVARA JSON API client for readings + savings + sites + systems + photos + owners + mgmt companies + leads + users + utilityapi + bills. */
 (function (global) {
   function apiBase() {
     var base = global.NOVARA_API_BASE;
@@ -392,6 +392,21 @@
         "/api/users/preapproved/" + encodeURIComponent(String(email)),
         "DELETE"
       );
+    },
+    getUtilityApiSettings: function () {
+      return fetchJson("/api/settings/utilityapi");
+    },
+    saveUtilityApiSettings: function (settings) {
+      return sendJson("/api/settings/utilityapi", "PUT", settings || {});
+    },
+    getUtilityBills: function (siteId) {
+      return fetchJson(
+        "/api/utility-bills",
+        siteId ? { siteId: siteId } : null
+      );
+    },
+    createUtilityBill: function (bill) {
+      return sendJson("/api/utility-bills", "POST", bill);
     },
   };
 })(window);

@@ -6,7 +6,7 @@
  */
 (function () {
   // Entity pages (Sites, Systems, Owners, Management Companies, Leads) stay
-  // grouped ahead of ops links (alarms, savings, reports, settings).
+  // grouped ahead of ops links (alarms, savings, utility data, reports, settings).
   var AEM_NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "sites", label: "Sites", href: "sites.html" },
@@ -17,6 +17,7 @@
     { id: "users", label: "Users", href: "users.html" },
     { id: "alarms", label: "Active Alarms", href: "active-alarms.html" },
     { id: "savings", label: "Energy Savings", href: "energy-savings.html" },
+    { id: "bills", label: "Utility Data", href: "bills.html" },
     { id: "reports", label: "Reports", href: "reports.html" },
     { id: "settings", label: "Settings", href: "settings.html" }
   ];
