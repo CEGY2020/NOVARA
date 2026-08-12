@@ -27,6 +27,23 @@ class ParseHelpersTests(unittest.TestCase):
         self.assertEqual(columns["T2"], "Return")
         self.assertEqual(columns["RelayState"], "Relay")
 
+    def test_resolve_vista_springs_headers(self):
+        columns = imp.resolve_columns(
+            ["Timestamp (UTC)", "Relay State", "T2 (F)", "T1 (F)"]
+        )
+        self.assertEqual(columns["TimestampUTC"], "Timestamp (UTC)")
+        self.assertEqual(columns["RelayState"], "Relay State")
+        self.assertEqual(columns["T2"], "T2 (F)")
+        self.assertEqual(columns["T1"], "T1 (F)")
+
+    def test_infer_vista_springs_ids(self):
+        path = Path(
+            "data/readings/vista-springs/"
+            "DHW-Sys-3-chart-data-2026-08-11_15-04-11.csv.csv"
+        )
+        self.assertEqual(imp.infer_vista_springs_ids(path), ("SITE001", "SYS003"))
+        self.assertIsNone(imp.infer_vista_springs_ids(Path("other.csv")))
+
     def test_parse_timestamp_iso_and_space(self):
         self.assertEqual(
             imp.parse_timestamp_utc("2026-08-01T14:30:00Z"),
@@ -74,7 +91,8 @@ class ParseHelpersTests(unittest.TestCase):
         )
         self.assertEqual(item["SiteID"], "SITE001")
         self.assertEqual(item["SystemID"], "SYS001")
-        self.assertEqual(item["TimestampUTC"], "2026-08-01T00:00:00Z")
+        # System-scoped readings use composite sort keys to avoid collisions.
+        self.assertEqual(item["TimestampUTC"], "2026-08-01T00:00:00Z#SYS001")
         self.assertEqual(item["T1"], Decimal("120.5"))
         self.assertEqual(item["T2"], Decimal("110.2"))
         self.assertEqual(item["RelayState"], Decimal("1"))
@@ -128,9 +146,48 @@ class CsvImportTests(unittest.TestCase):
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0]["SiteID"], "SITE001")
             self.assertEqual(items[0]["SystemID"], "SYS001")
+            self.assertEqual(items[0]["TimestampUTC"], "2026-08-02T12:00:00Z#SYS001")
             self.assertEqual(items[0]["RelayState"], Decimal("1"))
         finally:
             path.unlink(missing_ok=True)
+
+    def test_parse_vista_springs_sample_row(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False) as handle:
+            handle.write("Timestamp (UTC),Relay State,T2 (F),T1 (F)\n")
+            handle.write("2026-08-05T07:00:00Z,1,101.14,113.21\n")
+            path = Path(handle.name)
+        try:
+            items, errors = imp.parse_items(
+                path,
+                site_map={},
+                default_site="SITE001",
+                default_system="SYS002",
+            )
+            self.assertEqual(errors, [])
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["SiteID"], "SITE001")
+            self.assertEqual(items[0]["SystemID"], "SYS002")
+            self.assertEqual(items[0]["TimestampUTC"], "2026-08-05T07:00:00Z#SYS002")
+            self.assertEqual(items[0]["T1"], Decimal("113.21"))
+            self.assertEqual(items[0]["T2"], Decimal("101.14"))
+            self.assertEqual(items[0]["RelayState"], Decimal("1"))
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_expand_input_paths_directory(self):
+        folder = (
+            Path(__file__).resolve().parent / "data" / "readings" / "vista-springs"
+        )
+        expanded = imp.expand_input_paths([folder])
+        self.assertEqual(len(expanded), 7)
+        self.assertTrue(all(p.name.startswith("DHW-Sys-") for p in expanded))
+
+    def test_dry_run_vista_springs_directory(self):
+        folder = (
+            Path(__file__).resolve().parent / "data" / "readings" / "vista-springs"
+        )
+        rc = imp.main([str(folder), "--dry-run"])
+        self.assertEqual(rc, 0)
 
     def test_dedupe_keeps_last(self):
         items = [
@@ -157,14 +214,14 @@ class CsvImportTests(unittest.TestCase):
             {
                 "SiteID": "SITE001",
                 "SystemID": "SYS001",
-                "TimestampUTC": "2026-08-01T00:00:00Z",
+                "TimestampUTC": "2026-08-01T00:00:00Z#SYS001",
                 "T1": Decimal("1"),
                 "T2": Decimal("2"),
             },
             {
                 "SiteID": "SITE001",
                 "SystemID": "SYS002",
-                "TimestampUTC": "2026-08-01T00:00:00Z",
+                "TimestampUTC": "2026-08-01T00:00:00Z#SYS002",
                 "T1": Decimal("3"),
                 "T2": Decimal("4"),
             },
@@ -172,6 +229,19 @@ class CsvImportTests(unittest.TestCase):
         unique, dupes = imp.dedupe_items(items)
         self.assertEqual(dupes, 0)
         self.assertEqual(len(unique), 2)
+
+    def test_summarize_by_system(self):
+        counts = imp.summarize_by_system(
+            [
+                {"SystemID": "SYS001"},
+                {"SystemID": "SYS001"},
+                {"SystemID": "SYS002"},
+                {},
+            ]
+        )
+        self.assertEqual(counts["SYS001"], 2)
+        self.assertEqual(counts["SYS002"], 1)
+        self.assertEqual(counts["(none)"], 1)
 
 
 class PutItemsTests(unittest.TestCase):
