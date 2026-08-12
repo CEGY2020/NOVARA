@@ -16,6 +16,12 @@
   var ownerIdDisplay = document.getElementById("field-ownerIdDisplay");
   var mgmtCompanySelect = document.getElementById("field-mgmtCompany");
   var mgmtCompanyIdDisplay = document.getElementById("field-mgmtCompanyIdDisplay");
+  var emptyStateEl = document.getElementById("sites-empty-state");
+  var tableEl = document.querySelector("table.data-table");
+  var headingEl = document.querySelector(".topbar h2");
+  var subtitleEl = document.querySelector(".topbar p");
+
+  var OWNER_EMPTY_MESSAGE = "No properties linked to your account yet";
 
   var sitesById = {};
   var ownersList = [];
@@ -29,6 +35,103 @@
 
   if (!tbody) {
     return;
+  }
+
+  function currentUser() {
+    return (
+      (window.NovaraAuth &&
+        NovaraAuth.getCurrentUser &&
+        NovaraAuth.getCurrentUser()) ||
+      null
+    );
+  }
+
+  function isOwnerScoped() {
+    if (window.NovaraAuth && typeof NovaraAuth.isOwnerUser === "function") {
+      return NovaraAuth.isOwnerUser(currentUser());
+    }
+    var user = currentUser();
+    if (!user) return false;
+    var role = String(user.role || "").toLowerCase();
+    if (role === "aem") return false;
+    return role === "owner" || Boolean(user.ownerId);
+  }
+
+  function currentOwnerId() {
+    if (window.NovaraAuth && typeof NovaraAuth.getOwnerId === "function") {
+      return NovaraAuth.getOwnerId(currentUser()) || "";
+    }
+    if (!isOwnerScoped()) return "";
+    var user = currentUser();
+    return user ? String(user.ownerId || "").trim() : "";
+  }
+
+  function siteBelongsToOwner(site, ownerId) {
+    if (!ownerId) return false;
+    var id = String((site && (site.ownerId || site.owner)) || "").trim();
+    return id === ownerId;
+  }
+
+  function filterSitesForCurrentUser(sites) {
+    var list = Array.isArray(sites) ? sites.slice() : [];
+    if (!isOwnerScoped()) {
+      return list;
+    }
+    var ownerId = currentOwnerId();
+    if (!ownerId) {
+      return [];
+    }
+    return list.filter(function (site) {
+      return siteBelongsToOwner(site, ownerId);
+    });
+  }
+
+  function applyOwnerChrome() {
+    var scoped = isOwnerScoped();
+    if (addBtn) {
+      addBtn.hidden = scoped;
+    }
+    if (headingEl && scoped) {
+      headingEl.textContent = "My Sites";
+    }
+    if (subtitleEl && scoped) {
+      subtitleEl.textContent = "Properties linked to your account";
+    }
+  }
+
+  function setEmptyState(visible, message) {
+    if (emptyStateEl) {
+      emptyStateEl.hidden = !visible;
+      if (message) {
+        emptyStateEl.textContent = message;
+      }
+    }
+    if (tableEl) {
+      tableEl.hidden = Boolean(visible);
+    }
+  }
+
+  function ensureOwnerContext() {
+    applyOwnerChrome();
+    var user = currentUser();
+    if (!isOwnerScoped(user) || currentOwnerId()) {
+      return Promise.resolve(user);
+    }
+    if (!window.NovaraApi || typeof NovaraApi.getSession !== "function") {
+      return Promise.resolve(user);
+    }
+    return NovaraApi.getSession()
+      .then(function (result) {
+        var next = result && result.user;
+        if (next && window.NovaraAuth && NovaraAuth.updateCurrentUser) {
+          NovaraAuth.updateCurrentUser(next);
+        }
+        applyOwnerChrome();
+        return currentUser();
+      })
+      .catch(function () {
+        return user;
+      });
   }
 
   function setStatus(message, isError) {
@@ -119,6 +222,9 @@
     var systemsRaw = fieldValue("field-systems");
     var systems = systemsRaw === "" ? 0 : Number(systemsRaw);
     var ownerId = fieldValue("field-owner");
+    if (isOwnerScoped() && currentOwnerId()) {
+      ownerId = currentOwnerId();
+    }
     return {
       SiteID: fieldValue("field-siteId"),
       SiteName: fieldValue("field-siteName"),
@@ -189,13 +295,24 @@
 
   function populateOwnerOptions(selectedOwner) {
     if (!ownerSelect) return;
-    var selectedId = resolveLookupId(ownersList, selectedOwner, "ownerId", [
+    var list = ownersList;
+    var scopedId = currentOwnerId();
+    if (isOwnerScoped() && scopedId) {
+      list = ownersList.filter(function (owner) {
+        return String(owner.ownerId || "") === scopedId;
+      });
+      if (!list.length) {
+        list = [{ ownerId: scopedId, name: scopedId }];
+      }
+      selectedOwner = scopedId;
+    }
+    var selectedId = resolveLookupId(list, selectedOwner, "ownerId", [
       "name",
       "ownerName",
     ]);
     var options =
       '<option value="">Select owner…</option>' +
-      ownersList
+      list
         .map(function (owner) {
           var id = owner.ownerId || "";
           var label = owner.name || owner.ownerName || id;
@@ -215,6 +332,7 @@
     if (selectedId) {
       ownerSelect.value = selectedId;
     }
+    ownerSelect.disabled = Boolean(isOwnerScoped());
     syncLookupIdDisplay(ownerSelect, ownerIdDisplay);
   }
 
@@ -323,6 +441,9 @@
     if (statusSelect) {
       statusSelect.disabled = false;
     }
+    if (ownerSelect) {
+      ownerSelect.disabled = false;
+    }
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.textContent = "Save";
@@ -358,10 +479,16 @@
   function renderSites(sites) {
     sitesById = {};
     if (!sites.length) {
+      var emptyMessage = isOwnerScoped()
+        ? OWNER_EMPTY_MESSAGE
+        : "No sites found in NOVARASites.";
       tbody.innerHTML =
-        '<tr><td colspan="7">No sites found in NOVARASites.</td></tr>';
+        '<tr><td colspan="7">' + escapeHtml(emptyMessage) + "</td></tr>";
+      setEmptyState(isOwnerScoped(), emptyMessage);
       return;
     }
+
+    setEmptyState(false);
 
     tbody.innerHTML = sites
       .map(function (site) {
@@ -470,15 +597,19 @@
 
     return request
       .then(function (data) {
-        var sites = (data && data.sites) || [];
+        var sites = filterSitesForCurrentUser((data && data.sites) || []);
         renderSites(sites);
         if (!sites.length) {
-          setStatus("No sites found in NOVARASites.", false);
+          setStatus(
+            isOwnerScoped() ? OWNER_EMPTY_MESSAGE : "No sites found in NOVARASites.",
+            false
+          );
         } else {
           setStatus(sites.length + " site" + (sites.length === 1 ? "" : "s"), false);
         }
       })
       .catch(function (err) {
+        setEmptyState(false);
         tbody.innerHTML =
           '<tr><td colspan="7">Unable to load sites.</td></tr>';
         setStatus(err.message || "Failed to load sites", true);
@@ -651,18 +782,23 @@
     closeModal();
   });
 
-  Promise.all([
-    Promise.resolve(loadLookups()).catch(function () {
-      ownersList = [];
-      mgmtCompaniesList = [];
-    }),
-    loadSites(),
-  ]).then(function () {
-    var sites = Object.keys(sitesById).map(function (id) {
-      return sitesById[id];
+  applyOwnerChrome();
+  ensureOwnerContext()
+    .then(function () {
+      return Promise.all([
+        Promise.resolve(loadLookups()).catch(function () {
+          ownersList = [];
+          mgmtCompaniesList = [];
+        }),
+        loadSites(),
+      ]);
+    })
+    .then(function () {
+      var sites = Object.keys(sitesById).map(function (id) {
+        return sitesById[id];
+      });
+      if (sites.length) {
+        renderSites(sites);
+      }
     });
-    if (sites.length) {
-      renderSites(sites);
-    }
-  });
 })();

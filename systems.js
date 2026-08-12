@@ -328,7 +328,21 @@
         });
 
     return request.then(function (data) {
-      sitesList = (data && data.sites) || [];
+      var sites = (data && data.sites) || [];
+      if (
+        window.NovaraAuth &&
+        typeof NovaraAuth.isOwnerUser === "function" &&
+        NovaraAuth.isOwnerUser()
+      ) {
+        var ownerId = NovaraAuth.getOwnerId() || "";
+        sites = ownerId
+          ? sites.filter(function (site) {
+              var id = String((site && (site.ownerId || site.owner)) || "").trim();
+              return id === ownerId;
+            })
+          : [];
+      }
+      sitesList = sites;
       return sitesList;
     });
   }

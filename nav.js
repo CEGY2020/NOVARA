@@ -23,7 +23,7 @@
 
   var OWNER_NAV_ITEMS = [
     { id: "owner-home", label: "Home", href: "owner-home.html" },
-    { id: "owner-sites", label: "My Sites", href: "owner-home.html#sites" },
+    { id: "sites", label: "My Sites", href: "sites.html" },
     { id: "owner-performance", label: "Performance", href: "owner-home.html#performance" },
     { id: "owner-savings", label: "Savings", href: "owner-home.html#savings" }
   ];

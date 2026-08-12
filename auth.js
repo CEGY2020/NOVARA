@@ -44,6 +44,7 @@
         .trim(),
       role: role,
       company: String(user.company || user.Company || ""),
+      ownerId: String(user.ownerId || user.OwnerID || "").trim(),
       status: String(user.status || user.Status || ""),
     };
   }
@@ -162,6 +163,54 @@
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   }
 
+  function isAemUser(user) {
+    var current = user || getCurrentUser();
+    return Boolean(
+      current && String(current.role || "").toLowerCase() === "aem"
+    );
+  }
+
+  function isOwnerUser(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return false;
+    }
+    var role = String(current.role || "").toLowerCase();
+    return role === "owner" || Boolean(current.ownerId);
+  }
+
+  function getOwnerId(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return "";
+    }
+    if (!isOwnerUser(current)) {
+      return "";
+    }
+    return String(current.ownerId || "").trim();
+  }
+
+  function updateCurrentUser(partial) {
+    var session = readSession();
+    if (!session || !session.user) {
+      return null;
+    }
+    var merged = {};
+    Object.keys(session.user).forEach(function (key) {
+      merged[key] = session.user[key];
+    });
+    if (partial && typeof partial === "object") {
+      Object.keys(partial).forEach(function (key) {
+        merged[key] = partial[key];
+      });
+    }
+    return setCurrentUser(merged, {
+      token: session.token,
+      expiresAt: session.expiresAt,
+      remember: session.remember,
+    });
+  }
+
   function logout(redirectTo) {
     clearCurrentUser();
     if (global.NovaraRole && NovaraRole.clearSelectedRole) {
@@ -176,8 +225,12 @@
     getCurrentUser: getCurrentUser,
     getToken: getToken,
     setCurrentUser: setCurrentUser,
+    updateCurrentUser: updateCurrentUser,
     clearCurrentUser: clearCurrentUser,
     initialsFor: initialsFor,
     logout: logout,
+    isAemUser: isAemUser,
+    isOwnerUser: isOwnerUser,
+    getOwnerId: getOwnerId,
   };
 })(window);

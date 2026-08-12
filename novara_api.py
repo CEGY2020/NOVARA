@@ -2516,6 +2516,7 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
         ("RejectionReason", "rejectionReason", "rejection_reason"),
         default="",
     )
+    owner_id = first_present(item, ("OwnerID", "ownerId", "owner_id"), default="")
     role_text = str(role or "").lower().strip()
     status_text = str(status or "Pending").strip()
     if status_text.lower() == "approved":
@@ -2526,6 +2527,7 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
         "email": str(email or "").strip().lower(),
         "role": role_text,
         "company": str(company or ""),
+        "ownerId": str(owner_id or ""),
         "status": status_text,
         "rejectionReason": str(rejection_reason or ""),
         "createdAt": str(created_at or ""),
@@ -2547,6 +2549,157 @@ def normalize_user(item: dict, *, include_sensitive: bool = False) -> dict:
             or ""
         )
     return payload
+
+
+def persist_user_owner_id(user_id: str, owner_id: str) -> None:
+    """Store a resolved OwnerID on the NOVARAUsers row."""
+    target_id = _as_text(user_id)
+    owner = _as_text(owner_id)
+    if not target_id or not owner:
+        return
+    ensure_users_table()
+    table = dynamodb_table(USERS_TABLE_NAME)
+    now_s = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    table.update_item(
+        Key={"UserID": target_id},
+        UpdateExpression="SET OwnerID = :oid, UpdatedAt = :updated",
+        ExpressionAttributeValues={":oid": owner, ":updated": now_s},
+        ConditionExpression="attribute_exists(UserID)",
+    )
+
+
+def find_owner_matching_user(user: dict | None) -> dict | None:
+    """Match a user to a NOVARAOwners row by OwnerID, contact email, or company name."""
+    if not isinstance(user, dict):
+        return None
+    stored_id = _as_text(user.get("ownerId") or user.get("OwnerID") or "")
+    email = _as_text(user.get("email") or user.get("Email") or "").lower()
+    company = _as_text(user.get("company") or user.get("Company") or "").lower()
+    try:
+        owners = list((scan_owners().get("owners") or []))
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+        owners = []
+
+    if stored_id:
+        for owner in owners:
+            if _as_text(owner.get("ownerId")) == stored_id:
+                return owner
+        return {"ownerId": stored_id}
+
+    email_match = None
+    company_match = None
+    for owner in owners:
+        contact = _as_text(owner.get("contactEmail") or "").lower()
+        name = _as_text(owner.get("name") or owner.get("ownerName") or "").lower()
+        if email and contact and contact == email:
+            email_match = owner
+            break
+        if company and name and name == company and company_match is None:
+            company_match = owner
+    return email_match or company_match
+
+
+def enrich_user_owner_id(user: dict | None, *, persist: bool = False) -> dict:
+    """Ensure an Owner-role (or already-linked) user has ownerId populated."""
+    if not isinstance(user, dict):
+        return {}
+    enriched = dict(user)
+    stored = _as_text(enriched.get("ownerId") or enriched.get("OwnerID") or "")
+    role = str(enriched.get("role") or "").lower().strip()
+    if stored:
+        enriched["ownerId"] = stored
+        return enriched
+    if role != "owner":
+        enriched["ownerId"] = ""
+        return enriched
+    match = find_owner_matching_user(enriched)
+    owner_id = _as_text((match or {}).get("ownerId") or "")
+    enriched["ownerId"] = owner_id
+    if persist and owner_id and enriched.get("userId"):
+        try:
+            persist_user_owner_id(str(enriched["userId"]), owner_id)
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+    return enriched
+
+
+def owner_scope_id(user: dict | None) -> str | None:
+    """OwnerID to scope site queries, or None when the user may see all sites.
+
+    Returns an empty string when the user is an Owner but no OwnerID is linked
+    (callers should treat that as an empty result set).
+    """
+    if not user:
+        return None
+    role = str(user.get("role") or "").lower().strip()
+    if role == "aem":
+        return None
+    if role == "owner":
+        return _as_text(user.get("ownerId") or "")
+    linked = _as_text(user.get("ownerId") or "")
+    if linked:
+        return linked
+    return None
+
+
+def site_belongs_to_owner(site: dict | None, owner_id: str) -> bool:
+    target = _as_text(owner_id)
+    if not target or not isinstance(site, dict):
+        return False
+    site_owner_id = _as_text(site.get("ownerId") or "")
+    site_owner = _as_text(site.get("owner") or "")
+    return site_owner_id == target or site_owner == target
+
+
+def filter_sites_by_owner_id(payload: dict, owner_id: str) -> dict:
+    sites = list(payload.get("sites") or [])
+    if owner_id:
+        sites = [site for site in sites if site_belongs_to_owner(site, owner_id)]
+    else:
+        sites = []
+    filtered = dict(payload)
+    filtered["sites"] = sites
+    filtered["count"] = len(sites)
+    filtered["scopedOwnerId"] = owner_id
+    return filtered
+
+
+def filter_systems_by_owner_id(payload: dict, owner_id: str) -> dict:
+    allowed_ids: set[str] = set()
+    if owner_id:
+        try:
+            sites = scan_sites(include_system_counts=False).get("sites") or []
+            allowed_ids = {
+                str(site.get("siteId"))
+                for site in sites
+                if site.get("siteId") and site_belongs_to_owner(site, owner_id)
+            }
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+    systems = [
+        row
+        for row in (payload.get("systems") or [])
+        if str(row.get("siteId") or "") in allowed_ids
+    ]
+    filtered = dict(payload)
+    filtered["systems"] = systems
+    filtered["count"] = len(systems)
+    filtered["scopedOwnerId"] = owner_id
+    return filtered
+
+
+def optional_auth_user(
+    headers: dict | None,
+) -> tuple[dict | None, str | None]:
+    """Return (user, error). error is set when a bearer token was sent but invalid."""
+    token = _bearer_token_from_headers(headers)
+    if not token:
+        return None, None
+    try:
+        return resolve_session_token(token), None
+    except PermissionError as exc:
+        return None, str(exc)
 
 
 def _scan_user_items() -> list[dict]:
@@ -2845,7 +2998,7 @@ def resolve_session_token(token: str) -> dict:
     if datetime.now(timezone.utc) >= expires_at:
         raise PermissionError("Invalid or expired session")
 
-    user = normalize_user(item)
+    user = enrich_user_owner_id(normalize_user(item), persist=True)
     if (user.get("status") or "Pending") != "Active":
         raise PermissionError("Your account is not active.")
     return user
@@ -2857,7 +3010,7 @@ def authenticate_user(email: str, password: str) -> dict:
     if not item or not verify_password(password, item.get("PasswordHash") or ""):
         raise PermissionError("Invalid email or password")
 
-    user = normalize_user(item)
+    user = enrich_user_owner_id(normalize_user(item), persist=True)
     status = user.get("status") or "Pending"
     if status == "Pending":
         raise PermissionError(
@@ -3544,21 +3697,43 @@ def handle_savings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
         }
 
 
-def handle_sites_request() -> tuple[int, dict]:
+def handle_sites_request(*, headers: dict | None = None) -> tuple[int, dict]:
+    user, auth_error = optional_auth_user(headers)
+    if auth_error:
+        return 401, {"error": auth_error}
     try:
-        return 200, scan_sites()
+        payload = scan_sites()
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         return 500, {
             "error": "Failed to load sites from DynamoDB",
             "detail": str(exc),
         }
+    scope = owner_scope_id(user)
+    if scope is not None:
+        payload = filter_sites_by_owner_id(payload, scope)
+    return 200, payload
 
 
-def handle_site_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
+def handle_site_write_request(
+    body: dict | None, *, mode: str, headers: dict | None = None
+) -> tuple[int, dict]:
+    user, auth_error = optional_auth_user(headers)
+    if auth_error:
+        return 401, {"error": auth_error}
     item, error = parse_site_payload(body)
     if error:
         return 400, {"error": error}
+    scope = owner_scope_id(user)
+    if scope is not None:
+        if not scope:
+            return 403, {"error": "No Owner record is linked to your account."}
+        if mode == "update":
+            existing = get_site_item(item["SiteID"])
+            if not existing or not site_belongs_to_owner(existing, scope):
+                return 403, {"error": "You do not have access to this site."}
+        item["Owner"] = scope
+        item["OwnerID"] = scope
     try:
         return 200, save_site(item, mode=mode)
     except ValueError as exc:
@@ -3573,15 +3748,22 @@ def handle_site_write_request(body: dict | None, *, mode: str) -> tuple[int, dic
         }
 
 
-def handle_systems_request() -> tuple[int, dict]:
+def handle_systems_request(*, headers: dict | None = None) -> tuple[int, dict]:
+    user, auth_error = optional_auth_user(headers)
+    if auth_error:
+        return 401, {"error": auth_error}
     try:
-        return 200, scan_systems()
+        payload = scan_systems()
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         return 500, {
             "error": "Failed to load systems from DynamoDB",
             "detail": str(exc),
         }
+    scope = owner_scope_id(user)
+    if scope is not None:
+        payload = filter_systems_by_owner_id(payload, scope)
+    return 200, payload
 
 
 def handle_system_write_request(body: dict | None, *, mode: str) -> tuple[int, dict]:
@@ -4267,15 +4449,15 @@ def route_request(
         return handle_savings_request(params)
     if normalized.endswith("/api/sites") or normalized == "/sites":
         if method == "GET":
-            return handle_sites_request()
+            return handle_sites_request(headers=headers)
         if method == "POST":
-            return handle_site_write_request(body, mode="create")
+            return handle_site_write_request(body, mode="create", headers=headers)
         if method == "PUT":
-            return handle_site_write_request(body, mode="update")
+            return handle_site_write_request(body, mode="update", headers=headers)
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/systems") or normalized == "/systems":
         if method == "GET":
-            return handle_systems_request()
+            return handle_systems_request(headers=headers)
         if method == "POST":
             return handle_system_write_request(body, mode="create")
         if method == "PUT":

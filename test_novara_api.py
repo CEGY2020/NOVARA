@@ -290,6 +290,248 @@ class RouteTests(unittest.TestCase):
         self.assertIn("site.ownerId || site.owner", source)
         self.assertIn("OwnerID: ownerId", source)
 
+    def test_owner_scope_id_and_site_filter(self):
+        self.assertIsNone(novara_api.owner_scope_id(None))
+        self.assertIsNone(novara_api.owner_scope_id({"role": "aem", "ownerId": "OWN015"}))
+        self.assertEqual(
+            novara_api.owner_scope_id({"role": "owner", "ownerId": "OWN015"}),
+            "OWN015",
+        )
+        self.assertEqual(novara_api.owner_scope_id({"role": "owner"}), "")
+        self.assertEqual(
+            novara_api.owner_scope_id({"role": "contractor", "ownerId": "OWN001"}),
+            "OWN001",
+        )
+
+        vista = {"siteId": "SITE001", "ownerId": "OWN015", "owner": "OWN015"}
+        other = {"siteId": "SITE002", "ownerId": "OWN001", "owner": "OWN001"}
+        named = {
+            "siteId": "SITE003",
+            "ownerId": "OWN015",
+            "owner": "Crystal Asset Management",
+        }
+        self.assertTrue(novara_api.site_belongs_to_owner(vista, "OWN015"))
+        self.assertTrue(novara_api.site_belongs_to_owner(named, "OWN015"))
+        self.assertFalse(novara_api.site_belongs_to_owner(other, "OWN015"))
+
+        filtered = novara_api.filter_sites_by_owner_id(
+            {"table": "NOVARASites", "count": 3, "sites": [vista, other, named]},
+            "OWN015",
+        )
+        self.assertEqual(filtered["count"], 2)
+        self.assertEqual(
+            [row["siteId"] for row in filtered["sites"]],
+            ["SITE001", "SITE003"],
+        )
+        self.assertEqual(filtered["scopedOwnerId"], "OWN015")
+
+        empty = novara_api.filter_sites_by_owner_id(
+            {"table": "NOVARASites", "count": 3, "sites": [vista, other, named]},
+            "",
+        )
+        self.assertEqual(empty["count"], 0)
+        self.assertEqual(empty["sites"], [])
+
+    def test_resolve_owner_id_from_email_company_or_stored_id(self):
+        owners = {
+            "owners": [
+                {
+                    "ownerId": "OWN015",
+                    "name": "Crystal Asset Management",
+                    "contactEmail": "pat@crystal.com",
+                },
+                {
+                    "ownerId": "OWN010",
+                    "name": "Carlos Enterprises",
+                    "contactEmail": "carlos@example.com",
+                },
+            ]
+        }
+        with patch.object(novara_api, "scan_owners", return_value=owners):
+            from_email = novara_api.enrich_user_owner_id(
+                {"role": "owner", "email": "pat@crystal.com", "company": ""}
+            )
+            self.assertEqual(from_email["ownerId"], "OWN015")
+
+            from_company = novara_api.enrich_user_owner_id(
+                {
+                    "role": "owner",
+                    "email": "other@example.com",
+                    "company": "Carlos Enterprises",
+                }
+            )
+            self.assertEqual(from_company["ownerId"], "OWN010")
+
+            stored = novara_api.enrich_user_owner_id(
+                {"role": "owner", "ownerId": "OWN015", "email": "x@y.com"}
+            )
+            self.assertEqual(stored["ownerId"], "OWN015")
+
+            aem = novara_api.enrich_user_owner_id(
+                {"role": "aem", "email": "pat@crystal.com"}
+            )
+            self.assertEqual(aem["ownerId"], "")
+
+    def test_sites_route_scopes_owner_and_not_aem(self):
+        fake = {
+            "table": "NOVARASites",
+            "count": 2,
+            "sites": [
+                {
+                    "siteId": "SITE001",
+                    "name": "Vista Springs",
+                    "ownerId": "OWN015",
+                    "owner": "OWN015",
+                },
+                {
+                    "siteId": "SITE002",
+                    "name": "Highlander",
+                    "ownerId": "OWN001",
+                    "owner": "OWN001",
+                },
+            ],
+        }
+        owner_user = {
+            "userId": "USR009",
+            "role": "owner",
+            "ownerId": "OWN015",
+            "email": "pat@example.com",
+            "status": "Active",
+        }
+        aem_user = {
+            "userId": "USR001",
+            "role": "aem",
+            "ownerId": "",
+            "email": "admin@example.com",
+            "status": "Active",
+        }
+        with patch.object(novara_api, "scan_sites", return_value=fake), patch.object(
+            novara_api, "resolve_session_token", return_value=owner_user
+        ):
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/sites",
+                {},
+                None,
+                headers={"Authorization": "Bearer USR009.secret"},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["sites"][0]["siteId"], "SITE001")
+        self.assertEqual(payload["scopedOwnerId"], "OWN015")
+
+        with patch.object(novara_api, "scan_sites", return_value=fake), patch.object(
+            novara_api, "resolve_session_token", return_value=aem_user
+        ):
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/sites",
+                {},
+                None,
+                headers={"Authorization": "Bearer USR001.secret"},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 2)
+        self.assertNotIn("scopedOwnerId", payload)
+
+        unlinked = dict(owner_user)
+        unlinked["ownerId"] = ""
+        with patch.object(novara_api, "scan_sites", return_value=fake), patch.object(
+            novara_api, "resolve_session_token", return_value=unlinked
+        ):
+            status, payload = novara_api.route_request(
+                "GET",
+                "/api/sites",
+                {},
+                None,
+                headers={"Authorization": "Bearer USR009.secret"},
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["sites"], [])
+
+    def test_owner_site_write_is_forced_to_own_owner_id(self):
+        owner_user = {
+            "userId": "USR009",
+            "role": "owner",
+            "ownerId": "OWN015",
+            "status": "Active",
+        }
+        saved = {"ok": True, "site": {"siteId": "SITE009"}}
+        with patch.object(
+            novara_api, "resolve_session_token", return_value=owner_user
+        ), patch.object(novara_api, "save_site", return_value=saved) as mocked_save:
+            status, payload = novara_api.route_request(
+                "POST",
+                "/api/sites",
+                {},
+                {
+                    "SiteID": "SITE009",
+                    "SiteName": "New Property",
+                    "Owner": "OWN001",
+                    "OwnerID": "OWN001",
+                },
+                headers={"Authorization": "Bearer USR009.secret"},
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        written = mocked_save.call_args.args[0]
+        self.assertEqual(written["OwnerID"], "OWN015")
+        self.assertEqual(written["Owner"], "OWN015")
+
+        with patch.object(
+            novara_api, "resolve_session_token", return_value=owner_user
+        ), patch.object(
+            novara_api,
+            "get_site_item",
+            return_value={"siteId": "SITE002", "ownerId": "OWN001"},
+        ):
+            status, payload = novara_api.route_request(
+                "PUT",
+                "/api/sites",
+                {},
+                {"SiteID": "SITE002", "SiteName": "Not Yours"},
+                headers={"Authorization": "Bearer USR009.secret"},
+            )
+        self.assertEqual(status, 403)
+
+    def test_sites_page_has_owner_empty_state_and_keeps_aem_forms(self):
+        html = Path(__file__).resolve().parent.joinpath("sites.html").read_text(
+            encoding="utf-8"
+        )
+        source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(
+            encoding="utf-8"
+        )
+        auth = Path(__file__).resolve().parent.joinpath("auth.js").read_text(
+            encoding="utf-8"
+        )
+        nav = Path(__file__).resolve().parent.joinpath("nav.js").read_text(
+            encoding="utf-8"
+        )
+        owner_home = Path(__file__).resolve().parent.joinpath(
+            "owner-home.html"
+        ).read_text(encoding="utf-8")
+        owner_js = Path(__file__).resolve().parent.joinpath(
+            "owner-home.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("No properties linked to your account yet", html)
+        self.assertIn("sites-empty-state", html)
+        self.assertIn("OWNER_EMPTY_MESSAGE", source)
+        self.assertIn("filterSitesForCurrentUser", source)
+        self.assertIn("isOwnerScoped", source)
+        self.assertIn("addBtn.hidden = scoped", source)
+        self.assertIn("ownerSelect.disabled = Boolean(isOwnerScoped())", source)
+        self.assertIn('id="field-ownerIdDisplay"', html)
+        self.assertIn("syncLookupIdDisplay", source)
+        self.assertIn("ownerId", auth)
+        self.assertIn("isOwnerUser", auth)
+        self.assertIn("getOwnerId", auth)
+        self.assertIn('href: "sites.html"', nav)
+        self.assertIn("No properties linked to your account yet", owner_home)
+        self.assertIn("owner-sites-empty", owner_home)
+        self.assertIn("OWNER_EMPTY_MESSAGE", owner_js)
+        self.assertIn("api.getSites", owner_js)
+
     def test_lambda_event_readings(self):
         fake = {
             "points": [{"t": "2026-08-02T20:00:00Z", "t1": 72.5, "t2": 68.1}],
@@ -1456,7 +1698,9 @@ class RouteTests(unittest.TestCase):
         }
         with patch.object(novara_api, "find_user_by_email", return_value=active_user), patch.object(
             novara_api, "create_session_for_user", return_value=fake_session
-        ) as mocked_session:
+        ) as mocked_session, patch.object(
+            novara_api, "scan_owners", return_value={"owners": []}
+        ):
             status, payload = novara_api.route_request(
                 "POST",
                 "/api/users/login",
@@ -1466,6 +1710,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["user"]["status"], "Active")
+        self.assertEqual(payload["user"]["ownerId"], "")
         self.assertEqual(payload["token"], "USR001.session-token")
         self.assertEqual(payload["expiresAt"], "2099-01-01T00:00:00Z")
         self.assertNotIn("passwordHash", payload["user"])
