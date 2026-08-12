@@ -20,6 +20,10 @@
   var mgmtCompaniesList = [];
   /** Authoritative create|edit mode. Do not rely only on #site-mode — form.reset() restores its default. */
   var currentMode = "create";
+  var photosUI =
+    window.NovaraPhotosUI && typeof NovaraPhotosUI.create === "function"
+      ? NovaraPhotosUI.create({ idPrefix: "photo", defaultPhotoType: "Property" })
+      : null;
 
   if (!tbody) {
     return;
@@ -271,6 +275,9 @@
         site.systems == null || site.systems === "—" ? 0 : site.systems
       );
       updateDerivedFieldHints(site);
+      if (photosUI) {
+        photosUI.bind({ enabled: true, siteId: site.siteId });
+      }
     } else {
       modalTitle.textContent = "Add Site";
       modalSubtitle.textContent = "Create a new site in NOVARASites";
@@ -280,6 +287,9 @@
       setFieldValue("field-status", "Online");
       setFieldValue("field-systems", 0);
       updateDerivedFieldHints({ systems: 0 });
+      if (photosUI) {
+        photosUI.bind({ enabled: false, siteId: "" });
+      }
     }
 
     modal.hidden = false;
@@ -295,6 +305,9 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     setFormError("");
+    if (photosUI) {
+      photosUI.clear();
+    }
     var statusSelect = document.getElementById("field-status");
     if (statusSelect) {
       statusSelect.disabled = false;
@@ -576,9 +589,12 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && modal && !modal.hidden) {
-      closeModal();
+    if (event.key !== "Escape" || !modal || modal.hidden) return;
+    var lightbox = document.getElementById("photo-lightbox");
+    if (lightbox && !lightbox.hidden) {
+      return;
     }
+    closeModal();
   });
 
   Promise.all([

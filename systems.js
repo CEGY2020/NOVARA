@@ -18,6 +18,10 @@
   var sitesList = [];
   /** Authoritative create|edit mode. Do not rely only on #system-mode — form.reset() restores its default. */
   var currentMode = "create";
+  var photosUI =
+    window.NovaraPhotosUI && typeof NovaraPhotosUI.create === "function"
+      ? NovaraPhotosUI.create({ idPrefix: "photo", defaultPhotoType: "System" })
+      : null;
 
   if (!tbody) {
     return;
@@ -179,6 +183,13 @@
       );
       setFieldValue("field-installDate", system.installDate || "");
       setFieldValue("field-notes", system.notes || "");
+      if (photosUI) {
+        photosUI.bind({
+          enabled: true,
+          siteId: system.siteId || "",
+          systemId: system.systemId || "",
+        });
+      }
     } else {
       modalTitle.textContent = "Add System";
       modalSubtitle.textContent = "Create a new system in NOVARASystems";
@@ -186,6 +197,9 @@
       populateSiteOptions("");
       setFieldValue("field-status", "Online");
       setFieldValue("field-equipmentCount", 0);
+      if (photosUI) {
+        photosUI.bind({ enabled: false, siteId: "", systemId: "" });
+      }
     }
 
     modal.hidden = false;
@@ -201,6 +215,9 @@
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     setFormError("");
+    if (photosUI) {
+      photosUI.clear();
+    }
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.textContent = "Save";
@@ -536,9 +553,12 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && modal && !modal.hidden) {
-      closeModal();
+    if (event.key !== "Escape" || !modal || modal.hidden) return;
+    var lightbox = document.getElementById("photo-lightbox");
+    if (lightbox && !lightbox.hidden) {
+      return;
     }
+    closeModal();
   });
 
   Promise.all([

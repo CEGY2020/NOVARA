@@ -1684,11 +1684,171 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(payload["table"], "NOVARAReadings")
         self.assertEqual(payload["sitesTable"], "NOVARASites")
         self.assertEqual(payload["systemsTable"], "NOVARASystems")
+        self.assertEqual(payload["photosTable"], "NOVARAPhotos")
+        self.assertIn(payload["photosStorage"], ("s3", "local"))
         self.assertEqual(payload["ownersTable"], "NOVARAOwners")
         self.assertEqual(payload["mgmtCompaniesTable"], "NOVARAMgmtCompanies")
         self.assertEqual(payload["leadsTable"], "NOVARALeads")
         self.assertEqual(payload["usersTable"], "NOVARAUsers")
         self.assertEqual(payload["preapprovedTable"], "NOVARAPreapprovedEmails")
+
+    def test_photos_list_route(self):
+        fake = {
+            "table": "NOVARAPhotos",
+            "storage": "local",
+            "count": 1,
+            "siteId": "SITE001",
+            "systemId": "",
+            "photos": [
+                {
+                    "photoId": "PHOABC123",
+                    "siteId": "SITE001",
+                    "systemId": "",
+                    "photoType": "Property",
+                    "caption": "Front elevation",
+                    "s3Key": "sites/SITE001/PHOABC123/front.jpg",
+                    "url": "/api/photos/PHOABC123/content",
+                    "uploadedAt": "2026-08-12T00:00:00Z",
+                    "uploadedBy": "USR001",
+                }
+            ],
+        }
+        with patch.object(novara_api, "list_photos", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "GET", "/api/photos", {"siteId": ["SITE001"]}
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["photos"][0]["photoId"], "PHOABC123")
+        mocked.assert_called_once_with(site_id="SITE001", system_id="")
+
+    def test_photos_create_route(self):
+        body = {
+            "SiteID": "SITE001",
+            "PhotoType": "Property",
+            "Caption": "Lobby",
+            "ContentType": "image/jpeg",
+            "FileName": "lobby.jpg",
+        }
+        item = {
+            "PhotoID": "PHOTEST001",
+            "SiteID": "SITE001",
+            "PhotoType": "Property",
+            "Caption": "Lobby",
+            "S3Key": "sites/SITE001/PHOTEST001/lobby.jpg",
+            "ContentType": "image/jpeg",
+            "FileName": "lobby.jpg",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAPhotos",
+            "storage": "local",
+            "photo": {"photoId": "PHOTEST001", "siteId": "SITE001"},
+            "uploadUrl": "/api/photos/upload/sites/SITE001/PHOTEST001/lobby.jpg",
+            "uploadMethod": "PUT",
+            "uploadHeaders": {"Content-Type": "image/jpeg"},
+        }
+        with patch.object(novara_api, "save_photo", return_value=fake) as mocked:
+            with patch.object(
+                novara_api, "parse_photo_payload", return_value=(item, None)
+            ):
+                status, payload = novara_api.route_request(
+                    "POST", "/api/photos", {}, body
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertIn("uploadUrl", payload)
+        mocked.assert_called_once_with(item)
+
+    def test_photos_create_validation(self):
+        status, payload = novara_api.route_request(
+            "POST", "/api/photos", {}, {"PhotoType": "Property"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("SiteID", payload["error"])
+
+    def test_photos_delete_route(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARAPhotos",
+            "deleted": True,
+            "photoId": "PHOTEST001",
+            "siteId": "SITE001",
+            "systemId": "",
+        }
+        with patch.object(novara_api, "delete_photo", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/photos/PHOTEST001", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["deleted"])
+        mocked.assert_called_once_with("PHOTEST001")
+
+    def test_parse_photo_payload_requires_existing_site(self):
+        with patch.object(novara_api, "get_site_item", return_value=None):
+            item, error = novara_api.parse_photo_payload(
+                {
+                    "SiteID": "SITE999",
+                    "PhotoType": "Equipment",
+                    "ContentType": "image/png",
+                    "FileName": "plate.png",
+                }
+            )
+        self.assertIsNone(item)
+        self.assertIn("SITE999", error)
+
+    def test_parse_photo_payload_links_system_to_site(self):
+        with patch.object(
+            novara_api,
+            "get_site_item",
+            return_value={"siteId": "SITE001", "name": "Vista"},
+        ):
+            with patch.object(
+                novara_api,
+                "get_system_item",
+                return_value={"systemId": "SYS001", "siteId": "SITE001"},
+            ):
+                item, error = novara_api.parse_photo_payload(
+                    {
+                        "SiteID": "SITE001",
+                        "SystemID": "SYS001",
+                        "PhotoType": "System",
+                        "Caption": "Panel",
+                        "ContentType": "image/jpeg",
+                        "FileName": "panel.jpg",
+                        "UploadedBy": "USR001",
+                    }
+                )
+        self.assertIsNone(error)
+        self.assertEqual(item["SiteID"], "SITE001")
+        self.assertEqual(item["SystemID"], "SYS001")
+        self.assertEqual(item["PhotoType"], "System")
+        self.assertEqual(item["UploadedBy"], "USR001")
+        self.assertTrue(item["PhotoID"].startswith("PHO"))
+        self.assertIn("sites/SITE001/systems/SYS001/", item["S3Key"])
+
+    def test_sites_and_systems_html_include_photos_section(self):
+        sites_html = Path(__file__).resolve().parent.joinpath("sites.html").read_text(
+            encoding="utf-8"
+        )
+        systems_html = Path(__file__).resolve().parent.joinpath(
+            "systems.html"
+        ).read_text(encoding="utf-8")
+        for html in (sites_html, systems_html):
+            self.assertIn('id="photo-section"', html)
+            self.assertIn('id="photo-gallery"', html)
+            self.assertIn('id="photo-files"', html)
+            self.assertIn("photos-ui.js", html)
+            self.assertIn("auth.js", html)
+
+    def test_api_client_exposes_photo_methods(self):
+        source = Path(__file__).resolve().parent.joinpath("api-client.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("getPhotos:", source)
+        self.assertIn("createPhoto:", source)
+        self.assertIn("deletePhoto:", source)
+        self.assertIn("uploadPhotoFile:", source)
+        self.assertIn('"/api/photos"', source)
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})
