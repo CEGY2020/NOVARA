@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Owner Home</title>
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=owner-scope-1">
 </head>
 <body data-page="owner-home" data-role="owner">
 
@@ -22,7 +22,14 @@
 
     <section id="sites" class="page-panel">
       <h3>My Sites</h3>
-      <p>Placeholder for sites associated with this owner account.</p>
+      <p id="owner-sites-status" class="chart-status" aria-live="polite">Loading your properties…</p>
+      <p id="owner-sites-empty" class="chart-empty-state list-empty-state" hidden>
+        No properties linked to your account yet
+      </p>
+      <ul id="owner-sites-list" class="owner-sites-list"></ul>
+      <p class="owner-sites-more">
+        <a href="sites.html">View all properties</a>
+      </p>
     </section>
 
     <section id="performance" class="page-panel">
@@ -37,7 +44,11 @@
   </main>
 </div>
 
-<script src="role.js"></script>
-<script src="nav.js"></script>
+<script src="api-config.js?v=owner-scope-1"></script>
+<script src="api-client.js?v=owner-scope-1"></script>
+<script src="role.js?v=owner-scope-1"></script>
+<script src="auth.js?v=owner-scope-1"></script>
+<script src="nav.js?v=owner-scope-1"></script>
+<script src="owner-home.js?v=owner-scope-1"></script>
 </body>
 </html>

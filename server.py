@@ -64,11 +64,13 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             self._send_json(status, payload)
             return
         if parsed.path == "/api/sites":
-            status, payload = novara_api.handle_sites_request()
+            headers = {"Authorization": self.headers.get("Authorization", "")}
+            status, payload = novara_api.handle_sites_request(headers=headers)
             self._send_json(status, payload)
             return
         if parsed.path == "/api/systems":
-            status, payload = novara_api.handle_systems_request()
+            headers = {"Authorization": self.headers.get("Authorization", "")}
+            status, payload = novara_api.handle_systems_request(headers=headers)
             self._send_json(status, payload)
             return
         if parsed.path == "/api/photos":
@@ -238,7 +240,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             body = self._read_json_body()
             if body is None:
                 return
-            status, payload = novara_api.handle_site_write_request(body, mode=mode)
+            headers = {"Authorization": self.headers.get("Authorization", "")}
+            status, payload = novara_api.handle_site_write_request(
+                body, mode=mode, headers=headers
+            )
             self._send_json(status, payload)
             return
         if parsed.path == "/api/systems":

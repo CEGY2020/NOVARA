@@ -1264,6 +1264,64 @@ a.sales-home-link {
     display: none;
 }
 
+.list-empty-state {
+    position: static;
+    min-height: 160px;
+    margin: 16px 0 0;
+}
+
+.owner-sites-list {
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.owner-sites-list[hidden] {
+    display: none;
+}
+
+.owner-site-item a {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    background: #f7fafc;
+    border: 1px solid #e4edf3;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text);
+}
+
+.owner-site-item a:hover {
+    border-color: var(--accent);
+}
+
+.owner-site-item strong {
+    color: var(--heading);
+}
+
+.owner-site-item span {
+    color: #7b8993;
+    font-size: 13px;
+}
+
+.owner-sites-more {
+    margin: 16px 0 0;
+}
+
+.owner-sites-more a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.owner-sites-more a:hover {
+    text-decoration: underline;
+}
+
 .savings-summary-row {
     display: flex;
     flex-wrap: wrap;
