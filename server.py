@@ -147,6 +147,30 @@ class NovaraHandler(SimpleHTTPRequestHandler):
             self._send_json(status, payload)
             return
         if parsed.path == "/api/photos":
+            content_type = self.headers.get("Content-Type", "")
+            if novara_api.is_multipart_content_type(content_type):
+                raw = self._read_raw_body()
+                try:
+                    fields, files = novara_api.parse_multipart_form(
+                        raw, content_type
+                    )
+                    status, payload = novara_api.handle_photo_multipart_create(
+                        fields, files
+                    )
+                except ValueError as exc:
+                    self._send_json(400, {"error": str(exc)})
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json(
+                        500,
+                        {
+                            "error": "Failed to parse multipart upload",
+                            "detail": str(exc),
+                        },
+                    )
+                    return
+                self._send_json(status, payload)
+                return
             body = self._read_json_body()
             if body is None:
                 return

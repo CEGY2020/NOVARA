@@ -146,7 +146,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | `PUT /api/systems/{id}` | Update system by `SystemID` path (JSON body) |
 | `DELETE /api/systems/{id}` | Delete system; refreshes linked site `Systems` count + status |
 | `GET /api/photos?siteId=&systemId=` | `NOVARAPhotos` (optional filters; view URLs are presigned or local content paths) |
-| `POST /api/photos` | Create photo metadata + return S3/local upload URL (JSON body) |
+| `POST /api/photos` | Multipart upload (`file`/`files`/`photo` + `PhotoType` + `Caption` + `SiteID` + optional `SystemID`/`UploadedBy`) stores the image immediately; JSON body still returns an `uploadUrl` for a follow-up `PUT` |
 | `GET /api/photos/{id}` | One photo metadata record |
 | `DELETE /api/photos/{id}` | Delete photo metadata + stored object |
 | `GET /api/photos/{id}/content` | Binary image bytes (local storage / fallback) |
@@ -168,7 +168,9 @@ Sites create/update body fields: `SiteID` (required), `SiteName` (required), `Ow
 
 Systems create/update body fields: `SystemID` (required, `SYS###`), `SiteID` (required, must exist in `NOVARASites`), `SystemName` (required), `SystemType` (`DHW`/`Pool`/`HVAC`/`Boiler`), `Status` (`Online`/`Offline`/`Needs Review`/`Maintenance`), `EquipmentCount` (number), `InstallDate` (optional), `Notes` (optional). Creating, updating, or deleting a system refreshes the linked site’s `Systems` count and derives site `Status` from linked systems (`Offline` > `Needs Review`/`Maintenance` > `Online`).
 
-Photos create body fields: `SiteID` (required), `SystemID` (optional; must belong to the site), `PhotoType` (`Property`/`System`/`Equipment`/`Nameplate`/`Other`), `Caption` (optional), `ContentType` (image MIME type), `FileName`, `UploadedBy` (optional). Response includes `uploadUrl` for a `PUT` of the raw image bytes.
+Photos upload (preferred): `multipart/form-data` with image file field `file` (also accepts `files` / `photo`) plus `SiteID` (required), `SystemID` (optional; must belong to the site), `PhotoType` (`Property`/`System`/`Equipment`/`Nameplate`/`Other`), `Caption` (optional), `UploadedBy` (optional). The API stores the file in S3 (or local `.novara-photos/`) and writes metadata to `NOVARAPhotos`.
+
+Photos JSON create (legacy / large-file): same metadata fields plus `ContentType` and `FileName`. Response includes `uploadUrl` for a `PUT` of the raw image bytes.
 
 Owners create/update body fields: `OwnerID` (required, `OWN###`), `Name` (required), `Address`, `City`, `State`, `Zip`, `ContactName`, `ContactEmail`, `ContactPhone`, `Notes` (optional).
 

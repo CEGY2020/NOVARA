@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import tempfile
 import unittest
@@ -1766,6 +1767,144 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("SiteID", payload["error"])
 
+    def _build_multipart(
+        self, fields: dict[str, str], files: list[tuple[str, str, str, bytes]]
+    ) -> tuple[str, bytes]:
+        boundary = "----NovaraTestBoundary7MA4YWxkTrZu0gW"
+        chunks: list[bytes] = []
+        for name, value in fields.items():
+            chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+            chunks.append(
+                (
+                    f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                    f"{value}\r\n"
+                ).encode("utf-8")
+            )
+        for field_name, filename, content_type, data in files:
+            chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+            chunks.append(
+                (
+                    f'Content-Disposition: form-data; name="{field_name}"; '
+                    f'filename="{filename}"\r\n'
+                    f"Content-Type: {content_type}\r\n\r\n"
+                ).encode("utf-8")
+            )
+            chunks.append(data)
+            chunks.append(b"\r\n")
+        chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+        return f"multipart/form-data; boundary={boundary}", b"".join(chunks)
+
+    def test_parse_multipart_form_extracts_fields_and_files(self):
+        content_type, body = self._build_multipart(
+            {
+                "SiteID": "SITE001",
+                "PhotoType": "Property",
+                "Caption": "Lobby",
+            },
+            [("file", "lobby.jpg", "image/jpeg", b"fake-jpeg-bytes")],
+        )
+        fields, files = novara_api.parse_multipart_form(body, content_type)
+        self.assertEqual(fields["SiteID"], "SITE001")
+        self.assertEqual(fields["PhotoType"], "Property")
+        self.assertEqual(fields["Caption"], "Lobby")
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0]["filename"], "lobby.jpg")
+        self.assertEqual(files[0]["data"], b"fake-jpeg-bytes")
+
+    def test_photos_multipart_create_stores_file(self):
+        item = {
+            "PhotoID": "PHOTEST002",
+            "SiteID": "SITE001",
+            "PhotoType": "Property",
+            "Caption": "Lobby",
+            "S3Key": "sites/SITE001/PHOTEST002/lobby.jpg",
+            "ContentType": "image/jpeg",
+            "FileName": "lobby.jpg",
+            "UploadedAt": "2026-08-12T00:00:00Z",
+            "UploadedBy": "USR001",
+        }
+        fake = {
+            "ok": True,
+            "table": "NOVARAPhotos",
+            "storage": "local",
+            "photo": {"photoId": "PHOTEST002", "siteId": "SITE001"},
+            "uploaded": True,
+            "bytes": 15,
+        }
+        with patch.object(
+            novara_api, "parse_photo_payload", return_value=(item, None)
+        ):
+            with patch.object(
+                novara_api, "save_photo_with_file", return_value=fake
+            ) as mocked:
+                status, payload = novara_api.handle_photo_multipart_create(
+                    {
+                        "SiteID": "SITE001",
+                        "PhotoType": "Property",
+                        "Caption": "Lobby",
+                        "UploadedBy": "USR001",
+                    },
+                    [
+                        {
+                            "name": "file",
+                            "filename": "lobby.jpg",
+                            "content_type": "image/jpeg",
+                            "data": b"fake-jpeg-bytes",
+                        }
+                    ],
+                )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["uploaded"])
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["photo"]["photoId"], "PHOTEST002")
+        mocked.assert_called_once()
+
+    def test_photos_multipart_requires_file(self):
+        status, payload = novara_api.handle_photo_multipart_create(
+            {"SiteID": "SITE001", "PhotoType": "Property"}, []
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("file", payload["error"].lower())
+
+    def test_lambda_multipart_photo_create(self):
+        content_type, body = self._build_multipart(
+            {
+                "SiteID": "SITE001",
+                "PhotoType": "Equipment",
+                "Caption": "Nameplate",
+            },
+            [("file", "plate.png", "image/png", b"png-bytes")],
+        )
+        fake = {
+            "ok": True,
+            "table": "NOVARAPhotos",
+            "storage": "local",
+            "count": 1,
+            "photos": [{"photoId": "PHOMP001"}],
+            "photo": {"photoId": "PHOMP001"},
+            "uploaded": True,
+        }
+        with patch.object(
+            novara_api, "handle_photo_multipart_create", return_value=(200, fake)
+        ) as mocked:
+            response = novara_api.handle_lambda_event(
+                {
+                    "requestContext": {"http": {"method": "POST"}},
+                    "rawPath": "/api/photos",
+                    "headers": {"content-type": content_type},
+                    "body": base64.b64encode(body).decode("ascii"),
+                    "isBase64Encoded": True,
+                }
+            )
+        self.assertEqual(response["statusCode"], 200)
+        payload = json.loads(response["body"])
+        self.assertTrue(payload["uploaded"])
+        mocked.assert_called_once()
+        args = mocked.call_args[0]
+        self.assertEqual(args[0]["SiteID"], "SITE001")
+        self.assertEqual(args[1][0]["filename"], "plate.png")
+
     def test_photos_delete_route(self):
         fake = {
             "ok": True,
@@ -1846,9 +1985,19 @@ class RouteTests(unittest.TestCase):
         )
         self.assertIn("getPhotos:", source)
         self.assertIn("createPhoto:", source)
+        self.assertIn("uploadPhoto:", source)
         self.assertIn("deletePhoto:", source)
         self.assertIn("uploadPhotoFile:", source)
         self.assertIn('"/api/photos"', source)
+        self.assertIn("FormData", source)
+
+    def test_photos_ui_uses_multipart_upload(self):
+        source = Path(__file__).resolve().parent.joinpath("photos-ui.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("uploadPhoto", source)
+        self.assertIn("Failed to upload photos", source)
+        self.assertIn("loadPhotos", source)
 
     def test_api_response_is_json_not_html(self):
         response = novara_api.api_response(200, {"ok": True})
