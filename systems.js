@@ -13,9 +13,11 @@
   var cancelBtn = document.getElementById("system-cancel-btn");
   var systemIdInput = document.getElementById("field-systemId");
   var siteSelect = document.getElementById("field-siteId");
+  var siteIdDisplay = document.getElementById("field-siteIdDisplay");
 
   var systemsById = {};
   var sitesList = [];
+  var lastSystems = [];
   /** Authoritative create|edit mode. Do not rely only on #system-mode — form.reset() restores its default. */
   var currentMode = "create";
   var photosUI =
@@ -125,30 +127,92 @@
     }
   }
 
-  function populateSiteOptions(selectedSiteId) {
-    if (!siteSelect) return;
-    var options =
-      '<option value="">Select site…</option>' +
-      sitesList
-        .map(function (site) {
-          var id = site.siteId || "";
-          var label = (site.name || site.siteName || id) + " (" + id + ")";
-          var selected = selectedSiteId && selectedSiteId === id ? " selected" : "";
-          return (
-            '<option value="' +
-            escapeHtml(id) +
-            '"' +
-            selected +
-            ">" +
-            escapeHtml(label) +
-            "</option>"
-          );
-        })
-        .join("");
-    siteSelect.innerHTML = options;
-    if (selectedSiteId) {
-      siteSelect.value = selectedSiteId;
+  function syncLookupIdDisplay(selectEl, displayEl) {
+    if (!displayEl) return;
+    displayEl.value = selectEl && selectEl.value ? String(selectEl.value) : "";
+  }
+
+  function resolveLookupId(list, selectedValue, idKey, nameKeys) {
+    var value = String(selectedValue == null ? "" : selectedValue).trim();
+    if (!value) return "";
+    var matchById = list.find(function (row) {
+      return String(row[idKey] || "") === value;
+    });
+    if (matchById) {
+      return String(matchById[idKey] || "");
     }
+    var matchByName = list.find(function (row) {
+      return nameKeys.some(function (key) {
+        return String(row[key] || "").trim() === value;
+      });
+    });
+    if (matchByName) {
+      return String(matchByName[idKey] || "");
+    }
+    return value;
+  }
+
+  function siteOptionLabel(site) {
+    return site.name || site.siteName || site.siteId || "";
+  }
+
+  function ensureSelectValue(selectEl, value) {
+    if (!selectEl) return;
+    var text = String(value == null ? "" : value);
+    if (!text) return;
+    var found = Array.prototype.some.call(selectEl.options, function (opt) {
+      return opt.value === text;
+    });
+    if (!found) {
+      var option = document.createElement("option");
+      option.value = text;
+      option.textContent = text;
+      selectEl.appendChild(option);
+    }
+    selectEl.value = text;
+  }
+
+  function populateSiteOptions(selectedSite) {
+    if (!siteSelect) return;
+    var list = sitesList.slice().sort(function (a, b) {
+      return String(siteOptionLabel(a))
+        .toLowerCase()
+        .localeCompare(String(siteOptionLabel(b)).toLowerCase());
+    });
+    var selectedId = resolveLookupId(list, selectedSite, "siteId", [
+      "name",
+      "siteName",
+    ]);
+    var seen = {};
+    var options = '<option value="">Select site…</option>';
+    list.forEach(function (site) {
+      var id = site.siteId || "";
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      var label = siteOptionLabel(site) || id;
+      var selected = selectedId && selectedId === id ? " selected" : "";
+      options +=
+        '<option value="' +
+        escapeHtml(id) +
+        '"' +
+        selected +
+        ">" +
+        escapeHtml(label) +
+        "</option>";
+    });
+    if (selectedId && !seen[selectedId]) {
+      options +=
+        '<option value="' +
+        escapeHtml(selectedId) +
+        '" selected>' +
+        escapeHtml(selectedId) +
+        "</option>";
+    }
+    siteSelect.innerHTML = options;
+    if (selectedId) {
+      siteSelect.value = selectedId;
+    }
+    syncLookupIdDisplay(siteSelect, siteIdDisplay);
   }
 
   function openModal(mode, system) {
@@ -173,10 +237,16 @@
       modalSubtitle.textContent =
         "Update " + (system.systemId || "system") + " in NOVARASystems";
       setFieldValue("field-systemId", system.systemId);
-      populateSiteOptions(system.siteId || "");
+      populateSiteOptions(system.siteId || system.siteName || "");
       setFieldValue("field-systemName", system.systemName || system.name);
-      setFieldValue("field-systemType", system.systemType || "");
-      setFieldValue("field-status", system.status || "Online");
+      ensureSelectValue(
+        document.getElementById("field-systemType"),
+        system.systemType || ""
+      );
+      ensureSelectValue(
+        document.getElementById("field-status"),
+        system.status || "Online"
+      );
       setFieldValue(
         "field-equipmentCount",
         system.equipmentCount == null ? 0 : system.equipmentCount
@@ -224,29 +294,53 @@
     }
   }
 
+  function systemSiteId(system) {
+    var value = system && (system.siteId || system.SiteID);
+    return String(value == null ? "" : value).trim();
+  }
+
+  function systemSiteName(system) {
+    var storedId = systemSiteId(system);
+    var storedName = String((system && system.siteName) || "").trim();
+    if (!storedId && !storedName) {
+      return "—";
+    }
+    var match = sitesList.find(function (site) {
+      var id = String(site.siteId || "");
+      var name = String(site.name || site.siteName || "").trim();
+      return (
+        (storedId && id === storedId) ||
+        (storedName && (id === storedName || name === storedName))
+      );
+    });
+    if (match) {
+      return match.name || match.siteName || storedName || storedId;
+    }
+    return storedName || storedId || "—";
+  }
+
   function renderSystems(systems) {
+    lastSystems = Array.isArray(systems) ? systems : [];
     systemsById = {};
-    if (!systems.length) {
+    if (!lastSystems.length) {
       tbody.innerHTML =
-        '<tr><td colspan="7">No systems found in NOVARASystems.</td></tr>';
+        '<tr><td colspan="8">No systems found in NOVARASystems.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = systems
+    tbody.innerHTML = lastSystems
       .map(function (system) {
         systemsById[system.systemId] = system;
         var cls = statusClass(system.status);
         var statusHtml = cls
           ? '<td class="' + cls + '">' + escapeHtml(system.status) + "</td>"
           : "<td>" + escapeHtml(system.status) + "</td>";
-        var siteLabel = system.siteName
-          ? system.siteName
-          : system.siteId || "—";
+        var siteId = systemSiteId(system);
         var detailHref =
           "system-detail.html?systemId=" +
           encodeURIComponent(system.systemId || "") +
           "&siteId=" +
-          encodeURIComponent(system.siteId || "");
+          encodeURIComponent(siteId);
         return (
           '<tr class="system-row" data-system-id="' +
           escapeHtml(system.systemId) +
@@ -259,10 +353,13 @@
           "</a>" +
           "</td>" +
           "<td>" +
-          escapeHtml(system.systemName || system.name) +
+          escapeHtml(systemSiteName(system)) +
           "</td>" +
           "<td>" +
-          escapeHtml(siteLabel) +
+          escapeHtml(siteId || "—") +
+          "</td>" +
+          "<td>" +
+          escapeHtml(system.systemName || system.name) +
           "</td>" +
           "<td>" +
           escapeHtml(system.systemType || "—") +
@@ -377,7 +474,7 @@
       })
       .catch(function (err) {
         tbody.innerHTML =
-          '<tr><td colspan="7">Unable to load systems.</td></tr>';
+          '<tr><td colspan="8">Unable to load systems.</td></tr>';
         setStatus(err.message || "Failed to load systems", true);
       });
   }
@@ -445,6 +542,7 @@
         })
         .catch(function (err) {
           var message = err.message || "Failed to save system";
+          // Never retry-as-create while editing — that would insert a new SystemID.
           var isDuplicate =
             mode === "create" &&
             /already exists/i.test(message) &&
@@ -470,6 +568,14 @@
     }
 
     submit(payload, true);
+  }
+
+  function openSystemModal(mode, system) {
+    return Promise.resolve(loadSites())
+      .catch(function () {})
+      .then(function () {
+        openModal(mode, system);
+      });
   }
 
   if (addBtn) {
@@ -511,6 +617,11 @@
   if (form) {
     form.addEventListener("submit", saveSystem);
   }
+  if (siteSelect) {
+    siteSelect.addEventListener("change", function () {
+      syncLookupIdDisplay(siteSelect, siteIdDisplay);
+    });
+  }
 
   tbody.addEventListener("click", function (event) {
     var deleteBtn = event.target.closest(".delete-system-btn");
@@ -526,13 +637,9 @@
     if (editBtn) {
       event.stopPropagation();
       var editId = editBtn.getAttribute("data-system-id");
-      Promise.resolve(loadSites())
-        .catch(function () {})
-        .then(function () {
-          if (editId && systemsById[editId]) {
-            openModal("edit", systemsById[editId]);
-          }
-        });
+      if (editId && systemsById[editId]) {
+        openSystemModal("edit", systemsById[editId]);
+      }
       return;
     }
     // Ignore clicks on the detail link; otherwise open Edit like Sites rows.
@@ -542,13 +649,9 @@
     var row = event.target.closest("tr.system-row");
     if (!row) return;
     var rowId = row.getAttribute("data-system-id");
-    Promise.resolve(loadSites())
-      .catch(function () {})
-      .then(function () {
-        if (rowId && systemsById[rowId]) {
-          openModal("edit", systemsById[rowId]);
-        }
-      });
+    if (rowId && systemsById[rowId]) {
+      openSystemModal("edit", systemsById[rowId]);
+    }
   });
 
   tbody.addEventListener("keydown", function (event) {
@@ -557,13 +660,9 @@
     if (!row) return;
     event.preventDefault();
     var systemId = row.getAttribute("data-system-id");
-    Promise.resolve(loadSites())
-      .catch(function () {})
-      .then(function () {
-        if (systemId && systemsById[systemId]) {
-          openModal("edit", systemsById[systemId]);
-        }
-      });
+    if (systemId && systemsById[systemId]) {
+      openSystemModal("edit", systemsById[systemId]);
+    }
   });
 
   document.addEventListener("keydown", function (event) {
@@ -580,5 +679,9 @@
       sitesList = [];
     }),
     loadSystems(),
-  ]);
+  ]).then(function () {
+    if (lastSystems.length) {
+      renderSystems(lastSystems);
+    }
+  });
 })();
