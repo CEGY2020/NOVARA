@@ -862,6 +862,43 @@ class RouteTests(unittest.TestCase):
         self.assertIn("systemSiteId", source)
         self.assertIn("systemSiteName", source)
 
+    def test_systems_primary_click_opens_temperature_trends(self):
+        """Row and System ID go to Graph; only the Edit button opens the form."""
+        source = Path(__file__).resolve().parent.joinpath("systems.js").read_text(
+            encoding="utf-8"
+        )
+        html = Path(__file__).resolve().parent.joinpath("systems.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("function systemDetailHref", source)
+        self.assertIn("function openSystemDetail", source)
+        self.assertIn("system-detail.html?systemId=", source)
+        self.assertIn("window.location.assign(systemDetailHref(system))", source)
+        self.assertIn('class="link-btn edit-system-btn"', source)
+        self.assertIn("systems.js?v=systems-nav-1", html)
+
+        click_handler = source.split('tbody.addEventListener("click"', 1)[1].split(
+            'tbody.addEventListener("keydown"', 1
+        )[0]
+        self.assertIn("openSystemDetail", click_handler)
+        self.assertIn('openSystemModal("edit"', click_handler)
+        self.assertLess(
+            click_handler.find('openSystemModal("edit"'),
+            click_handler.find("openSystemDetail"),
+            "Edit button must be handled before the row-click Graph navigation",
+        )
+        # Row path must not open the edit modal (that used to make SYS clicks inconsistent).
+        row_path = click_handler.split("event.target.closest(\"a\")", 1)[1]
+        self.assertIn("openSystemDetail", row_path)
+        self.assertNotIn("openSystemModal", row_path)
+
+        keydown = source.split('tbody.addEventListener("keydown"', 1)[1].split(
+            'document.addEventListener("keydown"', 1
+        )[0]
+        self.assertIn("openSystemDetail", keydown)
+        self.assertNotIn("openSystemModal", keydown)
+        self.assertIn("a, button, input, select, textarea", keydown)
+
     def test_systems_form_uses_site_dropdown_and_site_id_display(self):
         """Site is a name dropdown that stores SiteID, with a readonly SiteID field."""
         html = Path(__file__).resolve().parent.joinpath("systems.html").read_text(
