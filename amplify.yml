@@ -10,6 +10,10 @@ frontend:
         - echo "NOVARA_API_BASE in api-config.js"
         - grep -n "NOVARA_API_BASE" api-config.js || true
         - |
+          if ! grep -q 'src="formatDateTime.js' system-detail.html; then
+            echo "ERROR system-detail.html must load formatDateTime.js"
+            exit 1
+          fi
           if ! grep -q 'id="add-site-btn"' sites.html; then
             echo "ERROR sites.html is missing add-site-btn"
             exit 1
