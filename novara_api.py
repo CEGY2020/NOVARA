@@ -4361,9 +4361,11 @@ DEMO_SAVINGS_SITES = (
 SAVINGS_ALLOWED_DAYS = (30, 90, 365)
 
 
-def build_demo_savings(days: int) -> dict:
+def build_demo_savings(days: int, *, end: datetime | None = None) -> dict:
     """Build a clean portfolio savings series for charts (demo until calc exists)."""
-    end = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    if end is None:
+        end = datetime.now(timezone.utc)
+    end = end.astimezone(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
     sites = [dict(site) for site in DEMO_SAVINGS_SITES]
     annual_total = sum(float(site["verifiedSavings"]) for site in sites)
     # Scale annual verified savings into the selected window with mild daily variation.
@@ -4400,6 +4402,8 @@ def build_demo_savings(days: int) -> dict:
         1,
     )
     last_update = points[-1]["t"] if points else None
+    range_start = (end - timedelta(days=max(days, 1) - 1)).strftime("%Y-%m-%d")
+    range_end = end.strftime("%Y-%m-%d")
     return {
         "points": points,
         "sites": sites,
@@ -4411,23 +4415,59 @@ def build_demo_savings(days: int) -> dict:
         },
         "lastUpdate": last_update,
         "days": days,
+        "rangeStart": range_start,
+        "rangeEnd": range_end,
         "count": len(points),
         "source": "demo",
     }
 
 
-def handle_savings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
+def _first_query_param(params: dict[str, list[str]], key: str) -> str:
+    values = params.get(key) or []
+    if not values:
+        return ""
+    return str(values[0] or "").strip()
+
+
+def _parse_savings_ymd(value: str) -> datetime | None:
     try:
-        days = int((params.get("days") or ["30"])[0])
+        return datetime.strptime(value, "%Y-%m-%d").replace(
+            hour=12, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+        )
     except ValueError:
-        return 400, {"error": "days must be an integer"}
-    if days not in SAVINGS_ALLOWED_DAYS:
-        return 400, {"error": "days must be one of 30, 90, or 365"}
+        return None
+
+
+def handle_savings_request(params: dict[str, list[str]]) -> tuple[int, dict]:
+    start_raw = _first_query_param(params, "start")
+    end_raw = _first_query_param(params, "end")
+    end: datetime | None = None
+    days: int | None = None
+
+    if start_raw or end_raw:
+        if not start_raw or not end_raw:
+            return 400, {"error": "start and end are both required"}
+        start = _parse_savings_ymd(start_raw)
+        end = _parse_savings_ymd(end_raw)
+        if start is None or end is None:
+            return 400, {"error": "start and end must be YYYY-MM-DD"}
+        if start > end:
+            return 400, {"error": "start must be on or before end"}
+        days = (end.date() - start.date()).days + 1
+        if days < 1 or days > 365:
+            return 400, {"error": "range must be between 1 and 365 days"}
+    else:
+        try:
+            days = int(_first_query_param(params, "days") or "30")
+        except ValueError:
+            return 400, {"error": "days must be an integer"}
+        if days not in SAVINGS_ALLOWED_DAYS:
+            return 400, {"error": "days must be one of 30, 90, or 365"}
 
     try:
         # Verified savings calculation from NOVARAReadings is not available yet.
         # Serve deterministic demo data so Savings Graphs render usefully.
-        return 200, build_demo_savings(days)
+        return 200, build_demo_savings(days, end=end)
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc()
         return 500, {

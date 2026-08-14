@@ -479,7 +479,7 @@ Outputs:
     Description: Example readings endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/readings?siteId=VS001&days=7"
   SavingsEndpoint:
-    Description: Energy savings graphs endpoint
+    Description: Energy savings graphs endpoint (days=30|90|365 or start/end)
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/savings?days=30"
   SitesEndpoint:
     Description: Sites endpoint
