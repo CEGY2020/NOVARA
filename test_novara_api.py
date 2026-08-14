@@ -2094,6 +2094,33 @@ class RouteTests(unittest.TestCase):
         self.assertIn("Reject", html_body)
         self.assertIn("account-decision.html", text)
         self.assertIn("secret-token", text)
+        self.assertIn("08-11-26 12:00 PM", text)
+        self.assertIn("08-11-26 12:00 PM", html_body)
+
+    def test_format_signup_date_uses_mm_dd_yy(self):
+        self.assertEqual(
+            novara_api._format_signup_date("2026-08-14T09:44:00Z"),
+            "08-14-26 09:44 AM",
+        )
+        self.assertEqual(
+            novara_api._format_signup_date("2026-08-14T14:30:00Z"),
+            "08-14-26 02:30 PM",
+        )
+        self.assertEqual(novara_api._format_signup_date("2026-08-14"), "08-14-26")
+        self.assertEqual(novara_api._format_signup_date(""), "—")
+
+    def test_datetime_pages_include_shared_formatter(self):
+        root = Path(__file__).resolve().parent
+        pages = [
+            "system-detail.html",
+            "energy-savings.html",
+            "users.html",
+            "bills.html",
+            "leads.html",
+        ]
+        for name in pages:
+            source = root.joinpath(name).read_text(encoding="utf-8")
+            self.assertIn("formatDateTime.js", source, name)
 
     def test_reject_requires_reason(self):
         existing = {

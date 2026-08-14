@@ -45,24 +45,25 @@
     return amount.toFixed(1) + "%";
   }
 
+  function datetime() {
+    return window.NovaraDateTime || null;
+  }
+
   function formatDayLabel(iso) {
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
+    var dt = datetime();
+    if (dt && dt.formatDate) {
+      return dt.formatDate(iso) || iso;
+    }
+    return iso;
   }
 
   function formatFullDate(iso) {
     if (!iso) return "";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    var dt = datetime();
+    if (dt && dt.formatDate) {
+      return dt.formatDate(iso) || iso;
+    }
+    return iso;
   }
 
   function currencyTooltip(item) {

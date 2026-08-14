@@ -28,17 +28,25 @@
     chartStatusEl.classList.toggle("is-error", Boolean(isError));
   }
 
+  function datetime() {
+    return window.NovaraDateTime || null;
+  }
+
   function formatLastUpdate(iso) {
     if (!iso) return "No readings in range";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    var dt = datetime();
+    if (dt && dt.formatDateTime) {
+      return dt.formatDateTime(iso) || iso;
+    }
+    return iso;
+  }
+
+  function formatChartTick(iso) {
+    var dt = datetime();
+    if (dt && dt.formatDateTime) {
+      return dt.formatDateTime(iso, { use24Hour: true }) || iso;
+    }
+    return iso;
   }
 
   function relativeFromNow(iso) {
@@ -142,14 +150,10 @@
               maxTicksLimit: 8,
               callback: function (value) {
                 var label = this.getLabelForValue(value);
-                var date = new Date(label);
-                if (Number.isNaN(date.getTime())) return label;
-                return date.toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                });
+                return formatChartTick(label);
               },
+              maxRotation: 45,
+              minRotation: 0,
             },
             grid: {
               color: "rgba(15, 45, 58, 0.06)",
@@ -200,8 +204,12 @@
       .then(function (data) {
         var points = (data && data.points) || [];
         if (statusEl) {
-          statusEl.textContent = relativeFromNow(data.lastUpdate);
-          statusEl.title = data.lastUpdate ? formatLastUpdate(data.lastUpdate) : "";
+          statusEl.textContent = data.lastUpdate
+            ? formatLastUpdate(data.lastUpdate)
+            : "No readings in range";
+          statusEl.title = data.lastUpdate
+            ? relativeFromNow(data.lastUpdate)
+            : "";
         }
         renderChart(points);
         var scopeLabel =
