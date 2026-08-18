@@ -5240,6 +5240,64 @@ def _preapproved_email_from_path(path: str) -> str | None:
     return None
 
 
+def handle_pool_recommend_request(body: dict | None) -> tuple[int, dict]:
+    """Return a NOVARA Pool heater schedule recommendation."""
+    if not isinstance(body, dict):
+        return 400, {"error": "Request body must be a JSON object"}
+
+    try:
+        cfg = PoolConfig(
+            system_id=str(body.get("system_id") or body.get("systemId") or "pool"),
+            length_ft=float(body.get("length_ft", body.get("lengthFt", 40))),
+            width_ft=float(body.get("width_ft", body.get("widthFt", 20))),
+            avg_depth_ft=float(body.get("avg_depth_ft", body.get("avgDepthFt", 5))),
+            target_setpoint_f=float(
+                body.get("target_setpoint_f", body.get("targetSetpointF", 82))
+            ),
+            heater_input_btu_h=float(
+                body.get("heater_input_btu_h", body.get("heaterInputBtuH", 400000))
+            ),
+            heater_efficiency=float(
+                body.get("heater_efficiency", body.get("heaterEfficiency", 0.82))
+            ),
+        )
+
+        site = {
+            "T_air_f": float(body.get("T_air_f", body.get("airTempF", 70))),
+            "rh_pct": float(body.get("rh_pct", body.get("humidityPct", 50))),
+            "wind_mph": float(body.get("wind_mph", body.get("windMph", 5))),
+            "solar_W_m2": float(body.get("solar_W_m2", body.get("solarWM2", 0))),
+            "cloud_frac": float(body.get("cloud_frac", body.get("cloudFrac", 0.3))),
+            "precip_mm": float(body.get("precip_mm", body.get("precipMm", 0))),
+        }
+
+        pool_temp_f = float(
+            body.get("pool_temp_f", body.get("poolTempF", cfg.target_setpoint_f))
+        )
+
+        result = recommend_heater_schedule(
+            cfg,
+            pool_temp_f,
+            site,
+            system_id=cfg.system_id,
+        )
+
+        if hasattr(result, "model_dump"):
+            payload = result.model_dump()
+        elif hasattr(result, "dict"):
+            payload = result.dict()
+        else:
+            payload = result
+
+        return 200, json_safe(payload)
+
+    except (TypeError, ValueError) as exc:
+        return 400, {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.exception("Pool recommendation failed")
+        return 500, {"error": str(exc)}
+
+
 def handle_health_request() -> tuple[int, dict]:
     return 200, {
         "ok": True,
@@ -5276,6 +5334,10 @@ def route_request(
     while "//" in normalized:
         normalized = normalized.replace("//", "/")
     normalized = normalized.rstrip("/") or "/"
+    if normalized.endswith("/api/pool/recommend") or normalized == "/pool/recommend":
+        if method != "POST":
+            return 405, {"error": "Method not allowed"}
+        return handle_pool_recommend_request(body)
     if normalized.endswith("/api/readings") or normalized == "/readings":
         if method != "GET":
             return 405, {"error": "Method not allowed"}
