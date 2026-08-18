@@ -6,6 +6,8 @@ import base64
 import hashlib
 import html
 import json
+from pool_engine.engine import recommend_heater_schedule
+from pool_engine.models import PoolConfig
 import logging
 import os
 import re
@@ -5635,3 +5637,4 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
         method, path, params, body, headers=headers
     )
     return api_response(status, payload)
+
