@@ -93,6 +93,17 @@ class RouteTests(unittest.TestCase):
             ("2026-08-05T07:00:00Z", None),
         )
 
+    def test_system_detail_loads_format_datetime_before_chart(self):
+        source = Path(__file__).resolve().parent.joinpath(
+            "system-detail.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("formatDateTime.js", source)
+        self.assertIn("temperature-trends.js", source)
+        self.assertLess(
+            source.index("formatDateTime.js"),
+            source.index("temperature-trends.js"),
+        )
+
     def test_savings_route_returns_demo_series(self):
         status, payload = novara_api.route_request(
             "GET", "/api/savings", {"days": ["30"]}
