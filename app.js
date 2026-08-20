@@ -1,112 +1,108 @@
-// Capture role from directory (?role=) and keep the existing login page.
-var selectedRole = null;
-var loginMessage = document.getElementById("loginMessage");
-var loginSubmit = document.getElementById("loginSubmit");
+/*
+ * NOVARA Authentication
+ * Amazon Cognito managed login
+ */
 
-function setLoginMessage(text, isError) {
-  if (!loginMessage) return;
-  loginMessage.textContent = text || "";
-  loginMessage.classList.toggle("is-error", Boolean(isError));
-  loginMessage.classList.toggle("is-success", Boolean(text) && !isError);
-}
+(function () {
+  "use strict";
 
-if (window.NovaraRole) {
-  selectedRole = NovaraRole.captureRoleFromQuery();
+  // Amazon Cognito configuration
+  const COGNITO_DOMAIN =
+    "https://us-west-2ztzcbgehz.auth.us-west-2.amazoncognito.com";
 
-  var roleLabelEl = document.getElementById("selectedRoleLabel");
-  if (roleLabelEl && selectedRole) {
-    roleLabelEl.textContent = "Signing in as " + NovaraRole.getRoleLabel(selectedRole);
-    roleLabelEl.hidden = false;
+  const CLIENT_ID =
+    "4dcudd58k6s3t8uf4bfiabflk0";
+
+  const REDIRECT_URI =
+    "https://d8411y8p4kdic.cloudfront.net";
+
+  /*
+   * Build the Cognito managed-login URL.
+   */
+  function getCognitoLoginUrl() {
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      response_type: "code",
+      scope: "openid email phone",
+      redirect_uri: REDIRECT_URI
+    });
+
+    return COGNITO_DOMAIN + "/oauth2/authorize?" + params.toString();
   }
-}
 
-// Login form — authenticate against NOVARAUsers; only Active users may enter.
-var loginForm = document.getElementById("loginForm") || document.querySelector("form");
-if (loginForm) {
-  loginForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    setLoginMessage("");
+  /*
+   * Send user to Amazon Cognito.
+   */
+  function signInWithCognito() {
+    window.location.href = getCognitoLoginUrl();
+  }
 
-    var email = String((document.getElementById("email") || {}).value || "")
-      .trim()
-      .toLowerCase();
-    var password = String((document.getElementById("password") || {}).value || "");
+  /*
+   * Preserve NOVARA role selection, if one was supplied
+   * in the page URL.
+   */
+  function saveSelectedRole() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const role = params.get("role");
 
-    if (!email || !password) {
-      setLoginMessage("Email and password are required.", true);
-      return;
+      if (role) {
+        sessionStorage.setItem("novaraSelectedRole", role);
+      }
+    } catch (err) {
+      console.warn("Unable to save NOVARA role.", err);
     }
+  }
 
-    if (!window.NovaraApi || typeof NovaraApi.loginUser !== "function") {
-      setLoginMessage("API client is unavailable.", true);
-      return;
-    }
+  /*
+   * Login page
+   */
+  const loginForm = document.getElementById("loginForm");
 
-    if (loginSubmit) {
-      loginSubmit.disabled = true;
-      loginSubmit.textContent = "Signing in…";
-    }
+  if (loginForm) {
+    saveSelectedRole();
 
-    var rememberEl = document.getElementById("rememberMe");
-    var remember = Boolean(rememberEl && rememberEl.checked);
+    loginForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      signInWithCognito();
+    });
+  }
 
-    NovaraApi.loginUser({ Email: email, Password: password })
-      .then(function (result) {
-        var user = result && result.user;
-        if (!user) {
-          throw new Error("Login succeeded but no user was returned.");
-        }
-        if (!result.token) {
-          throw new Error("Login succeeded but no session token was returned.");
-        }
+  /*
+   * Password show/hide button.
+   * This is retained so the existing page does not break,
+   * although Cognito will now handle the actual password entry.
+   */
+  const togglePassword = document.getElementById("togglePassword");
+  const passwordInput = document.getElementById("password");
 
-        if (window.NovaraAuth && NovaraAuth.setCurrentUser) {
-          NovaraAuth.setCurrentUser(user, {
-            token: result.token,
-            expiresAt: result.expiresAt || "",
-            remember: remember,
-          });
-        }
+  if (togglePassword && passwordInput) {
+    togglePassword.addEventListener("click", function () {
+      const isPassword = passwordInput.type === "password";
 
-        var role = user.role;
-        if (window.NovaraRole) {
-          role = NovaraRole.setSelectedRole(role) || role || selectedRole || "aem";
-          window.location.href = NovaraRole.getHomeForRole(role);
-          return;
-        }
+      passwordInput.type = isPassword ? "text" : "password";
+      togglePassword.textContent = isPassword ? "Hide" : "Show";
+    });
+  }
 
-        window.location.href = "dashboard.html";
-      })
-      .catch(function (err) {
-        setLoginMessage((err && err.message) || "Sign-in failed.", true);
-      })
-      .finally(function () {
-        if (loginSubmit) {
-          loginSubmit.disabled = false;
-          loginSubmit.textContent = "Sign In";
-        }
-      });
-  });
-}
+  /*
+   * Forgot password.
+   * Send the user to Cognito, where password recovery is handled.
+   */
+  const forgotPassword = document.getElementById("forgotPassword");
 
-// Show / Hide Password
-const togglePassword = document.getElementById("togglePassword");
-const passwordInput = document.getElementById("password");
+  if (forgotPassword) {
+    forgotPassword.addEventListener("click", function (event) {
+      event.preventDefault();
+      signInWithCognito();
+    });
+  }
 
-if (togglePassword && passwordInput) {
-  togglePassword.addEventListener("click", function () {
-    const type = passwordInput.getAttribute("type") === "password" ? "text" : "password";
-    passwordInput.setAttribute("type", type);
-    togglePassword.textContent = type === "password" ? "Show" : "Hide";
-  });
-}
-
-// Forgot Password (temporary)
-const forgotPassword = document.getElementById("forgotPassword");
-
-if (forgotPassword) {
-  forgotPassword.addEventListener("click", function (e) {
-    e.preventDefault();
-    alert("Password reset is coming soon. For now, please contact support.");
-  });
-}
+  /*
+   * Make Cognito sign-in available to other NOVARA pages.
+   */
+  window.NovaraCognito = {
+    signIn: signInWithCognito,
+    loginUrl: getCognitoLoginUrl
+  };
+})();
