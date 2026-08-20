@@ -3049,10 +3049,25 @@ def _aws_client_kwargs() -> dict[str, str]:
 
 
 def _format_signup_date(value: str) -> str:
+    """Format timestamps as MM-DD-YY plus time (e.g. 08-14-26 09:44 AM)."""
     text = str(value or "").strip()
     if not text:
         return "—"
-    return text.replace("T", " ").replace("Z", " UTC")[:19]
+    try:
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            dt = datetime.strptime(text, "%Y-%m-%d")
+            return dt.strftime("%m-%d-%y")
+        candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
+        dt = datetime.fromisoformat(candidate)
+        hour = dt.hour
+        ampm = "PM" if hour >= 12 else "AM"
+        hour12 = hour % 12 or 12
+        return (
+            f"{dt.month:02d}-{dt.day:02d}-{str(dt.year)[-2:]} "
+            f"{hour12:02d}:{dt.minute:02d} {ampm}"
+        )
+    except ValueError:
+        return text.replace("T", " ").replace("Z", " UTC")[:19]
 
 
 def build_welcome_email(user: dict) -> tuple[str, str, str]:

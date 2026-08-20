@@ -45,8 +45,11 @@
 
   function formatWhen(value) {
     if (!value) return "—";
-    var text = String(value);
-    return text.replace("T", " ").replace("Z", " UTC").slice(0, 19);
+    var dt = window.NovaraDateTime;
+    if (dt && dt.formatOrDash) {
+      return dt.formatOrDash(value);
+    }
+    return String(value);
   }
 
   function statusBadge(status) {

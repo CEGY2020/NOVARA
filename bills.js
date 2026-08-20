@@ -26,9 +26,19 @@
       .replace(/'/g, "&#39;");
   }
 
+  function formatDateLabel(value) {
+    var raw = String(value || "").trim();
+    if (!raw) return "";
+    var dt = window.NovaraDateTime;
+    if (dt && dt.formatDate) {
+      return dt.formatDate(raw) || raw;
+    }
+    return raw;
+  }
+
   function formatPeriod(bill) {
-    var start = String((bill && bill.periodStart) || "").trim();
-    var end = String((bill && bill.periodEnd) || "").trim();
+    var start = formatDateLabel((bill && bill.periodStart) || "");
+    var end = formatDateLabel((bill && bill.periodEnd) || "");
     if (start && end) {
       return start + " – " + end;
     }
@@ -65,10 +75,11 @@
 
   function formatWhen(value) {
     if (!value) return "—";
-    return String(value)
-      .replace("T", " ")
-      .replace("Z", " UTC")
-      .slice(0, 19);
+    var dt = window.NovaraDateTime;
+    if (dt && dt.formatOrDash) {
+      return dt.formatOrDash(value);
+    }
+    return String(value);
   }
 
   function renderEmpty() {

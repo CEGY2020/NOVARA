@@ -153,18 +153,20 @@
 
   function formatFollowUp(value) {
     if (!value) return "—";
+    var dt = window.NovaraDateTime;
+    if (dt && dt.formatOrDash) {
+      return dt.formatOrDash(value);
+    }
     return String(value);
   }
 
   function formatUpdatedAt(value) {
     if (!value) return "—";
-    var raw = String(value).trim();
-    // Prefer date portion of ISO timestamps (YYYY-MM-DDTHH:MM:SSZ).
-    var datePart = raw.slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-      return datePart;
+    var dt = window.NovaraDateTime;
+    if (dt && dt.formatOrDash) {
+      return dt.formatOrDash(value);
     }
-    return raw;
+    return String(value);
   }
 
   function followUpBadgeHtml(urgency) {
