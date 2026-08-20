@@ -126,9 +126,10 @@
 
       const tokens = await response.json();
 
-      const payload = JSON.parse(
-        atob(tokens.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-      );
+      const base64Url = tokens.id_token.split(".")[1];
+const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, "=");
+const payload = JSON.parse(atob(padded));
 
       const user = {
         userId: payload.sub || "",
