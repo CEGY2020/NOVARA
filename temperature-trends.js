@@ -28,23 +28,47 @@
     chartStatusEl.classList.toggle("is-error", Boolean(isError));
   }
 
+  function datetime() {
+    return window.NovaraDateTime || null;
+  }
+
+  function readingTimestamp(value) {
+    var dt = datetime();
+    if (dt && dt.stripReadingSortKey) {
+      return dt.stripReadingSortKey(value);
+    }
+    return String(value == null ? "" : value).replace(/#(SYS\d+)$/i, "");
+  }
+
   function formatLastUpdate(iso) {
     if (!iso) return "No readings in range";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    var dt = datetime();
+    if (dt && dt.formatDateTime) {
+      return dt.formatDateTime(iso) || readingTimestamp(iso);
+    }
+    return readingTimestamp(iso);
+  }
+
+  var axisTickMode = "datetime24";
+
+  function formatChartTick(iso) {
+    var dt = datetime();
+    if (dt && dt.formatAxisTick) {
+      return dt.formatAxisTick(iso, axisTickMode);
+    }
+    if (dt && dt.formatDateTime) {
+      if (axisTickMode === "date" && dt.formatDate) {
+        return dt.formatDate(iso) || readingTimestamp(iso);
+      }
+      return dt.formatDateTime(iso, { use24Hour: true }) || readingTimestamp(iso);
+    }
+    return readingTimestamp(iso);
   }
 
   function relativeFromNow(iso) {
     if (!iso) return "—";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
+    var date = new Date(readingTimestamp(iso));
+    if (Number.isNaN(date.getTime())) return readingTimestamp(iso);
     var diffMs = Date.now() - date.getTime();
     if (diffMs < 0) return "just now";
     var minutes = Math.floor(diffMs / 60000);
@@ -58,8 +82,14 @@
 
   function renderChart(points) {
     var labels = points.map(function (p) {
-      return p.t;
+      return readingTimestamp(p.t);
     });
+    var dt = datetime();
+    if (dt && dt.chartTickMode && labels.length) {
+      axisTickMode = dt.chartTickMode(labels[0], labels[labels.length - 1]);
+    } else {
+      axisTickMode = "datetime24";
+    }
     var supply = points.map(function (p) {
       return p.t1;
     });
@@ -140,15 +170,11 @@
           x: {
             ticks: {
               maxTicksLimit: 8,
+              maxRotation: 45,
+              minRotation: 0,
               callback: function (value) {
                 var label = this.getLabelForValue(value);
-                var date = new Date(label);
-                if (Number.isNaN(date.getTime())) return label;
-                return date.toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                });
+                return formatChartTick(label);
               },
             },
             grid: {
