@@ -97,7 +97,64 @@
       signInWithCognito();
     });
   }
+  /*
+   * Complete Cognito login after Cognito redirects back to NOVARA.
+   */
+  async function handleCognitoCallback() {
+    const query = new URLSearchParams(window.location.search);
+    const code = query.get("code");
 
+    if (!code) return;
+
+    try {
+      const response = await fetch(COGNITO_DOMAIN + "/oauth2/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: CLIENT_ID,
+          code: code,
+          redirect_uri: REDIRECT_URI
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to complete Cognito login.");
+      }
+
+      const tokens = await response.json();
+
+      const payload = JSON.parse(
+        atob(tokens.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+      );
+
+      const user = {
+        userId: payload.sub || "",
+        email: payload.email || "",
+        fullName: payload.name || payload.email || "",
+        role: "aem",
+        status: "Active"
+      };
+
+      sessionStorage.setItem("novaraUser", JSON.stringify(user));
+      sessionStorage.setItem("novaraToken", tokens.access_token);
+      sessionStorage.setItem(
+        "novaraTokenExpires",
+        String(Date.now() + (tokens.expires_in * 1000))
+      );
+
+      window.history.replaceState({}, document.title, REDIRECT_URI);
+      window.location.replace("dashboard.html");
+
+    } catch (error) {
+      console.error("Cognito callback error:", error);
+      alert("NOVARA sign-in completed, but the session could not be created.");
+    }
+  }
+
+  handleCognitoCallback();
   /*
    * Make Cognito sign-in available to other NOVARA pages.
    */
