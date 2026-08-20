@@ -14,7 +14,7 @@
     "4dcudd58k6s3t8uf4bfiabflk0";
 
   const REDIRECT_URI =
-    "https://d8411y8p4kdic.cloudfront.net";
+    "https://d84l1y8p4kdic.cloudfront.net";
 
   /*
    * Build the Cognito managed-login URL.
