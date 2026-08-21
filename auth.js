@@ -216,7 +216,7 @@
     if (global.NovaraRole && NovaraRole.clearSelectedRole) {
       NovaraRole.clearSelectedRole();
     }
-    window.location.href = redirectTo || "directory.html";
+    window.location.href = redirectTo || "video-landing.html";
   }
 
   global.NovaraAuth = {
