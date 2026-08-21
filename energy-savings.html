@@ -6,6 +6,8 @@
   <title>NOVARA - Energy Savings</title>
   <link rel="stylesheet" href="dashboard.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body data-page="savings">
 
@@ -27,10 +29,23 @@
           <h3>Savings Graphs</h3>
           <p>Portfolio verified savings over time</p>
         </div>
-        <div class="range-controls">
-          <button class="range-btn active" type="button" data-days="30">Last 30 Days</button>
-          <button class="range-btn" type="button" data-days="90">Last 90 Days</button>
-          <button class="range-btn" type="button" data-days="365">Last 12 Months</button>
+        <div class="savings-range-toolbar">
+          <div class="range-controls">
+            <button class="range-btn active" type="button" data-days="30">Last 30 Days</button>
+            <button class="range-btn" type="button" data-days="90">Last 90 Days</button>
+            <button class="range-btn" type="button" data-days="365">Last 12 Months</button>
+          </div>
+          <div class="range-controls date-range-controls">
+            <label class="date-range-field">
+              <span>Start</span>
+              <input type="date" id="savings-start-date" aria-label="Savings start date">
+            </label>
+            <label class="date-range-field">
+              <span>End</span>
+              <input type="date" id="savings-end-date" aria-label="Savings end date">
+            </label>
+            <button class="range-btn" type="button" id="savings-reset-zoom">Reset zoom</button>
+          </div>
         </div>
       </div>
       <div class="savings-summary-row" aria-live="polite">
@@ -120,9 +135,11 @@
   </main>
 </div>
 
-<script src="api-config.js?v=savings-1"></script>
-<script src="api-client.js?v=savings-1"></script>
-<script src="nav.js?v=savings-1"></script>
-<script src="energy-savings.js?v=savings-1"></script>
+<script src="api-config.js?v=savings-zoom-1"></script>
+<script src="api-client.js?v=savings-zoom-1"></script>
+<script src="nav.js?v=savings-zoom-1"></script>
+<script src="formatDateTime.js?v=savings-zoom-1"></script>
+<script src="savingsGraph.js?v=savings-zoom-1"></script>
+<script src="energy-savings.js?v=savings-zoom-1"></script>
 </body>
 </html>

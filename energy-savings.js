@@ -1,17 +1,21 @@
 (function () {
+  var graph = window.NovaraSavingsGraph;
   var cumulativeChart = null;
   var bySiteChart = null;
   var chartStatusEl = document.getElementById("chart-status");
   var cumulativeCanvas = document.getElementById("savings-cumulative-chart");
   var bySiteCanvas = document.getElementById("savings-by-site-chart");
-  var rangeButtons = document.querySelectorAll(".range-btn");
+  var rangeButtons = document.querySelectorAll(".range-btn[data-days]");
   var tableBody = document.getElementById("savings-table-body");
   var summaryTotalEl = document.getElementById("savings-summary-total");
   var summaryPctEl = document.getElementById("savings-summary-pct");
   var summarySitesEl = document.getElementById("savings-summary-sites");
   var emptyStateEl = document.getElementById("savings-empty-state");
+  var startInput = document.getElementById("savings-start-date");
+  var endInput = document.getElementById("savings-end-date");
+  var resetBtn = document.getElementById("savings-reset-zoom");
 
-  if (!cumulativeCanvas || typeof Chart === "undefined") {
+  if (!cumulativeCanvas || typeof Chart === "undefined" || !graph) {
     return;
   }
 
@@ -45,26 +49,6 @@
     return amount.toFixed(1) + "%";
   }
 
-  function formatDayLabel(iso) {
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-  }
-
-  function formatFullDate(iso) {
-    if (!iso) return "";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
-
   function currencyTooltip(item) {
     var value = item.parsed.y;
     if (value == null) return item.dataset.label + ": —";
@@ -79,131 +63,37 @@
     );
   }
 
-  function renderCumulativeChart(points) {
-    var labels = points.map(function (p) {
-      return p.t;
-    });
-    var cumulative = points.map(function (p) {
-      return Number(p.cumulative) || 0;
-    });
-    var daily = points.map(function (p) {
-      return Number(p.daily) || 0;
-    });
+  function todayInputDate() {
+    return graph.toInputDate(new Date());
+  }
 
+  function writeDateInputs(start, end) {
+    if (startInput) startInput.value = start || "";
+    if (endInput) endInput.value = end || "";
+  }
+
+  function syncPresetButtons(days) {
+    rangeButtons.forEach(function (btn) {
+      var btnDays = Number(btn.getAttribute("data-days"));
+      btn.classList.toggle("active", days != null && btnDays === days);
+    });
+  }
+
+  function markPresetForRange(start, end) {
+    var days = graph.daysInclusive(start, end);
+    var isPreset =
+      end === todayInputDate() && (days === 30 || days === 90 || days === 365);
+    syncPresetButtons(isPreset ? days : null);
+  }
+
+  function renderCumulativeChart(points) {
     if (cumulativeChart) {
-      cumulativeChart.data.labels = labels;
-      cumulativeChart.data.datasets[0].data = cumulative;
-      cumulativeChart.data.datasets[1].data = daily;
-      cumulativeChart.update("none");
+      graph.updateCumulativeChart(cumulativeChart, points);
       return;
     }
-
-    cumulativeChart = new Chart(cumulativeCanvas.getContext("2d"), {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: "Cumulative savings ($)",
-            data: cumulative,
-            borderColor: "#1785ad",
-            backgroundColor: "rgba(23, 133, 173, 0.12)",
-            borderWidth: 2,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.25,
-            fill: true,
-            yAxisID: "y",
-          },
-          {
-            label: "Daily savings ($)",
-            data: daily,
-            borderColor: "#d97706",
-            backgroundColor: "rgba(217, 119, 6, 0.10)",
-            borderWidth: 2,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            tension: 0.25,
-            fill: false,
-            yAxisID: "y1",
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-          mode: "index",
-          intersect: false,
-        },
-        plugins: {
-          legend: {
-            position: "top",
-            align: "end",
-            labels: {
-              boxWidth: 12,
-              boxHeight: 12,
-              usePointStyle: true,
-              pointStyle: "circle",
-            },
-          },
-          tooltip: {
-            callbacks: {
-              title: function (items) {
-                if (!items.length) return "";
-                return formatFullDate(items[0].label);
-              },
-              label: currencyTooltip,
-            },
-          },
-        },
-        scales: {
-          x: {
-            ticks: {
-              maxTicksLimit: 8,
-              callback: function (value) {
-                var label = this.getLabelForValue(value);
-                return formatDayLabel(label);
-              },
-            },
-            grid: {
-              color: "rgba(15, 45, 58, 0.06)",
-            },
-          },
-          y: {
-            position: "left",
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: "Cumulative ($)",
-            },
-            grid: {
-              color: "rgba(15, 45, 58, 0.08)",
-            },
-            ticks: {
-              callback: function (value) {
-                return "$" + Number(value).toLocaleString();
-              },
-            },
-          },
-          y1: {
-            position: "right",
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: "Daily ($)",
-            },
-            grid: {
-              drawOnChartArea: false,
-            },
-            ticks: {
-              callback: function (value) {
-                return "$" + Number(value).toLocaleString();
-              },
-            },
-          },
-        },
-      },
+    cumulativeChart = graph.createCumulativeChart(cumulativeCanvas, {
+      points: points,
+      currencyTooltip: currencyTooltip,
     });
   }
 
@@ -336,10 +226,32 @@
     }
   }
 
-  function applyPayload(data, days) {
+  function formatRangeLabel(start, end, days) {
+    var dt = window.NovaraDateTime;
+    var startLabel = start;
+    var endLabel = end;
+    if (dt && dt.formatDate) {
+      startLabel = dt.formatDate(start) || start;
+      endLabel = dt.formatDate(end) || end;
+    }
+    if (startLabel && endLabel) {
+      return startLabel + " – " + endLabel;
+    }
+    return "last " + days + " day" + (days === 1 ? "" : "s");
+  }
+
+  function applyPayload(data, request) {
     var points = (data && data.points) || [];
     var sites = (data && data.sites) || [];
     var summary = (data && data.summary) || {};
+    var days = Number((data && data.days) || (request && request.days) || points.length) || 0;
+    var start = (data && data.rangeStart) || (request && request.start) || "";
+    var end = (data && data.rangeEnd) || (request && request.end) || "";
+
+    if (start && end) {
+      writeDateInputs(start, end);
+      markPresetForRange(start, end);
+    }
 
     renderSummary(summary);
     renderTable(sites);
@@ -351,7 +263,7 @@
         true,
         "No savings data is available for this range yet. Import readings or check back after the next verification cycle."
       );
-      setChartStatus("No savings points for the last " + days + " days.", false);
+      setChartStatus("No savings points for " + formatRangeLabel(start, end, days) + ".", false);
       return;
     }
 
@@ -365,41 +277,51 @@
         sites.length +
         " sites · " +
         sourceLabel +
-        " · last " +
-        days +
-        " day" +
-        (days === 1 ? "" : "s"),
+        " · " +
+        formatRangeLabel(start, end, days) +
+        " · drag, scroll, or pinch to zoom",
       false
     );
   }
 
-  function loadSavings(days) {
+  function setControlsDisabled(disabled) {
+    rangeButtons.forEach(function (btn) {
+      btn.disabled = disabled;
+    });
+    if (startInput) startInput.disabled = disabled;
+    if (endInput) endInput.disabled = disabled;
+    if (resetBtn) resetBtn.disabled = disabled;
+  }
+
+  function loadSavings(request) {
+    request = request || {};
     setChartStatus("Loading savings…", false);
     setEmptyState(false);
-    rangeButtons.forEach(function (btn) {
-      btn.disabled = true;
-    });
+    setControlsDisabled(true);
 
     var api = window.NovaraApi;
-    var request = api
-      ? api.getSavings(days)
-      : fetch("/api/savings?days=" + encodeURIComponent(String(days))).then(
-          function (response) {
-            return response.json().then(function (body) {
-              if (!response.ok) {
-                var detail = body && (body.detail || body.error);
-                throw new Error(
-                  detail || "Request failed (" + response.status + ")"
-                );
-              }
-              return body;
-            });
-          }
-        );
+    var days = request.days;
+    var start = request.start;
+    var end = request.end;
+    var queryRequest;
+    if (api) {
+      queryRequest = api.getSavings(days, start && end ? { start: start, end: end } : null);
+    } else if (start && end) {
+      queryRequest = fetch(
+        "/api/savings?start=" +
+          encodeURIComponent(start) +
+          "&end=" +
+          encodeURIComponent(end)
+      ).then(parseSavingsResponse);
+    } else {
+      queryRequest = fetch(
+        "/api/savings?days=" + encodeURIComponent(String(days || 30))
+      ).then(parseSavingsResponse);
+    }
 
-    return request
+    return queryRequest
       .then(function (data) {
-        applyPayload(data, days);
+        applyPayload(data, request);
       })
       .catch(function (err) {
         setChartStatus(err.message || "Failed to load savings", true);
@@ -410,26 +332,66 @@
         renderSummary({});
       })
       .finally(function () {
-        rangeButtons.forEach(function (btn) {
-          btn.disabled = false;
-        });
+        setControlsDisabled(false);
       });
   }
 
-  function activeDays() {
-    var active = document.querySelector(".range-btn.active");
-    return active ? Number(active.getAttribute("data-days")) || 30 : 30;
+  function parseSavingsResponse(response) {
+    return response.json().then(function (body) {
+      if (!response.ok) {
+        var detail = body && (body.detail || body.error);
+        throw new Error(detail || "Request failed (" + response.status + ")");
+      }
+      return body;
+    });
+  }
+
+  function loadFromDateInputs() {
+    var start = startInput && startInput.value;
+    var end = endInput && endInput.value;
+    if (!start || !end) {
+      setChartStatus("Choose a start and end date.", true);
+      return;
+    }
+    if (start > end) {
+      setChartStatus("Start date must be on or before end date.", true);
+      return;
+    }
+    var days = graph.daysInclusive(start, end);
+    if (days < 1 || days > 365) {
+      setChartStatus("Date range must be between 1 and 365 days.", true);
+      return;
+    }
+    markPresetForRange(start, end);
+    loadSavings({ start: start, end: end, days: days });
   }
 
   rangeButtons.forEach(function (btn) {
     btn.addEventListener("click", function () {
-      rangeButtons.forEach(function (b) {
-        b.classList.remove("active");
-      });
-      btn.classList.add("active");
-      loadSavings(Number(btn.getAttribute("data-days")) || 30);
+      var days = Number(btn.getAttribute("data-days")) || 30;
+      var range = graph.defaultRange(days);
+      writeDateInputs(range.start, range.end);
+      syncPresetButtons(days);
+      loadSavings({ days: days, start: range.start, end: range.end });
     });
   });
 
-  loadSavings(activeDays());
+  if (startInput) {
+    startInput.max = todayInputDate();
+    startInput.addEventListener("change", loadFromDateInputs);
+  }
+  if (endInput) {
+    endInput.max = todayInputDate();
+    endInput.addEventListener("change", loadFromDateInputs);
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      graph.resetZoom(cumulativeChart);
+    });
+  }
+
+  var initial = graph.defaultRange(30);
+  writeDateInputs(initial.start, initial.end);
+  syncPresetButtons(30);
+  loadSavings({ days: 30, start: initial.start, end: initial.end });
 })();
