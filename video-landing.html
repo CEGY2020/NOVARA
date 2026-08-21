@@ -1,6 +1,31 @@
-  <div class="hero-media" aria-hidden="true">
-    <video id="hero-video" class="hero-video" autoplay muted loop playsinline poster="images/wave1.jpg">
-      <source src="images/wave-video.mp4" type="video/mp4">
-    </video>
-    <div class="hero-veil"></div>
-  </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA</title>
+  <link rel="stylesheet" href="landing.css">
+  <style>
+    html, body { margin: 0; height: 100%; }
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: url("images/wave1.jpg") center / cover no-repeat fixed;
+    }
+    .hero-brand-logo { width: min(420px, 70vw); height: auto; }
+    .hero-ctas { margin-top: 28px; display: flex; gap: 16px; }
+  </style>
+</head>
+<body>
+  <main class="hero">
+    <img class="hero-brand-logo" src="images/novara-logo-hero.png" alt="NOVARA">
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="directory.html">GET STARTED</a>
+      <a class="btn btn-ghost" href="login.html">LOG IN</a>
+    </div>
+  </main>
+</body>
+</html>
