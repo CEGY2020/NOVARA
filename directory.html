@@ -12,18 +12,14 @@
 <body class="directory-page">
 
 <header class="directory-header">
-    <a class="brand-link" href="video-landing.html" aria-label="NOVARA home">
+  <a class="brand-link" href="video-landing.html" aria-label="NOVARA home">
     <img class="header-logo" src="images/novara-logo.png" alt="NOVARA">
   </a>
 
   <div>
-    <a class="btn btn-ghost" href="video-landing.html">Back</a>
+    <a href="video-landing.html" style="margin-right:16px;color:#fff;text-decoration:underline;">Back to wave</a>
     <a class="btn btn-primary" href="login.html">Login</a>
   </div>
-    <img class="header-logo" src="images/novara-logo.png" alt="NOVARA">
-  </a>
-
-  <a class="btn btn-primary" href="login.html">Login</a>
 </header>
 
 <main class="directory-main">
@@ -37,33 +33,25 @@
   <section class="role-grid" aria-label="Role options">
     <a class="role-card" href="signup.html?role=aem">
       <span class="role-name">AEM</span>
-      <span class="role-desc">
-        Advanced Energy Management operators and portfolio oversight.
-      </span>
+      <span class="role-desc">Advanced Energy Management operators and portfolio oversight.</span>
       <span class="role-cta">Continue</span>
     </a>
 
     <a class="role-card" href="signup.html?role=owner">
       <span class="role-name">Owner</span>
-      <span class="role-desc">
-        Building and asset owners monitoring performance and savings.
-      </span>
+      <span class="role-desc">Building and asset owners monitoring performance and savings.</span>
       <span class="role-cta">Continue</span>
     </a>
 
     <a class="role-card" href="signup.html?role=contractor">
       <span class="role-name">Contractor</span>
-      <span class="role-desc">
-        Service partners coordinating installs, service, and follow-up.
-      </span>
+      <span class="role-desc">Service partners coordinating installs, service, and follow-up.</span>
       <span class="role-cta">Continue</span>
     </a>
 
     <a class="role-card" href="signup.html?role=sales">
       <span class="role-name">Sales</span>
-      <span class="role-desc">
-        Sales teams tracking leads, opportunities, and customer sites.
-      </span>
+      <span class="role-desc">Sales teams tracking leads, opportunities, and customer sites.</span>
       <span class="role-cta">Continue</span>
     </a>
   </section>
@@ -80,9 +68,7 @@
       try {
         var url = new URL(card.getAttribute("href"), window.location.href);
         NovaraRole.setSelectedRole(url.searchParams.get("role"));
-      } catch (e) {
-        // Navigation still proceeds via the href with ?role=
-      }
+      } catch (e) {}
     });
   });
 </script>
