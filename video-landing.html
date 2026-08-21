@@ -3,87 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NOVARA | Video Landing Reference</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <title>NOVARA</title>
   <link rel="stylesheet" href="landing.css">
+  <style>
+    html, body { margin: 0; height: 100%; }
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: url("images/wave1.jpg") center / cover no-repeat fixed;
+    }
+    .hero-brand-logo { width: min(420px, 70vw); height: auto; }
+    .hero-ctas { margin-top: 28px; display: flex; gap: 16px; }
+  </style>
 </head>
-<body class="landing-page video-landing">
-
-<main class="hero" id="top" aria-label="NOVARA video landing reference">
-  <div class="hero-media" aria-hidden="true">
-    <video
-      id="hero-video"
-      class="hero-video"
-      autoplay
-      muted
-      loop
-      playsinline
-      webkit-playsinline
-      preload="auto"
-      poster="images/wave1.jpg"
-      disablepictureinpicture
-      disableremoteplayback
-    >
-      <source src="images/wave-video.mp4" type="video/mp4">
-    </video>
-    <div class="hero-veil hero-veil-light"></div>
-  </div>
-
-  <div class="hero-content">
-    <img
-      class="hero-brand-logo"
-      src="images/novara-logo-hero.png"
-      alt="NOVARA"
-    >
+<body class="landing-page">
+  <main class="hero">
+    <img class="hero-brand-logo" src="images/novara-logo-hero.png" alt="NOVARA">
     <div class="hero-ctas">
       <a class="btn btn-primary" href="directory.html">GET STARTED</a>
       <a class="btn btn-ghost" href="login.html">LOG IN</a>
     </div>
-  </div>
-</main>
-
-<script>
-  (function () {
-    var video = document.getElementById("hero-video");
-    if (!video) return;
-
-    // iOS / strict autoplay policies: muted must be set as a property, then play().
-    video.muted = true;
-    video.defaultMuted = true;
-    video.setAttribute("muted", "");
-    video.playsInline = true;
-
-    function tryPlay() {
-      var playPromise = video.play();
-      if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch(function () {
-          // Retry once media can play; ignore if the browser still blocks it.
-          video.addEventListener(
-            "canplay",
-            function onCanPlay() {
-              video.removeEventListener("canplay", onCanPlay);
-              video.play().catch(function () {});
-            },
-            { once: true }
-          );
-        });
-      }
-    }
-
-    if (video.readyState >= 2) {
-      tryPlay();
-    } else {
-      video.addEventListener("loadeddata", tryPlay, { once: true });
-      video.load();
-    }
-
-    document.addEventListener("visibilitychange", function () {
-      if (!document.hidden && video.paused) tryPlay();
-    });
-  })();
-</script>
-
+  </main>
 </body>
 </html>
