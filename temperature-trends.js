@@ -28,23 +28,58 @@
     chartStatusEl.classList.toggle("is-error", Boolean(isError));
   }
 
+  function datetime() {
+    return window.NovaraDateTime || null;
+  }
+
+  function stripReadingSortKey(value) {
+    var dt = datetime();
+    if (dt && dt.stripReadingSortKey) {
+      return dt.stripReadingSortKey(value);
+    }
+    return String(value == null ? "" : value).replace(/#(SYS\d+)\s*$/i, "");
+  }
+
+  /**
+   * Axis ticks + tooltip titles: MM-DD-YY HH:MM with no #SYS001.
+   *
+   * Chart.js category labels are these strings. Do not pass raw DynamoDB
+   * keys like ``2026-08-07T21:30:00Z#SYS001`` into data.labels — ``new Date``
+   * cannot parse the suffix, so ticks fall back to the raw key.
+   */
+  function formatChartTick(value) {
+    var dt = datetime();
+    if (dt && dt.formatAxisTick) {
+      return dt.formatAxisTick(value) || stripReadingSortKey(value);
+    }
+    var iso = stripReadingSortKey(value);
+    if (/^\d{2}-\d{2}-\d{2} \d{2}:\d{2}$/.test(iso)) return iso;
+    var match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+    if (match) {
+      return (
+        match[2] +
+        "-" +
+        match[3] +
+        "-" +
+        match[1].slice(-2) +
+        " " +
+        match[4] +
+        ":" +
+        match[5]
+      );
+    }
+    return iso;
+  }
+
   function formatLastUpdate(iso) {
     if (!iso) return "No readings in range";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
-    return date.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatChartTick(iso);
   }
 
   function relativeFromNow(iso) {
     if (!iso) return "—";
-    var date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return iso;
+    var date = new Date(stripReadingSortKey(iso));
+    if (Number.isNaN(date.getTime())) return stripReadingSortKey(iso);
     var diffMs = Date.now() - date.getTime();
     if (diffMs < 0) return "just now";
     var minutes = Math.floor(diffMs / 60000);
@@ -58,7 +93,7 @@
 
   function renderChart(points) {
     var labels = points.map(function (p) {
-      return p.t;
+      return formatChartTick(p.t);
     });
     var supply = points.map(function (p) {
       return p.t1;
@@ -126,7 +161,7 @@
             callbacks: {
               title: function (items) {
                 if (!items.length) return "";
-                return formatLastUpdate(items[0].label);
+                return formatChartTick(items[0].label);
               },
               label: function (item) {
                 var value = item.parsed.y;
@@ -140,15 +175,11 @@
           x: {
             ticks: {
               maxTicksLimit: 8,
+              maxRotation: 45,
+              minRotation: 0,
               callback: function (value) {
                 var label = this.getLabelForValue(value);
-                var date = new Date(label);
-                if (Number.isNaN(date.getTime())) return label;
-                return date.toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                });
+                return formatChartTick(label);
               },
             },
             grid: {
