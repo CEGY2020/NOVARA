@@ -299,6 +299,20 @@
     return String(value == null ? "" : value).trim();
   }
 
+  function systemDetailHref(system) {
+    return (
+      "system-detail.html?systemId=" +
+      encodeURIComponent((system && system.systemId) || "") +
+      "&siteId=" +
+      encodeURIComponent(systemSiteId(system))
+    );
+  }
+
+  function openSystemDetail(system) {
+    if (!system) return;
+    window.location.assign(systemDetailHref(system));
+  }
+
   function systemSiteName(system) {
     var storedId = systemSiteId(system);
     var storedName = String((system && system.siteName) || "").trim();
@@ -336,11 +350,7 @@
           ? '<td class="' + cls + '">' + escapeHtml(system.status) + "</td>"
           : "<td>" + escapeHtml(system.status) + "</td>";
         var siteId = systemSiteId(system);
-        var detailHref =
-          "system-detail.html?systemId=" +
-          encodeURIComponent(system.systemId || "") +
-          "&siteId=" +
-          encodeURIComponent(siteId);
+        var detailHref = systemDetailHref(system);
         return (
           '<tr class="system-row" data-system-id="' +
           escapeHtml(system.systemId) +
@@ -348,7 +358,7 @@
           "<td>" +
           '<a href="' +
           escapeHtml(detailHref) +
-          '">' +
+          '" title="View temperature trends">' +
           escapeHtml(system.systemId) +
           "</a>" +
           "</td>" +
@@ -642,7 +652,8 @@
       }
       return;
     }
-    // Ignore clicks on the detail link; otherwise open Edit like Sites rows.
+    // Primary click (row or System ID link) always opens Temperature Trends.
+    // Let the native <a> navigate; JS handles clicks on the rest of the row.
     if (event.target.closest("a")) {
       return;
     }
@@ -650,18 +661,22 @@
     if (!row) return;
     var rowId = row.getAttribute("data-system-id");
     if (rowId && systemsById[rowId]) {
-      openSystemModal("edit", systemsById[rowId]);
+      openSystemDetail(systemsById[rowId]);
     }
   });
 
   tbody.addEventListener("keydown", function (event) {
     if (event.key !== "Enter" && event.key !== " ") return;
+    // Let Edit/Delete buttons and the System ID link keep native keyboard behavior.
+    if (event.target.closest("a, button, input, select, textarea")) {
+      return;
+    }
     var row = event.target.closest("tr.system-row");
     if (!row) return;
     event.preventDefault();
     var systemId = row.getAttribute("data-system-id");
     if (systemId && systemsById[systemId]) {
-      openSystemModal("edit", systemsById[systemId]);
+      openSystemDetail(systemsById[systemId]);
     }
   });
 
