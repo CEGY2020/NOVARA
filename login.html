@@ -7,24 +7,17 @@
   <link rel="stylesheet" href="landing.css">
   <link rel="stylesheet" href="style.css">
   <style>
-    .login-page { position: relative; min-height: 100vh; }
-    .hero-media, .hero-video {
-      position: fixed; inset: 0; width: 100%; height: 100%;
-      object-fit: cover; z-index: 0;
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: url("images/wave1.jpg") center / cover no-repeat fixed;
     }
-    .hero-veil { position: fixed; inset: 0; z-index: 1; background: rgba(4, 20, 40, 0.35); }
+    .login-page { min-height: 100vh; }
     .login-card { position: relative; z-index: 2; }
   </style>
 </head>
 <body>
 <main class="login-page">
-  <div class="hero-media" aria-hidden="true">
-    <video id="hero-video" class="hero-video" autoplay muted loop playsinline poster="images/wave1.jpg">
-      <source src="images/wave-video.mp4" type="video/mp4">
-    </video>
-    <div class="hero-veil"></div>
-  </div>
-
   <section class="login-card">
     <img src="images/novara-logo.png" alt="NOVARA" class="logo">
     <p class="subtitle">Operational Intelligence Platform</p>
@@ -60,14 +53,5 @@
 <script src="role.js"></script>
 <script src="auth.js"></script>
 <script src="login.js"></script>
-<script>
-  (function () {
-    var video = document.getElementById("hero-video");
-    if (!video) return;
-    video.muted = true;
-    video.playsInline = true;
-    video.play().catch(function () {});
-  })();
-</script>
 </body>
 </html>
