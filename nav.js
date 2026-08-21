@@ -201,14 +201,14 @@
       title +
       "</span>" +
       "</div>" +
-      '<a href="directory.html" class="logout-btn" id="novara-logout-btn">Logout</a>';
+      '<a href="video-landing.html" class="logout-btn" id="novara-logout-btn">Logout</a>';
 
     var logoutBtn = root.querySelector("#novara-logout-btn");
     if (logoutBtn) {
       logoutBtn.addEventListener("click", function (event) {
         event.preventDefault();
         if (window.NovaraAuth && NovaraAuth.logout) {
-          NovaraAuth.logout("directory.html");
+          window.location.href = "video-landing.html";
           return;
         }
         try {
@@ -222,7 +222,7 @@
         } catch (e) {
           // no-op
         }
-        window.location.href = "directory.html";
+        window.location.href = "video-landing.html";
       });
     }
   }
