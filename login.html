@@ -1,109 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>NOVARA Sign In</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA Sign In</title>
+  <link rel="stylesheet" href="landing.css">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .login-page { position: relative; min-height: 100vh; }
+    .hero-media, .hero-video {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
+    }
+    .hero-veil { position: fixed; inset: 0; z-index: 1; background: rgba(4, 20, 40, 0.35); }
+    .login-card { position: relative; z-index: 2; }
+  </style>
 </head>
-
 <body>
-
 <main class="login-page">
+  <div class="hero-media" aria-hidden="true">
+    <video id="hero-video" class="hero-video" autoplay muted loop playsinline poster="images/wave1.jpg">
+      <source src="images/wave-video.mp4" type="video/mp4">
+    </video>
+    <div class="hero-veil"></div>
+  </div>
 
-    <section class="login-card">
-
-        <img
-            src="images/novara-logo.png"
-            alt="NOVARA"
-            class="logo"
-        >
-
-        <p class="subtitle">
-            Operational Intelligence Platform
-        </p>
-
-        <p id="selectedRoleLabel" class="role-context" hidden></p>
-
-        <p class="role-switch">
-            <a href="directory.html">Create an account</a>
-            ·
-            <a href="index.html">Back to home</a>
-        </p>
-
-        <form id="loginForm">
-
-            <label for="email">Email address</label>
-
-            <input
-                type="email"
-                id="email"
-                name="email"
-                placeholder="name@company.com"
-                autocomplete="email"
-                required
-            >
-
-            <label for="password">Password</label>
-
-            <div class="password-field">
-
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                    required
-                >
-
-                <button
-                    type="button"
-                    id="togglePassword"
-                    class="show-password"
-                >
-                    Show
-                </button>
-
-            </div>
-
-            <div class="login-options">
-
-                <label class="remember-me">
-                    <input type="checkbox" id="rememberMe">
-                    Remember me
-                </label>
-
-                <a href="#" id="forgotPassword">
-                    Forgot password?
-                </a>
-
-            </div>
-
-            <button type="submit" class="sign-in-button" id="loginSubmit">
-                Sign In
-            </button>
-
-            <p id="loginMessage" class="login-message"></p>
-
-        </form>
-
-        <footer>
-            <p>Powered by Advanced Energy Management</p>
-            <p>© 2026 AEM. All rights reserved.</p>
-        </footer>
-
-    </section>
-
+  <section class="login-card">
+    <img src="images/novara-logo.png" alt="NOVARA" class="logo">
+    <p class="subtitle">Operational Intelligence Platform</p>
+    <p id="selectedRoleLabel" class="role-context" hidden></p>
+    <p class="role-switch">
+      <a href="directory.html">Create an account</a>
+      ·
+      <a href="video-landing.html">Back to home</a>
+    </p>
+    <form id="loginForm">
+      <label for="email">Email address</label>
+      <input type="email" id="email" name="email" autocomplete="email" required>
+      <label for="password">Password</label>
+      <div class="password-field">
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+        <button type="button" id="togglePassword" class="show-password">Show</button>
+      </div>
+      <div class="login-options">
+        <label class="remember-me"><input type="checkbox" id="rememberMe"> Remember me</label>
+        <a href="#" id="forgotPassword">Forgot password?</a>
+      </div>
+      <button type="submit" class="sign-in-button" id="loginSubmit">Sign In</button>
+      <p id="loginMessage" class="login-message"></p>
+    </form>
+    <footer>
+      <p>Powered by Advanced Energy Management</p>
+      <p>© 2026 AEM. All rights reserved.</p>
+    </footer>
+  </section>
 </main>
-
 <script src="api-config.js"></script>
 <script src="api-client.js"></script>
 <script src="role.js"></script>
 <script src="auth.js"></script>
 <script src="login.js"></script>
-
+<script>
+  (function () {
+    var video = document.getElementById("hero-video");
+    if (!video) return;
+    video.muted = true;
+    video.playsInline = true;
+    video.play().catch(function () {});
+  })();
+</script>
 </body>
 </html>
