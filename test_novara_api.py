@@ -1148,10 +1148,9 @@ class RouteTests(unittest.TestCase):
         self.assertIn('setOwnerStatus(deactivateId, "Inactive")', source)
         self.assertIn('setOwnerStatus(activateId, "Active")', source)
         self.assertIn("api.deleteOwner", source)
-        self.assertIn(
-            "This owner is still linked to one or more sites. Reassign those sites first.",
-            source,
-        )
+        self.assertIn("removeOwnerFromList", source)
+        self.assertIn("console.error", source)
+        self.assertIn("Failed to delete owner", source)
         self.assertIn('statusFilter = "Active"', source)
 
     def test_api_client_update_owner_uses_path_id(self):
@@ -1190,6 +1189,21 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["deleted"])
         mocked.assert_called_once_with("OWN001")
+
+    def test_delete_owner_route_accepts_encoded_id(self):
+        fake = {
+            "ok": True,
+            "table": "NOVARAOwners",
+            "deleted": True,
+            "ownerId": "OWN 001",
+        }
+        with patch.object(novara_api, "delete_owner", return_value=fake) as mocked:
+            status, payload = novara_api.route_request(
+                "DELETE", "/api/owners/OWN%20001", {}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["deleted"])
+        mocked.assert_called_once_with("OWN 001")
 
     def test_delete_owner_route_blocks_linked_sites(self):
         with patch.object(
@@ -1245,6 +1259,17 @@ class RouteTests(unittest.TestCase):
         self.assertTrue(result["deleted"])
         self.assertEqual(result["ownerId"], "OWN001")
         fake_table.delete_item.assert_called_once()
+
+    def test_template_exposes_delete_owner_route(self):
+        source = Path(__file__).resolve().parent.joinpath("template.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("OwnersDeleteById:", source)
+        delete_block = source.split("OwnersDeleteById:", 1)[1].split(
+            "MgmtCompaniesGet:", 1
+        )[0]
+        self.assertIn("Path: /api/owners/{ownerId}", delete_block)
+        self.assertIn("Method: DELETE", delete_block)
 
     def test_sites_owner_dropdown_only_lists_active_owners(self):
         source = Path(__file__).resolve().parent.joinpath("sites.js").read_text(

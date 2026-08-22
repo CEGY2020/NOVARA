@@ -453,6 +453,26 @@
       });
   }
 
+  function removeOwnerFromList(ownerId) {
+    allOwners = allOwners.filter(function (owner) {
+      return owner.ownerId !== ownerId;
+    });
+    delete ownersById[ownerId];
+    renderOwners(allOwners);
+    var visible = allOwners.filter(function (owner) {
+      return ownerStatus(owner) === statusFilter;
+    }).length;
+    var label = statusFilter === "Inactive" ? "inactive owner" : "active owner";
+    if (!allOwners.length) {
+      setStatus("No owners found in NOVARAOwners.", false);
+    } else {
+      setStatus(
+        visible + " " + label + (visible === 1 ? "" : "s"),
+        false
+      );
+    }
+  }
+
   function deleteOwner(ownerId) {
     if (actionBusy) return;
     var owner = ownersById[ownerId];
@@ -478,14 +498,15 @@
     api
       .deleteOwner(ownerId)
       .then(function () {
+        removeOwnerFromList(ownerId);
         return loadOwners();
       })
       .catch(function (err) {
-        setStatus(
-          err.message ||
-            "This owner is still linked to one or more sites. Reassign those sites first.",
-          true
-        );
+        var message = (err && err.message) || "Failed to delete owner";
+        if (typeof console !== "undefined" && typeof console.error === "function") {
+          console.error("Owner delete failed for " + ownerId + ":", err);
+        }
+        setStatus(message, true);
       })
       .finally(function () {
         actionBusy = false;

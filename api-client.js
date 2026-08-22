@@ -50,7 +50,7 @@
         }
       }
       if (!response.ok) {
-        var detail = body && (body.detail || body.error);
+        var detail = body && (body.detail || body.error || body.message);
         throw new Error(detail || "Request failed (" + response.status + ")");
       }
       return body || {};
