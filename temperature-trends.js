@@ -16,7 +16,7 @@
   var statusEl = document.getElementById("system-last-update");
   var chartStatusEl = document.getElementById("chart-status");
   var canvas = document.getElementById("temperature-trends-chart");
-  var rangeButtons = document.querySelectorAll(".range-btn");
+  var rangeButtons = document.querySelectorAll(".range-btn[data-days]");
 
   if (!canvas || typeof Chart === "undefined") {
     return;
@@ -71,6 +71,7 @@
       chart.data.labels = labels;
       chart.data.datasets[0].data = supply;
       chart.data.datasets[1].data = ret;
+      if (chart.resetZoom) chart.resetZoom();
       chart.update("none");
       return;
     }
@@ -133,6 +134,18 @@
                 if (value == null) return item.dataset.label + ": —";
                 return item.dataset.label + ": " + Number(value).toFixed(1) + " °F";
               },
+            },
+          },
+          zoom: {
+            pan: { enabled: true, mode: "x" },
+            zoom: {
+              drag: {
+                enabled: true,
+                backgroundColor: "rgba(23,133,173,0.18)",
+              },
+              wheel: { enabled: true },
+              pinch: { enabled: true },
+              mode: "x",
             },
           },
         },
@@ -252,6 +265,13 @@
       loadReadings(Number(btn.getAttribute("data-days")) || 7);
     });
   });
+
+  var resetBtn = document.getElementById("chart-reset-zoom");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      if (chart && chart.resetZoom) chart.resetZoom();
+    });
+  }
 
   loadReadings(activeDays());
 })();
