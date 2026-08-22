@@ -6,6 +6,8 @@
   <title>NOVARA - System Detail</title>
   <link rel="stylesheet" href="dashboard.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body data-page="systems">
 
@@ -34,12 +36,13 @@
       <div class="panel-heading">
         <div>
           <h3>Temperature Trends</h3>
-          <p>Supply (T1) and return (T2) from NOVARAReadings</p>
+          <p>Supply (T1) and return (T2) from NOVARAReadings. Click and drag on the chart to zoom.</p>
         </div>
         <div class="range-controls">
           <button class="range-btn" type="button" data-days="3">Last 3 Days</button>
           <button class="range-btn active" type="button" data-days="7">Last 7 Days</button>
           <button class="range-btn" type="button" data-days="30">Last 30 Days</button>
+          <button class="range-btn" type="button" id="chart-reset-zoom">Reset zoom</button>
         </div>
       </div>
       <p id="chart-status" class="chart-status" aria-live="polite">Loading readings…</p>
@@ -50,9 +53,9 @@
   </main>
 </div>
 
-<script src="api-config.js?v=siteid-std-1"></script>
-<script src="api-client.js?v=siteid-std-1"></script>
-<script src="nav.js?v=siteid-std-1"></script>
-<script src="temperature-trends.js?v=siteid-std-1"></script>
+<script src="api-config.js?v=chart-zoom-1"></script>
+<script src="api-client.js?v=chart-zoom-1"></script>
+<script src="nav.js?v=chart-zoom-1"></script>
+<script src="temperature-trends.js?v=chart-zoom-1"></script>
 </body>
 </html>
