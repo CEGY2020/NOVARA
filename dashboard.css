@@ -1513,6 +1513,49 @@ a.sales-home-link {
     flex-wrap: wrap;
 }
 
+.savings-range-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.date-range-controls {
+    align-items: flex-end;
+}
+
+.date-range-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #536772;
+}
+
+.date-range-field input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text);
+    background: #fff;
+    font-family: inherit;
+}
+
+.date-range-field input[type="date"]:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(39, 167, 216, 0.15);
+}
+
+@media (max-width: 900px) {
+    .savings-range-toolbar {
+        align-items: flex-start;
+        width: 100%;
+    }
+}
+
 .range-btn {
     padding: 6px 14px;
     border: 1px solid #ccc;

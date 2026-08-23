@@ -107,7 +107,7 @@ Seed Vista Springs systems (`SYS001` / `SYS002` on `SITE001`) if needed:
 python3 scripts/seed_vista_springs_systems.py --execute
 ```
 
-After import, open Temperature Trends for that system (e.g. `system-detail.html?siteId=SITE001&systemId=SYS001`). The chart reads `T1`/`T2` via `GET /api/readings?siteId=…&systemId=…`. Energy Savings graphs use `GET /api/savings?days=30|90|365` (demo portfolio series until verified savings are calculated from readings).
+After import, open Temperature Trends for that system (e.g. `system-detail.html?siteId=SITE001&systemId=SYS001`). The chart reads `T1`/`T2` via `GET /api/readings?siteId=…&systemId=…`. Energy Savings graphs use `GET /api/savings?days=30|90|365` or `GET /api/savings?start=YYYY-MM-DD&end=YYYY-MM-DD` (demo portfolio series until verified savings are calculated from readings). The page includes a calendar start/end picker, Chart.js zoom (drag / scroll / pinch), a reset-zoom control, and `MM-DD-YY` axis labels via `formatDateTime.js` + `savingsGraph.js`.
 
 ### Sites response shape
 
@@ -138,7 +138,7 @@ This repo deploys a Python Lambda + HTTP API (`template.yaml`) that queries:
 | Endpoint | DynamoDB table |
 | --- | --- |
 | `GET /api/readings?siteId=SITE001&days=3\|7\|30[&systemId=SYS001]` | `NOVARAReadings` (`SiteID` + `TimestampUTC`, fields `T1`/`T2`, optional `SystemID` filter) |
-| `GET /api/savings?days=30\|90\|365` | Demo portfolio savings series for Energy Savings graphs (until verified calc exists) |
+| `GET /api/savings?days=30\|90\|365` or `?start=YYYY-MM-DD&end=YYYY-MM-DD` | Demo portfolio savings series for Energy Savings graphs (until verified calc exists) |
 | `GET /api/sites` | `NOVARASites` (systems count from linked `NOVARASystems`) |
 | `POST /api/sites` | Create site in `NOVARASites` (JSON body) |
 | `PUT /api/sites` | Update existing site in `NOVARASites` (JSON body) |

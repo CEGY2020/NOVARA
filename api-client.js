@@ -157,7 +157,13 @@
         systemId: systemId,
       });
     },
-    getSavings: function (days) {
+    getSavings: function (days, range) {
+      if (range && range.start && range.end) {
+        return fetchJson("/api/savings", {
+          start: range.start,
+          end: range.end,
+        });
+      }
       return fetchJson("/api/savings", {
         days: days,
       });

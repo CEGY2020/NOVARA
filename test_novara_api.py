@@ -105,6 +105,8 @@ class RouteTests(unittest.TestCase):
         self.assertGreater(payload["points"][-1]["cumulative"], 0)
         self.assertEqual(len(payload["sites"]), 4)
         self.assertIn("totalSavings", payload["summary"])
+        self.assertIn("rangeStart", payload)
+        self.assertIn("rangeEnd", payload)
 
     def test_savings_invalid_days(self):
         status, payload = novara_api.route_request(
@@ -121,6 +123,51 @@ class RouteTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(payload["days"], days)
             self.assertEqual(len(payload["points"]), days)
+
+    def test_savings_start_end_range(self):
+        status, payload = novara_api.route_request(
+            "GET",
+            "/api/savings",
+            {"start": ["2026-07-01"], "end": ["2026-07-15"]},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["days"], 15)
+        self.assertEqual(payload["rangeStart"], "2026-07-01")
+        self.assertEqual(payload["rangeEnd"], "2026-07-15")
+        self.assertEqual(len(payload["points"]), 15)
+        self.assertTrue(payload["points"][0]["t"].startswith("2026-07-01"))
+        self.assertTrue(payload["points"][-1]["t"].startswith("2026-07-15"))
+
+    def test_savings_start_after_end_rejected(self):
+        status, payload = novara_api.route_request(
+            "GET",
+            "/api/savings",
+            {"start": ["2026-08-14"], "end": ["2026-08-01"]},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("start", payload["error"])
+
+    def test_savings_invalid_calendar_dates_rejected(self):
+        status, payload = novara_api.route_request(
+            "GET",
+            "/api/savings",
+            {"start": ["07-01-26"], "end": ["08-14-26"]},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("YYYY-MM-DD", payload["error"])
+
+    def test_savings_graphs_page_wires_date_zoom(self):
+        source = Path(__file__).resolve().parent.joinpath(
+            "energy-savings.html"
+        ).read_text(encoding="utf-8")
+        self.assertIn("formatDateTime.js", source)
+        self.assertIn("savingsGraph.js", source)
+        self.assertIn("chartjs-plugin-zoom", source)
+        self.assertIn("hammerjs", source)
+        self.assertIn('id="savings-start-date"', source)
+        self.assertIn('id="savings-end-date"', source)
+        self.assertIn('id="savings-reset-zoom"', source)
+        self.assertIn('id="savings-cumulative-chart"', source)
 
     def test_sites_route(self):
         fake = {
