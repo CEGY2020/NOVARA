@@ -5,8 +5,6 @@
  * Navigation is filtered by the selected portal role (NovaraRole).
  */
 (function () {
-  // Entity pages (Sites, Systems, Owners, Management Companies, Leads) stay
-  // grouped ahead of ops links (alarms, savings, utility data, reports, settings).
   var AEM_NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
     { id: "sites", label: "Sites", href: "sites.html" },
@@ -29,6 +27,15 @@
     { id: "owner-savings", label: "Savings", href: "owner-home.html#savings" }
   ];
 
+  var MGMT_NAV_ITEMS = [
+    { id: "mgmt-home", label: "Portfolio", href: "mgmt-home.html" },
+    { id: "sites", label: "Managed Sites", href: "sites.html" },
+    { id: "systems", label: "Systems", href: "systems.html" },
+    { id: "alarms", label: "Alarms", href: "active-alarms.html" },
+    { id: "savings", label: "Savings", href: "energy-savings.html" },
+    { id: "mgmt-team", label: "Team", href: "mgmt-home.html#team" }
+  ];
+
   var CONTRACTOR_NAV_ITEMS = [
     { id: "contractor-home", label: "Home", href: "contractor-home.html" },
     { id: "contractor-sites", label: "Assigned Sites", href: "contractor-home.html#sites" },
@@ -44,6 +51,7 @@
   var ROLE_NAV = {
     aem: AEM_NAV_ITEMS,
     owner: OWNER_NAV_ITEMS,
+    mgmt: MGMT_NAV_ITEMS,
     contractor: CONTRACTOR_NAV_ITEMS,
     sales: SALES_NAV_ITEMS
   };
@@ -51,6 +59,7 @@
   var ROLE_TITLES = {
     aem: "Administrator",
     owner: "Owner",
+    mgmt: "Management Company",
     contractor: "Contractor",
     sales: "Sales"
   };
@@ -92,6 +101,10 @@
     document.body.getAttribute("data-role") ||
     "aem";
 
+  if (window.NovaraRole && NovaraRole.normalizeRole) {
+    role = NovaraRole.normalizeRole(role) || role;
+  }
+
   if (ROLE_NAV[role] == null) {
     role = "aem";
   }
@@ -101,7 +114,6 @@
   }
 
   var NAV_ITEMS = (ROLE_NAV[role] || AEM_NAV_ITEMS).slice();
-  // Users admin is only for logged-in AEM accounts.
   var isLoggedInAem =
     currentUser && String(currentUser.role || "").toLowerCase() === "aem";
   if (!isLoggedInAem) {
@@ -121,7 +133,6 @@
   }
 
   function isItemActive(item) {
-    // Sales Leads vs Pipeline share leads.html; hash selects the active item.
     if (role === "sales" && currentPage === "leads") {
       var onPipeline = currentHash() === "pipeline";
       if (item.id === "sales-pipeline") {
@@ -131,6 +142,16 @@
         return !onPipeline;
       }
       return false;
+    }
+
+    if (role === "mgmt" && currentPage === "mgmt-home") {
+      var hash = currentHash();
+      if (item.id === "mgmt-team") {
+        return hash === "team";
+      }
+      if (item.id === "mgmt-home") {
+        return hash !== "team";
+      }
     }
 
     if (item.id === currentPage) {
@@ -175,6 +196,8 @@
       (currentUser && currentUser.fullName) ||
       (currentUser && currentUser.email) ||
       "NOVARA User";
+    var companyLabel =
+      currentUser && currentUser.company ? " · " + currentUser.company : "";
     var initials = "?";
     if (window.NovaraAuth && NovaraAuth.initialsFor) {
       initials = NovaraAuth.initialsFor(currentUser || { fullName: displayName });
@@ -199,6 +222,7 @@
       "</strong>" +
       "  <span>" +
       title +
+      companyLabel +
       "</span>" +
       "</div>" +
       '<a href="video-landing.html" class="logout-btn" id="novara-logout-btn">Logout</a>';
@@ -208,7 +232,7 @@
       logoutBtn.addEventListener("click", function (event) {
         event.preventDefault();
         if (window.NovaraAuth && NovaraAuth.logout) {
-          window.location.href = "video-landing.html";
+          NovaraAuth.logout("video-landing.html");
           return;
         }
         try {
