@@ -26,8 +26,9 @@
   var sitesById = {};
   var ownersList = [];
   var mgmtCompaniesList = [];
-  /** Authoritative create|edit mode. Do not rely only on #site-mode — form.reset() restores its default. */
   var currentMode = "create";
+  var currentSite = null;
+  var editBtn = document.getElementById("site-edit-btn");
   var photosUI =
     window.NovaraPhotosUI && typeof NovaraPhotosUI.create === "function"
       ? NovaraPhotosUI.create({ idPrefix: "photo", defaultPhotoType: "Property" })
@@ -218,6 +219,44 @@
     el.value = value == null ? "" : String(value);
   }
 
+  function formControlIds() {
+    return [
+      "field-siteName",
+      "field-owner",
+      "field-mgmtCompany",
+      "field-address",
+      "field-city",
+      "field-state",
+      "field-zip",
+      "field-systemType",
+      "field-status"
+    ];
+  }
+
+  function setControlsDisabled(disabled) {
+    formControlIds().forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = Boolean(disabled);
+    });
+    if (siteIdInput) siteIdInput.readOnly = true;
+    var systemsEl = document.getElementById("field-systems");
+    if (systemsEl) systemsEl.readOnly = true;
+    var uploadGrid = document.querySelector(".photo-upload-grid");
+    if (uploadGrid) {
+      uploadGrid.hidden = Boolean(disabled);
+    }
+    if (saveBtn) {
+      saveBtn.hidden = Boolean(disabled);
+    }
+    if (editBtn) {
+      editBtn.hidden = !disabled;
+    }
+    if (cancelBtn) {
+      cancelBtn.textContent = disabled ? "Close" : "Cancel";
+    }
+  }
+
   function collectPayload() {
     var systemsRaw = fieldValue("field-systems");
     var systems = systemsRaw === "" ? 0 : Number(systemsRaw);
@@ -237,11 +276,10 @@
       Zip: fieldValue("field-zip"),
       SystemType: fieldValue("field-systemType"),
       Status: fieldValue("field-status") || "Online",
-      Systems: Number.isFinite(systems) ? systems : systemsRaw,
+      Systems: Number.isFinite(systems) ? systems : systemsRaw
     };
   }
 
-  /** Next sequential SiteID from NOVARASites rows matching SITE###. */
   function nextSiteId() {
     var maxNum = 0;
     var pattern = /^SITE(\d+)$/i;
@@ -313,7 +351,7 @@
     }
     var selectedId = resolveLookupId(list, selectedOwner, "ownerId", [
       "name",
-      "ownerName",
+      "ownerName"
     ]);
     if (!(isOwnerScoped() && scopedId)) {
       list = list.filter(function (owner) {
@@ -382,43 +420,60 @@
     syncLookupIdDisplay(mgmtCompanySelect, mgmtCompanyIdDisplay);
   }
 
+  function fillSiteFields(site) {
+    setFieldValue("field-siteId", site.siteId);
+    setFieldValue("field-siteName", site.siteName || site.name);
+    populateOwnerOptions(site.ownerId || site.owner);
+    populateMgmtCompanyOptions(site.mgmtCompany || site.mgmtCompanyId);
+    setFieldValue("field-address", site.address);
+    setFieldValue("field-city", site.city);
+    setFieldValue("field-state", site.state);
+    setFieldValue("field-zip", site.zip);
+    setFieldValue("field-systemType", site.systemType || "");
+    setFieldValue("field-status", site.status || "Online");
+    setFieldValue(
+      "field-systems",
+      site.systems == null || site.systems === "—" ? 0 : site.systems
+    );
+    updateDerivedFieldHints(site);
+    if (photosUI) {
+      photosUI.bind({ enabled: true, siteId: site.siteId });
+    }
+  }
+
   function openModal(mode, site) {
     if (!modal || !form) return;
-    mode = mode === "edit" ? "edit" : "create";
+    if (mode !== "edit" && mode !== "view") {
+      mode = "create";
+    }
     setFormError("");
     form.reset();
 
-    // Must set mode AFTER reset — #site-mode defaults to "create" in the HTML.
     currentMode = mode;
+    currentSite = site || null;
     if (modeInput) {
-      modeInput.value = mode;
+      modeInput.value = mode === "view" ? "edit" : mode;
     }
 
     if (siteIdInput) {
       siteIdInput.readOnly = true;
     }
-    setSiteIdHint(mode);
+    setSiteIdHint(mode === "create" ? "create" : "edit");
 
-    if (mode === "edit" && site) {
-      modalTitle.textContent = "Edit Site";
-      modalSubtitle.textContent = "Update " + (site.siteId || "site") + " in NOVARASites";
-      setFieldValue("field-siteId", site.siteId);
-      setFieldValue("field-siteName", site.siteName || site.name);
-      populateOwnerOptions(site.ownerId || site.owner);
-      populateMgmtCompanyOptions(site.mgmtCompany);
-      setFieldValue("field-address", site.address);
-      setFieldValue("field-city", site.city);
-      setFieldValue("field-state", site.state);
-      setFieldValue("field-zip", site.zip);
-      setFieldValue("field-systemType", site.systemType || "");
-      setFieldValue("field-status", site.status || "Online");
-      setFieldValue(
-        "field-systems",
-        site.systems == null || site.systems === "—" ? 0 : site.systems
-      );
-      updateDerivedFieldHints(site);
-      if (photosUI) {
-        photosUI.bind({ enabled: true, siteId: site.siteId });
+    if ((mode === "edit" || mode === "view") && site) {
+      fillSiteFields(site);
+      if (mode === "view") {
+        modalTitle.textContent = site.siteName || site.name || site.siteId || "Site";
+        modalSubtitle.textContent =
+          (site.siteId || "") + (site.location ? " · " + site.location : "");
+        setControlsDisabled(true);
+      } else {
+        modalTitle.textContent = "Edit Site";
+        modalSubtitle.textContent = "Update " + (site.siteId || "site") + " in NOVARASites";
+        setControlsDisabled(false);
+        if (isOwnerScoped() && ownerSelect) {
+          ownerSelect.disabled = true;
+        }
       }
     } else {
       modalTitle.textContent = "Add Site";
@@ -432,13 +487,20 @@
       if (photosUI) {
         photosUI.bind({ enabled: false, siteId: "" });
       }
+      setControlsDisabled(false);
+      if (editBtn) editBtn.hidden = true;
+      if (isOwnerScoped() && ownerSelect) {
+        ownerSelect.disabled = true;
+      }
     }
 
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    var focusEl = document.getElementById("field-siteName");
-    if (focusEl) {
-      focusEl.focus();
+    if (mode !== "view") {
+      var focusEl = document.getElementById("field-siteName");
+      if (focusEl && !focusEl.disabled) {
+        focusEl.focus();
+      }
     }
   }
 
@@ -459,7 +521,19 @@
     }
     if (saveBtn) {
       saveBtn.disabled = false;
+      saveBtn.hidden = false;
       saveBtn.textContent = "Save";
+    }
+    if (editBtn) {
+      editBtn.hidden = true;
+    }
+    if (cancelBtn) {
+      cancelBtn.textContent = "Cancel";
+    }
+    currentSite = null;
+    var uploadGrid = document.querySelector(".photo-upload-grid");
+    if (uploadGrid) {
+      uploadGrid.hidden = false;
     }
   }
 
@@ -589,7 +663,7 @@
       }),
       Promise.resolve(loadMgmtCompanies()).catch(function () {
         mgmtCompaniesList = mgmtCompaniesList || [];
-      }),
+      })
     ]);
   }
 
@@ -631,6 +705,9 @@
 
   function saveSite(event) {
     event.preventDefault();
+    if (currentMode === "view") {
+      return;
+    }
     setFormError("");
 
     var payload = collectPayload();
@@ -678,7 +755,6 @@
         })
         .catch(function (err) {
           var message = err.message || "Failed to save site";
-          // Never retry-as-create while editing — that would insert a new SiteID.
           var isDuplicate =
             mode === "create" &&
             /already exists/i.test(message) &&
@@ -712,15 +788,18 @@
     });
   }
 
+  if (editBtn) {
+    editBtn.addEventListener("click", function () {
+      if (!currentSite) return;
+      openModal("edit", currentSite);
+    });
+  }
   if (addBtn) {
     addBtn.addEventListener("click", function () {
       addBtn.disabled = true;
-      // Refresh NOVARASites so the next SITE### is based on current rows.
       Promise.all([
-        Promise.resolve(loadSites()).catch(function () {
-          /* keep cached sitesById if refresh fails */
-        }),
-        loadLookups(),
+        Promise.resolve(loadSites()).catch(function () {}),
+        loadLookups()
       ])
         .then(function () {
           openModal("create");
@@ -758,10 +837,10 @@
   }
 
   tbody.addEventListener("click", function (event) {
-    var editBtn = event.target.closest(".edit-site-btn");
-    if (editBtn) {
+    var rowEditBtn = event.target.closest(".edit-site-btn");
+    if (rowEditBtn) {
       event.stopPropagation();
-      var editId = editBtn.getAttribute("data-site-id");
+      var editId = rowEditBtn.getAttribute("data-site-id");
       if (editId && sitesById[editId]) {
         openSiteModal("edit", sitesById[editId]);
       }
@@ -771,7 +850,7 @@
     if (!row) return;
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openSiteModal("edit", sitesById[siteId]);
+      openSiteModal("view", sitesById[siteId]);
     }
   });
 
@@ -782,7 +861,7 @@
     event.preventDefault();
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openSiteModal("edit", sitesById[siteId]);
+      openSiteModal("view", sitesById[siteId]);
     }
   });
 
@@ -803,7 +882,7 @@
           ownersList = [];
           mgmtCompaniesList = [];
         }),
-        loadSites(),
+        loadSites()
       ]);
     })
     .then(function () {
