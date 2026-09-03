@@ -173,4 +173,93 @@
   function isAemUser(user) {
     var current = user || getCurrentUser();
     return Boolean(
-      current && 
+      current && String(current.role || "").toLowerCase() === "aem"
+    );
+  }
+
+  function isOwnerUser(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return false;
+    }
+    var role = String(current.role || "").toLowerCase();
+    return role === "owner" || Boolean(current.ownerId);
+  }
+
+  function isMgmtUser(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return false;
+    }
+    var role = String(current.role || "").toLowerCase();
+    return role === "mgmt" || Boolean(current.mgmtCompanyId);
+  }
+
+  function getOwnerId(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return "";
+    }
+    if (!isOwnerUser(current)) {
+      return "";
+    }
+    return String(current.ownerId || "").trim();
+  }
+
+  function getMgmtCompanyId(user) {
+    var current = user || getCurrentUser();
+    if (!current || isAemUser(current)) {
+      return "";
+    }
+    if (!isMgmtUser(current)) {
+      return "";
+    }
+    return String(current.mgmtCompanyId || "").trim();
+  }
+
+  function updateCurrentUser(partial) {
+    var session = readSession();
+    if (!session || !session.user) {
+      return null;
+    }
+    var merged = {};
+    Object.keys(session.user).forEach(function (key) {
+      merged[key] = session.user[key];
+    });
+    if (partial && typeof partial === "object") {
+      Object.keys(partial).forEach(function (key) {
+        merged[key] = partial[key];
+      });
+    }
+    return setCurrentUser(merged, {
+      token: session.token,
+      expiresAt: session.expiresAt,
+      remember: session.remember,
+    });
+  }
+
+  function logout(redirectTo) {
+    clearCurrentUser();
+    if (global.NovaraRole && NovaraRole.clearSelectedRole) {
+      NovaraRole.clearSelectedRole();
+    }
+    window.location.href = redirectTo || "video-landing.html";
+  }
+
+  global.NovaraAuth = {
+    USER_KEY: USER_KEY,
+    TOKEN_KEY: TOKEN_KEY,
+    getCurrentUser: getCurrentUser,
+    getToken: getToken,
+    setCurrentUser: setCurrentUser,
+    updateCurrentUser: updateCurrentUser,
+    clearCurrentUser: clearCurrentUser,
+    initialsFor: initialsFor,
+    logout: logout,
+    isAemUser: isAemUser,
+    isOwnerUser: isOwnerUser,
+    isMgmtUser: isMgmtUser,
+    getOwnerId: getOwnerId,
+    getMgmtCompanyId: getMgmtCompanyId,
+  };
+})(window);
