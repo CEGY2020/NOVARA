@@ -157,7 +157,7 @@
     }
     if (
       text.indexOf("warn") !== -1 ||
-      text.indexOf("review") !== -1 ||
+      text.indexOf("re") !== -1 ||
       text.indexOf("alarm") !== -1 ||
       text.indexOf("maintenance") !== -1
     ) {
@@ -443,7 +443,7 @@
 
   function openModal(mode, site) {
     if (!modal || !form) return;
-    if (mode !== "edit" && mode !== "view") {
+    if (mode !== "edit" && mode !== "") {
       mode = "create";
     }
     setFormError("");
@@ -452,7 +452,7 @@
     currentMode = mode;
     currentSite = site || null;
     if (modeInput) {
-      modeInput.value = mode === "view" ? "edit" : mode;
+      modeInput.value = mode === "" ? "edit" : mode;
     }
 
     if (siteIdInput) {
@@ -460,9 +460,9 @@
     }
     setSiteIdHint(mode === "create" ? "create" : "edit");
 
-    if ((mode === "edit" || mode === "view") && site) {
+    if ((mode === "edit" || mode === "") && site) {
       fillSiteFields(site);
-      if (mode === "view") {
+      if (mode === "") {
         modalTitle.textContent = site.siteName || site.name || site.siteId || "Site";
         modalSubtitle.textContent =
           (site.siteId || "") + (site.location ? " · " + site.location : "");
@@ -496,7 +496,7 @@
 
     modal.hidden = false;
     document.body.classList.add("modal-open");
-    if (mode !== "view") {
+    if (mode !== "") {
       var focusEl = document.getElementById("field-siteName");
       if (focusEl && !focusEl.disabled) {
         focusEl.focus();
@@ -705,7 +705,7 @@
 
   function saveSite(event) {
     event.preventDefault();
-    if (currentMode === "view") {
+    if (currentMode === "") {
       return;
     }
     setFormError("");
@@ -850,7 +850,7 @@
     if (!row) return;
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openSiteModal("view", sitesById[siteId]);
+      openSiteModal("", sitesById[siteId]);
     }
   });
 
@@ -861,7 +861,7 @@
     event.preventDefault();
     var siteId = row.getAttribute("data-site-id");
     if (siteId && sitesById[siteId]) {
-      openSiteModal("view", sitesById[siteId]);
+      openSiteModal("", sitesById[siteId]);
     }
   });
 
