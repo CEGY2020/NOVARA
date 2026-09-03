@@ -100,11 +100,12 @@ LEAD_STAGES = (
     "Won",
     "Lost",
 )
-USER_ROLES = ("aem", "owner", "contractor", "sales")
+USER_ROLES = ("aem", "owner", "mgmt", "contractor", "sales")
 USER_STATUSES = ("Pending", "Active", "Rejected")
 USER_ROLE_LABELS = {
     "aem": "AEM",
     "owner": "Owner",
+    "mgmt": "Management Company",
     "contractor": "Contractor",
     "sales": "Sales",
 }
