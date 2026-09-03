@@ -45,6 +45,13 @@
       role: role,
       company: String(user.company || user.Company || ""),
       ownerId: String(user.ownerId || user.OwnerID || "").trim(),
+      mgmtCompanyId: String(
+        user.mgmtCompanyId ||
+          user.MgmtCompanyID ||
+          user.mgmtCompanyID ||
+          user.ManagementCompanyID ||
+          ""
+      ).trim(),
       status: String(user.status || user.Status || ""),
     };
   }
@@ -166,71 +173,4 @@
   function isAemUser(user) {
     var current = user || getCurrentUser();
     return Boolean(
-      current && String(current.role || "").toLowerCase() === "aem"
-    );
-  }
-
-  function isOwnerUser(user) {
-    var current = user || getCurrentUser();
-    if (!current || isAemUser(current)) {
-      return false;
-    }
-    var role = String(current.role || "").toLowerCase();
-    return role === "owner" || Boolean(current.ownerId);
-  }
-
-  function getOwnerId(user) {
-    var current = user || getCurrentUser();
-    if (!current || isAemUser(current)) {
-      return "";
-    }
-    if (!isOwnerUser(current)) {
-      return "";
-    }
-    return String(current.ownerId || "").trim();
-  }
-
-  function updateCurrentUser(partial) {
-    var session = readSession();
-    if (!session || !session.user) {
-      return null;
-    }
-    var merged = {};
-    Object.keys(session.user).forEach(function (key) {
-      merged[key] = session.user[key];
-    });
-    if (partial && typeof partial === "object") {
-      Object.keys(partial).forEach(function (key) {
-        merged[key] = partial[key];
-      });
-    }
-    return setCurrentUser(merged, {
-      token: session.token,
-      expiresAt: session.expiresAt,
-      remember: session.remember,
-    });
-  }
-
-  function logout(redirectTo) {
-    clearCurrentUser();
-    if (global.NovaraRole && NovaraRole.clearSelectedRole) {
-      NovaraRole.clearSelectedRole();
-    }
-    window.location.href = redirectTo || "video-landing.html";
-  }
-
-  global.NovaraAuth = {
-    USER_KEY: USER_KEY,
-    TOKEN_KEY: TOKEN_KEY,
-    getCurrentUser: getCurrentUser,
-    getToken: getToken,
-    setCurrentUser: setCurrentUser,
-    updateCurrentUser: updateCurrentUser,
-    clearCurrentUser: clearCurrentUser,
-    initialsFor: initialsFor,
-    logout: logout,
-    isAemUser: isAemUser,
-    isOwnerUser: isOwnerUser,
-    getOwnerId: getOwnerId,
-  };
-})(window);
+      current && 
