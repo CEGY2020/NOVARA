@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Management Company Portfolio</title>
+  <link rel="stylesheet" href="dashboard.css?v=mgmt-role-1">
+  <style>
+    .mgmt-kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin: 0 0 24px;
+    }
+    .mgmt-kpi {
+      background: #fff;
+      border: 1px solid rgba(11, 61, 74, 0.12);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .mgmt-kpi span {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5b7280;
+      margin-bottom: 6px;
+    }
+    .mgmt-kpi strong {
+      font-size: 26px;
+      color: #0b3d4a;
+    }
+    .mgmt-kpi em {
+      display: block;
+      margin-top: 4px;
+      font-style: normal;
+      font-size: 12px;
+      color: #5b7280;
+    }
+    .owner-sites-list,
+    .mgmt-sites-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+    .owner-site-item a,
+    .mgmt-site-item a {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #fff;
+      border: 1px solid rgba(11, 61, 74, 0.12);
+      border-radius: 10px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .owner-site-item a:hover,
+    .mgmt-site-item a:hover {
+      border-color: #0b3d4a;
+    }
+    .mgmt-site-item span.status-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e8f4ef;
+      color: #1b6b4a;
+    }
+    .mgmt-site-item span.status-pill.is-review {
+      background: #f8edd4;
+      color: #8a5a12;
+    }
+    .mgmt-site-item span.status-pill.is-offline {
+      background: #f8dcdc;
+      color: #8a1f1f;
+    }
+    .mgmt-note {
+      font-size: 13px;
+      color: #5b7280;
+      max-width: 640px;
+    }
+  </style>
+</head>
+<body data-page="mgmt-home" data-role="mgmt">
+
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div>
+        <h2 id="mgmt-home-title">Management Company Portfolio</h2>
+        <p id="mgmt-home-subtitle">Sites your company operates — status, systems, and savings</p>
+      </div>
+      <div id="user-profile-root"></div>
+    </header>
+
+    <section class="mgmt-kpis" aria-label="Portfolio snapshot">
+      <div class="mgmt-kpi">
+        <span>Managed sites</span>
+        <strong id="kpi-sites">—</strong>
+        <em id="kpi-sites-note">Linked to your company</em>
+      </div>
+      <div class="mgmt-kpi">
+        <span>Systems</span>
+        <strong id="kpi-systems">—</strong>
+        <em>On managed sites</em>
+      </div>
+      <div class="mgmt-kpi">
+        <span>Needs attention</span>
+        <strong id="kpi-attention">—</strong>
+        <em>Offline or review</em>
+      </div>
+      <div class="mgmt-kpi">
+        <span>Online</span>
+        <strong id="kpi-online">—</strong>
+        <em>Reporting normally</em>
+      </div>
+    </section>
+
+    <section id="sites" class="page-panel">
+      <h3>Managed Sites</h3>
+      <p id="mgmt-sites-status" class="chart-status" aria-live="polite">Loading managed properties…</p>
+      <p id="mgmt-sites-empty" class="chart-empty-state list-empty-state" hidden>
+        No properties linked to this management company yet. Ask AEM to set MgmtCompany on each site and MgmtCompanyID on your user.
+      </p>
+      <ul id="mgmt-sites-list" class="mgmt-sites-list"></ul>
+    </section>
+
+    <section id="performance" class="page-panel">
+      <h3>Operations</h3>
+      <p class="mgmt-note">
+        This view is scoped to sites where <code>MgmtCompany</code> matches your company.
+        You can open systems and alarms for those sites. You cannot edit owners,
+        other management companies, users, or platform settings.
+      </p>
+    </section>
+
+    <section id="team" class="page-panel">
+      <h3>Team</h3>
+      <p id="mgmt-team-status" class="mgmt-note">
+        Sub-user invites for property managers are next. Until then, AEM creates
+        additional <strong>mgmt</strong> users and assigns the same MgmtCompanyID.
+      </p>
+    </section>
+  </main>
+</div>
+
+<script src="api-config.js?v=mgmt-role-1"></script>
+<script src="api-client.js?v=mgmt-role-1"></script>
+<script src="role.js?v=mgmt-role-1"></script>
+<script src="auth.js?v=mgmt-role-1"></script>
+<script src="nav.js?v=mgmt-role-1"></script>
+<script src="mgmt-home.js?v=mgmt-role-1"></script>
+</body>
+</html>
