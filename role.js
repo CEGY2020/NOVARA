@@ -1,15 +1,16 @@
 /**
- * Selected portal role (AEM, Owner, Contractor, Sales).
+ * Selected portal role (AEM, Owner, Management Company, Contractor, Sales).
  * Stored in sessionStorage and used for post-login routing.
  */
 (function (global) {
   var STORAGE_KEY = "novaraRole";
 
-  var VALID_ROLES = ["aem", "owner", "contractor", "sales"];
+  var VALID_ROLES = ["aem", "owner", "mgmt", "contractor", "sales"];
 
   var ROLE_LABELS = {
     aem: "AEM",
     owner: "Owner",
+    mgmt: "Management Company",
     contractor: "Contractor",
     sales: "Sales"
   };
@@ -17,15 +18,29 @@
   var HOME_BY_ROLE = {
     aem: "dashboard.html",
     owner: "owner-home.html",
+    mgmt: "mgmt-home.html",
     contractor: "contractor-home.html",
     sales: "sales-home.html"
+  };
+
+  var ROLE_ALIASES = {
+    "management": "mgmt",
+    "management-company": "mgmt",
+    "management_company": "mgmt",
+    "mgmtcompany": "mgmt",
+    "property-manager": "mgmt",
+    "property_manager": "mgmt",
+    "pm": "mgmt"
   };
 
   function normalizeRole(role) {
     if (!role) {
       return null;
     }
-    role = String(role).toLowerCase().trim();
+    role = String(role).toLowerCase().trim().replace(/\s+/g, "-");
+    if (ROLE_ALIASES[role]) {
+      role = ROLE_ALIASES[role];
+    }
     return VALID_ROLES.indexOf(role) >= 0 ? role : null;
   }
 
