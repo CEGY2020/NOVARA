@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - "scripts/deploy_novara_api_ci.py"
+      - "lambda_function.py"
+      - "novara_api.py"
+      - "hubspot_crm.py"
+      - "site_evaluations.py"
+      - "template.yaml"
       - ".github/workflows/deploy-novara-api-v07.yml"
   workflow_dispatch:
 
