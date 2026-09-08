@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Optima ProLink - Opportunities</title>
+  <link rel="stylesheet" href="dashboard.css?v=opportunities-1">
+  <style>
+    .opp-shell{max-width:1180px;margin:0 auto}.opp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.opp-card{background:#fff;border:1px solid #dfe5ec;border-radius:12px;padding:18px}.opp-card h3{margin-top:0}.opp-wide{grid-column:1/-1}.opp-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.opp-form-grid label{display:flex;flex-direction:column;gap:6px;font-weight:600}.opp-form-grid input,.opp-form-grid select,.opp-form-grid textarea{padding:10px;border:1px solid #cbd5df;border-radius:7px;font:inherit}.opp-form-grid textarea{min-height:90px}.opp-span-2{grid-column:span 2}.workflow{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.workflow span{padding:6px 9px;border-radius:14px;background:#eef2f6;font-size:12px}.workflow .now{font-weight:700;outline:2px solid #60758a}.call-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.opp-status{margin-top:12px;font-weight:600}.opp-note{font-size:13px;color:#566575}.opp-table{width:100%;border-collapse:collapse}.opp-table th,.opp-table td{padding:10px;border-bottom:1px solid #e5e9ee;text-align:left}.opp-table button{white-space:nowrap}@media(max-width:850px){.opp-grid,.opp-form-grid{grid-template-columns:1fr}.opp-span-2,.opp-wide{grid-column:auto}}
+  </style>
+</head>
+<body data-page="leads">
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+  <main class="main-content">
+    <div class="opp-shell">
+      <header class="topbar"><div><h2>DHW & Pool Opportunities</h2><p>Prospecting and qualification workspace</p></div><div id="user-profile-root"></div></header>
+      <div class="opp-grid">
+        <section class="opp-card opp-wide">
+          <h3>New / Update Opportunity</h3>
+          <p class="opp-note">Use this page during prospect calls. It writes the core prospect record to NOVARALeads. The complete 17-stage workflow is shown below; the first call-ready stages are active now.</p>
+          <form id="opp-form">
+            <input type="hidden" id="lead-id">
+            <div class="opp-form-grid">
+              <label>Program *<select id="program" required><option value="DHW NG">DHW</option><option value="Pool">Pool</option></select></label>
+              <label>Stage<select id="stage"><option value="New Lead">Lead</option><option value="Qualified">Qualified</option></select></label>
+              <label>Lead Source<select id="source"><option value="Cold Call">Cold Call</option><option value="Steve">Steve</option><option value="Carlos">Carlos</option><option value="Cam">Cam</option><option value="Katia">Katia</option><option value="PHEEP">PHEEP</option><option value="Referral">Referral</option><option value="Website">Website</option><option value="Rinnai">Rinnai</option><option value="Trade Show">Trade Show</option><option value="Other">Other</option></select></label>
+              <label class="opp-span-2">Company / Property / Site *<input id="company" required maxlength="160"></label>
+              <label>Assigned To<input id="assigned" value="Steve" maxlength="120"></label>
+              <label>Contact Name<input id="contact-name" maxlength="120"></label>
+              <label>Phone<input id="contact-phone" type="tel" maxlength="40"></label>
+              <label>Email<input id="contact-email" type="email" maxlength="160"></label>
+              <label>Next Follow-up<input id="followup" type="date"></label>
+              <label>Estimated # Systems / Pools<input id="system-count" type="number" min="0" step="1"></label>
+              <label>Estimated Savings $<input id="savings" type="number" min="0" step="any"></label>
+              <label class="opp-wide">Call / Qualification Notes<textarea id="notes" placeholder="Decision maker, current equipment, pain points, interest, next action, site evaluation timing..."></textarea></label>
+            </div>
+            <div class="call-actions"><button class="primary-btn" type="submit" id="save">Save Opportunity</button><button class="secondary-btn" type="button" id="qualified">Mark Qualified</button><button class="secondary-btn" type="button" id="site-eval">Site Evaluation Next</button><button class="secondary-btn" type="button" id="clear">New Opportunity</button></div>
+            <div id="status" class="opp-status" aria-live="polite"></div>
+          </form>
+        </section>
+        <section class="opp-card opp-wide"><h3>Optima ProLink Workflow</h3><div id="workflow" class="workflow"></div></section>
+        <section class="opp-card opp-wide"><h3>Current Prospects</h3><div style="overflow:auto"><table class="opp-table"><thead><tr><th>ID</th><th>Type</th><th>Company / Site</th><th>Contact</th><th>Stage</th><th>Follow-up</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></section>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="api-config.js?v=opportunities-1"></script><script src="auth.js?v=opportunities-1"></script><script src="api-client.js?v=opportunities-1"></script><script src="role.js?v=opportunities-1"></script><script src="nav.js?v=opportunities-1"></script><script src="phone-format.js?v=opportunities-1"></script><script src="opportunities.js?v=opportunities-1"></script>
+</body></html>
