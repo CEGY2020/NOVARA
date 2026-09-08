@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 import hubspot_crm
 import novara_api
 import site_evaluations
+import summary_reports
 
 
 def _crm_lambda_response(status: int, payload: dict) -> dict:
@@ -135,6 +136,9 @@ def handler(event, context):
 
     if path.rstrip("/")=="/api/site-evaluations":
         status,payload=site_evaluations.route(method,path,query=query,body=_event_body(event)); return _crm_lambda_response(status,payload)
+
+    if path.rstrip("/")=="/api/summary-reports":
+        status,payload=summary_reports.route(method,path,query=query,body=_event_body(event)); return _crm_lambda_response(status,payload)
 
     response=novara_api.handle_lambda_event(event,context)
     if path=="/api/leads" and method=="GET": return _enrich_lead_list(response)
