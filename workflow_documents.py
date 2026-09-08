@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import novara_api
 
-_ALLOWED_TYPES = {"LOI", "UtilityVerification"}
+_ALLOWED_TYPES = {"LOI", "UtilityVerification", "DeepSavings"}
 
 
 def _text(v):
@@ -32,7 +32,7 @@ def save(body):
     if program not in ("DHW", "Pool"):
         raise ValueError("Program must be DHW or Pool")
     if document_type not in _ALLOWED_TYPES:
-        raise ValueError("DocumentType must be LOI or UtilityVerification")
+        raise ValueError("DocumentType must be LOI, UtilityVerification, or DeepSavings")
     fields = body.get("Fields") if isinstance(body.get("Fields"), dict) else body.get("fields")
     if not isinstance(fields, dict):
         fields = {}
@@ -45,7 +45,6 @@ def save(body):
         "Fields": clean,
         "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    # Convert floats recursively using the same DynamoDB-safe helper pattern used elsewhere.
     from decimal import Decimal
     def ddb_safe(v):
         if isinstance(v, float):
@@ -68,7 +67,7 @@ def get(lead_id, program, document_type):
     if program not in ("DHW", "Pool"):
         raise ValueError("program must be DHW or Pool")
     if document_type not in _ALLOWED_TYPES:
-        raise ValueError("documentType must be LOI or UtilityVerification")
+        raise ValueError("documentType must be LOI, UtilityVerification, or DeepSavings")
     item = _table().get_item(Key={"SettingKey": _key(lead_id, program, document_type)}).get("Item")
     return {"document": novara_api.json_safe(item) if item else None}
 
