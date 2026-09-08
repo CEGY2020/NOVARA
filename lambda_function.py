@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from decimal import Decimal
 from urllib.parse import parse_qs
 
 import hubspot_crm
@@ -51,6 +52,124 @@ def _normalize_crm_path(path: str) -> str:
     return path
 
 
+_OPPORTUNITY_LINK_FIELDS = (
+    "OwnerID",
+    "OwnerName",
+    "SiteID",
+    "MgmtCompanyID",
+    "MgmtCompanyName",
+    "EstimatedSystemCount",
+)
+
+
+def _response_json(response: dict) -> dict:
+    try:
+        body = response.get("body") or "{}"
+        return body if isinstance(body, dict) else json.loads(body)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _set_response_json(response: dict, payload: dict) -> dict:
+    response = dict(response)
+    response["body"] = json.dumps(payload)
+    return response
+
+
+def _persist_opportunity_links(event: dict, response: dict) -> dict:
+    """Persist relationship fields after the normal lead API validates/saves the record."""
+    status = int(response.get("statusCode") or 500)
+    if status < 200 or status >= 300:
+        return response
+    body = _event_body(event)
+    lead_id = str(body.get("LeadID") or body.get("leadId") or "").strip()
+    if not lead_id:
+        payload = _response_json(response)
+        lead = payload.get("lead") if isinstance(payload, dict) else None
+        lead_id = str((lead or {}).get("leadId") or "").strip()
+    if not lead_id:
+        return response
+
+    values = {}
+    for field in _OPPORTUNITY_LINK_FIELDS:
+        raw = body.get(field)
+        if raw is None:
+            raw = body.get(field[0].lower() + field[1:])
+        if raw is None:
+            continue
+        if field == "EstimatedSystemCount":
+            if raw == "":
+                values[field] = None
+            else:
+                try:
+                    values[field] = Decimal(str(raw))
+                except Exception:
+                    continue
+        else:
+            values[field] = str(raw).strip()
+
+    if not values:
+        return response
+
+    novara_api.ensure_leads_table()
+    table = novara_api.dynamodb_table(novara_api.LEADS_TABLE_NAME)
+    set_parts = []
+    remove_parts = []
+    names = {}
+    attrs = {}
+    for idx, (field, value) in enumerate(values.items()):
+        name_key = f"#f{idx}"
+        names[name_key] = field
+        if value is None or value == "":
+            remove_parts.append(name_key)
+        else:
+            value_key = f":v{idx}"
+            attrs[value_key] = value
+            set_parts.append(f"{name_key} = {value_key}")
+    expression = []
+    if set_parts:
+        expression.append("SET " + ", ".join(set_parts))
+    if remove_parts:
+        expression.append("REMOVE " + ", ".join(remove_parts))
+    if expression:
+        kwargs = {
+            "Key": {"LeadID": lead_id},
+            "UpdateExpression": " ".join(expression),
+            "ExpressionAttributeNames": names,
+        }
+        if attrs:
+            kwargs["ExpressionAttributeValues"] = attrs
+        table.update_item(**kwargs)
+    return response
+
+
+def _enrich_lead_list(response: dict) -> dict:
+    """Add persisted Owner/Site/Management relationship fields to normalized lead output."""
+    status = int(response.get("statusCode") or 500)
+    if status < 200 or status >= 300:
+        return response
+    payload = _response_json(response)
+    leads = payload.get("leads") if isinstance(payload, dict) else None
+    if not isinstance(leads, list) or not leads:
+        return response
+
+    novara_api.ensure_leads_table()
+    table = novara_api.dynamodb_table(novara_api.LEADS_TABLE_NAME)
+    for lead in leads:
+        lead_id = str(lead.get("leadId") or "").strip()
+        if not lead_id:
+            continue
+        raw = table.get_item(Key={"LeadID": lead_id}).get("Item") or {}
+        lead["ownerId"] = str(raw.get("OwnerID") or "")
+        lead["ownerName"] = str(raw.get("OwnerName") or "")
+        lead["siteId"] = str(raw.get("SiteID") or "")
+        lead["mgmtCompanyId"] = str(raw.get("MgmtCompanyID") or "")
+        lead["mgmtCompanyName"] = str(raw.get("MgmtCompanyName") or "")
+        count = raw.get("EstimatedSystemCount")
+        lead["estimatedSystemCount"] = novara_api.json_safe(count) if count is not None else None
+    return _set_response_json(response, payload)
+
+
 def handler(event, context):
     event = event or {}
     request_context = event.get("requestContext") or {}
@@ -72,4 +191,15 @@ def handler(event, context):
         )
         return _crm_lambda_response(status, payload)
 
-    return novara_api.handle_lambda_event(event, context)
+    response = novara_api.handle_lambda_event(event, context)
+
+    # Preserve all existing lead API validation/auth behavior, then attach
+    # relationship fields used by the Optima ProLink opportunity workspace.
+    if path == "/api/leads" and method == "GET":
+        return _enrich_lead_list(response)
+    if path == "/api/leads" and method == "POST":
+        return _persist_opportunity_links(event, response)
+    if path.startswith("/api/leads/") and method in ("PUT", "PATCH"):
+        return _persist_opportunity_links(event, response)
+
+    return response
