@@ -5,7 +5,15 @@ from datetime import datetime, timezone
 
 import novara_api
 
-_ALLOWED_TYPES = {"LOI", "UtilityVerification", "DeepSavings"}
+_ALLOWED_TYPES = {
+    "LOI",
+    "UtilityVerification",
+    "DeepSavings",
+    "ContractorPricing",
+    "Proposal",
+    "CustomerApproval",
+    "Contracted",
+}
 
 
 def _text(v):
@@ -32,7 +40,7 @@ def save(body):
     if program not in ("DHW", "Pool"):
         raise ValueError("Program must be DHW or Pool")
     if document_type not in _ALLOWED_TYPES:
-        raise ValueError("DocumentType must be LOI, UtilityVerification, or DeepSavings")
+        raise ValueError("Unsupported workflow document type")
     fields = body.get("Fields") if isinstance(body.get("Fields"), dict) else body.get("fields")
     if not isinstance(fields, dict):
         fields = {}
@@ -67,7 +75,7 @@ def get(lead_id, program, document_type):
     if program not in ("DHW", "Pool"):
         raise ValueError("program must be DHW or Pool")
     if document_type not in _ALLOWED_TYPES:
-        raise ValueError("documentType must be LOI, UtilityVerification, or DeepSavings")
+        raise ValueError("Unsupported workflow document type")
     item = _table().get_item(Key={"SettingKey": _key(lead_id, program, document_type)}).get("Item")
     return {"document": novara_api.json_safe(item) if item else None}
 
