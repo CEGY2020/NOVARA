@@ -9,6 +9,7 @@ on:
       - "novara_api.py"
       - "hubspot_crm.py"
       - "site_evaluations.py"
+      - "summary_reports.py"
       - "template.yaml"
       - ".github/workflows/deploy-novara-api-v07.yml"
   workflow_dispatch:
