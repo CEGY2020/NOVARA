@@ -39,6 +39,18 @@ def _event_body(event: dict) -> dict:
         return {}
 
 
+def _normalize_crm_path(path: str) -> str:
+    # Public spec: /api/crm/sync/status/{entityType}/{entityId}
+    # Internal router: /api/crm/sync/{entityType}/{entityId}/status
+    prefix = "/api/crm/sync/status/"
+    if path.startswith(prefix):
+        remainder = path[len(prefix):].strip("/")
+        parts = remainder.split("/")
+        if len(parts) == 2 and all(parts):
+            return f"/api/crm/sync/{parts[0]}/{parts[1]}/status"
+    return path
+
+
 def handler(event, context):
     event = event or {}
     request_context = event.get("requestContext") or {}
@@ -50,12 +62,11 @@ def handler(event, context):
         if method == "OPTIONS":
             return _crm_lambda_response(204, {})
         query = parse_qs(event.get("rawQueryString") or "")
-        # REST API Gateway may provide already-decoded query parameters.
         if not query and isinstance(event.get("queryStringParameters"), dict):
             query = {k: [v] for k, v in event["queryStringParameters"].items() if v is not None}
         status, payload = hubspot_crm.route(
             method,
-            path,
+            _normalize_crm_path(path),
             query=query,
             body=_event_body(event),
         )
