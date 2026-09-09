@@ -54,6 +54,12 @@ def _normalize_crm_path(path: str) -> str:
     return path
 
 
+def _normalize_sales_report_path(path: str) -> str:
+    marker = "/api/sales-reports"
+    idx = path.find(marker)
+    return path[idx:] if idx >= 0 else path
+
+
 _OPPORTUNITY_LINK_FIELDS = (
     "OwnerID", "OwnerName", "SiteID", "SiteName", "MgmtCompanyID", "MgmtCompanyName", "EstimatedSystemCount",
 )
@@ -143,9 +149,11 @@ def handler(event, context):
         if method=="OPTIONS": return _crm_lambda_response(204,{})
         status,payload=hubspot_crm.route(method,_normalize_crm_path(path),query=query,body=_event_body(event)); return _crm_lambda_response(status,payload)
 
-    if path.startswith("/api/sales-reports"):
+    # Match the sales-report API even when a hosting/proxy layer prefixes the path.
+    if "/api/sales-reports" in path:
         if method == "OPTIONS": return _crm_lambda_response(204, {})
-        status, payload = sales_reports.route(method, path, headers=event.get("headers") or {}, body=_event_body(event))
+        sales_path = _normalize_sales_report_path(path)
+        status, payload = sales_reports.route(method, sales_path, headers=event.get("headers") or {}, body=_event_body(event))
         return _crm_lambda_response(status, payload)
 
     if path.rstrip("/")=="/api/site-evaluations":
