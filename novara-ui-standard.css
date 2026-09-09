@@ -1,0 +1,132 @@
+/* NOVARA UI readability and full-viewport standards */
+html,
+body {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  margin: 0;
+  color: #000;
+}
+
+body,
+body * {
+  color: #000;
+}
+
+.dashboard-layout,
+.main-content {
+  min-height: 100vh;
+}
+
+.main-content {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* Keep intentionally colored controls readable. */
+.primary-btn,
+.primary-btn *,
+.sidebar a.active,
+.sidebar a.active * {
+  color: #fff;
+}
+
+/* Larger form typography for readability. */
+.site-form,
+.site-form label,
+.site-form .form-field,
+.site-form .field-hint,
+.site-form input,
+.site-form select,
+.site-form textarea,
+.site-form button,
+.modal-panel {
+  font-size: 18px;
+}
+
+.site-form .form-field > span,
+.modal-header h3 {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.site-form input,
+.site-form select,
+.site-form textarea {
+  min-height: 46px;
+  line-height: 1.35;
+  color: #000;
+  background: #fff;
+}
+
+.site-form textarea {
+  min-height: 110px;
+}
+
+.site-form .field-hint {
+  font-size: 15px;
+  color: #000;
+}
+
+.site-form .inline-picker-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.site-form .inline-picker-row select,
+.site-form .inline-picker-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.site-form .inline-add-btn {
+  flex: 0 0 auto;
+  min-width: 112px;
+  min-height: 46px;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.site-form .inline-create-panel {
+  grid-column: 1 / -1;
+  border: 2px solid #b7c3cf;
+  border-radius: 10px;
+  padding: 16px;
+  background: #fff;
+}
+
+.site-form .inline-create-panel strong {
+  font-size: 20px;
+}
+
+.site-form .inline-create-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .site-form,
+  .site-form label,
+  .site-form .form-field,
+  .site-form input,
+  .site-form select,
+  .site-form textarea,
+  .site-form button,
+  .modal-panel {
+    font-size: 17px;
+  }
+
+  .site-form .inline-picker-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .site-form .inline-add-btn {
+    width: 100%;
+  }
+}
