@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NOVARA - Daily Sales Reports</title>
+  <link rel="stylesheet" href="dashboard.css?v=sales-reports-1">
+  <link rel="stylesheet" href="novara-ui-standard.css?v=1">
+  <style>
+    .sales-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:18px 0}.report-card{background:#fff;border:1px solid #cbd2da;border-radius:10px;padding:18px;color:#000}.report-card h3{margin-top:0;color:#000}.sales-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.sales-settings input,.sales-settings textarea,.sales-settings select{width:100%;min-height:42px;font-size:16px;color:#000;background:#fff;border:1px solid #9aa4b2;border-radius:7px;padding:8px}.sales-settings textarea{min-height:100px}.salesperson-table input[type=email]{min-width:230px}.salesperson-table input[type=number]{width:80px;font-size:16px}.daily-list{margin-top:12px}.daily-list table{width:100%;border-collapse:collapse}.daily-list th,.daily-list td{padding:8px;border-bottom:1px solid #ddd;text-align:left;color:#000}.daily-list th{font-size:13px}.board-note{font-size:14px;color:#333}.report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.progress-table{overflow:auto}.progress-table table{min-width:820px}.status-message{margin-top:10px;font-weight:600}.status-message.is-error{color:#a40000}
+  </style>
+</head>
+<body data-page="sales-reports">
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+  <main class="main-content">
+    <header class="topbar">
+      <div><h2>Daily Sales Reports</h2><p>Salesperson lead lists and restricted management progress reporting</p></div>
+      <div id="user-profile-root"></div>
+    </header>
+
+    <section class="report-card">
+      <h3>Daily Email Settings</h3>
+      <div class="sales-settings">
+        <label><strong>Daily emails</strong><select id="sales-report-enabled"><option value="false">Off</option><option value="true">On</option></select></label>
+        <label><strong>Delivery hour (Pacific)</strong><select id="sales-report-hour"></select></label>
+        <label style="grid-column:1/-1"><strong>Board / Authorized Progress Report Recipients</strong><textarea id="board-recipients" placeholder="One email address per line"></textarea><span class="board-note">Only these addresses receive the company-wide salesperson progress report.</span></label>
+      </div>
+      <div class="report-actions"><button class="primary-btn" id="save-sales-report-settings">Save Settings</button><button class="secondary-btn" id="send-sales-reports-now">Send Reports Now</button><button class="secondary-btn" id="refresh-sales-reports">Refresh</button></div>
+      <p id="sales-report-status" class="status-message" aria-live="polite"></p>
+    </section>
+
+    <section class="report-card">
+      <h3>Salespeople</h3>
+      <p>Each active salesperson receives only their own assigned daily lead list. Change the email or turn delivery off for an individual salesperson here.</p>
+      <div class="progress-table"><table class="data-table salesperson-table"><thead><tr><th>Send</th><th>Salesperson</th><th>Email</th><th>Active Leads</th><th>Won</th><th>Lost</th><th>Close Rate</th></tr></thead><tbody id="salespeople-tbody"><tr><td colspan="7">Loading…</td></tr></tbody></table></div>
+    </section>
+
+    <section class="report-card">
+      <h3>Sales Progress — Restricted Report</h3>
+      <div class="progress-table"><table class="data-table"><thead><tr><th>Salesperson</th><th>Total</th><th>Active</th><th>New</th><th>Contacted</th><th>Qualified</th><th>Proposal</th><th>Won</th><th>Lost</th><th>Close Rate</th></tr></thead><tbody id="progress-tbody"><tr><td colspan="10">Loading…</td></tr></tbody></table></div>
+    </section>
+
+    <section>
+      <h3>Daily Lead Order</h3>
+      <p>Use the Order number to decide the sequence a salesperson sees in their daily email. Lower numbers appear first. Leads without a number follow by next-contact date.</p>
+      <div id="daily-lists" class="sales-report-grid"></div>
+    </section>
+  </main>
+</div>
+<script src="api-config.js?v=sales-reports-1"></script>
+<script src="api-client.js?v=sales-reports-1"></script>
+<script src="role.js?v=sales-reports-1"></script>
+<script src="nav.js?v=sales-reports-1"></script>
+<script src="sales-reports.js?v=1"></script>
+</body>
+</html>
