@@ -43,6 +43,12 @@
   text-shadow: none !important;
 }
 
+/* Keep the lookups, but remove the extra availability/helper text blocks. */
+#lead-company-hint,
+#lead-site-hint {
+  display: none !important;
+}
+
 #leads-tbody tr[hidden],
 .pipeline-card[hidden] {
   display: none !important;
