@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Leads</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-site-picker-1">
+  <link rel="stylesheet" href="dashboard.css?v=leads-company-site-mgmt-1">
+  <link rel="stylesheet" href="novara-ui-standard.css?v=1">
 </head>
 <body data-page="leads">
 
@@ -37,13 +38,46 @@
     <form id="lead-form" class="site-form" novalidate>
       <input type="hidden" id="lead-mode" value="create">
       <div class="form-grid">
-        <label class="form-field"><span>LeadID <em>*</em></span><input type="text" id="field-leadId" name="LeadID" required maxlength="64" autocomplete="off" readonly aria-readonly="true"><small class="field-hint" id="lead-id-hint">Auto-generated sequentially (LD001…)</small></label>
-        <label class="form-field"><span>CompanyName / SiteName <em>*</em></span><input type="text" id="field-companyName" name="CompanyName" required maxlength="160" autocomplete="organization"></label>
-        <label class="form-field"><span>ContactName</span><input type="text" id="field-contactName" name="ContactName" maxlength="120" autocomplete="name"></label>
-        <label class="form-field"><span>ContactEmail</span><input type="email" id="field-contactEmail" name="ContactEmail" maxlength="160" autocomplete="email"></label>
-        <label class="form-field"><span>ContactPhone</span><input type="tel" id="field-contactPhone" name="ContactPhone" maxlength="40" autocomplete="tel"></label>
+        <label class="form-field"><span>Lead ID <em>*</em></span><input type="text" id="field-leadId" name="LeadID" required maxlength="64" autocomplete="off" readonly aria-readonly="true"><small class="field-hint" id="lead-id-hint">Auto-generated sequentially (LD001…)</small></label>
+
+        <label class="form-field"><span>Company Name <em>*</em></span><input type="text" id="field-companyName" name="CompanyName" required maxlength="160" autocomplete="organization"></label>
+
+        <label class="form-field"><span>Owner</span><select id="field-ownerId" name="OwnerID"><option value="">Select owner…</option></select></label>
+
+        <label class="form-field"><span>Site Name</span><div class="inline-picker-row"><select id="field-siteId" name="SiteID"><option value="">Select site…</option></select><button type="button" class="secondary-btn inline-add-btn" id="lead-add-site-btn">+ Add New</button></div><input type="hidden" id="field-siteName" name="SiteName"><small class="field-hint" id="lead-site-hint">Choose an existing site or add a new one.</small></label>
+
+        <label class="form-field"><span>Management Company</span><div class="inline-picker-row"><select id="field-mgmtCompanyId" name="MgmtCompanyID"><option value="">Select management company…</option></select><button type="button" class="secondary-btn inline-add-btn" id="lead-add-mgmt-btn">+ Add New</button></div><input type="hidden" id="field-mgmtCompanyName" name="MgmtCompanyName"></label>
+
+        <div id="lead-new-site-panel" class="inline-create-panel" hidden>
+          <strong>Add New Site</strong>
+          <div class="form-grid" style="margin-top:12px">
+            <label class="form-field"><span>Site Name <em>*</em></span><input id="lead-new-site-name" maxlength="160"></label>
+            <label class="form-field"><span>Address</span><input id="lead-new-site-address" maxlength="180"></label>
+            <label class="form-field"><span>City</span><input id="lead-new-site-city" maxlength="100"></label>
+            <label class="form-field"><span>State</span><input id="lead-new-site-state" maxlength="40"></label>
+            <label class="form-field"><span>ZIP</span><input id="lead-new-site-zip" maxlength="20"></label>
+          </div>
+          <div class="inline-create-actions"><button type="button" class="primary-btn" id="lead-create-site">Save New Site</button><button type="button" class="secondary-btn" id="lead-cancel-new-site">Cancel</button></div>
+          <p id="lead-new-site-status" class="field-hint" aria-live="polite"></p>
+        </div>
+
+        <div id="lead-new-mgmt-panel" class="inline-create-panel" hidden>
+          <strong>Add New Management Company</strong>
+          <div class="form-grid" style="margin-top:12px">
+            <label class="form-field"><span>Company Name <em>*</em></span><input id="lead-new-mgmt-name" maxlength="160"></label>
+            <label class="form-field"><span>Contact Name</span><input id="lead-new-mgmt-contact" maxlength="120"></label>
+            <label class="form-field"><span>Phone</span><input id="lead-new-mgmt-phone" maxlength="40"></label>
+            <label class="form-field"><span>Email</span><input id="lead-new-mgmt-email" type="email" maxlength="160"></label>
+          </div>
+          <div class="inline-create-actions"><button type="button" class="primary-btn" id="lead-create-mgmt">Save New Management Company</button><button type="button" class="secondary-btn" id="lead-cancel-new-mgmt">Cancel</button></div>
+          <p id="lead-new-mgmt-status" class="field-hint" aria-live="polite"></p>
+        </div>
+
+        <label class="form-field"><span>Contact Name</span><input type="text" id="field-contactName" name="ContactName" maxlength="120" autocomplete="name"></label>
+        <label class="form-field"><span>Contact Email</span><input type="email" id="field-contactEmail" name="ContactEmail" maxlength="160" autocomplete="email"></label>
+        <label class="form-field"><span>Contact Phone</span><input type="tel" id="field-contactPhone" name="ContactPhone" maxlength="40" autocomplete="tel"></label>
         <label class="form-field"><span>Source</span><select id="field-source" name="Source"><option value="">Select…</option><option value="Carlos">Carlos</option><option value="Cam">Cam</option><option value="Cold Call">Cold Call</option><option value="Katia">Katia</option><option value="PHEEP">PHEEP</option><option value="Steve">Steve</option><option value="Referral">Referral</option><option value="Website">Website</option><option value="Rinnai">Rinnai</option><option value="Trade Show">Trade Show</option><option value="Other">Other</option></select></label>
-        <label class="form-field"><span>SystemType</span><select id="field-systemType" name="SystemType"><option value="">Select…</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
+        <label class="form-field"><span>System Type</span><select id="field-systemType" name="SystemType"><option value="">Select…</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
         <label class="form-field"><span>Stage</span><select id="field-stage" name="Stage"><option value="New Lead">New Lead</option><option value="Contacted">Contacted</option><option value="Qualified">Qualified</option><option value="Proposal Sent">Proposal Sent</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
         <label class="form-field form-field-followup"><span>Next Follow-up</span><input type="date" id="field-nextFollowUp" name="NextFollowUp"><small class="field-hint">Set or clear the next outreach date. Overdue and dates within 7 days are highlighted in the list and pipeline.</small></label>
         <label class="form-field"><span>Assigned To</span><input type="text" id="field-assignedTo" name="AssignedTo" maxlength="120" autocomplete="off"></label>
@@ -57,12 +91,12 @@
   </div>
 </div>
 
-<script src="api-config.js?v=leads-site-picker-1"></script>
-<script src="api-client.js?v=leads-site-picker-1"></script>
-<script src="role.js?v=leads-site-picker-1"></script>
-<script src="nav.js?v=leads-site-picker-1"></script>
-<script src="phone-format.js?v=leads-site-picker-1"></script>
-<script src="leads.js?v=leads-site-picker-1"></script>
-<script src="leads-site-picker.js?v=leads-site-picker-1"></script>
+<script src="api-config.js?v=leads-company-site-mgmt-1"></script>
+<script src="api-client.js?v=leads-company-site-mgmt-1"></script>
+<script src="role.js?v=leads-company-site-mgmt-1"></script>
+<script src="nav.js?v=leads-company-site-mgmt-1"></script>
+<script src="phone-format.js?v=leads-company-site-mgmt-1"></script>
+<script src="leads.js?v=leads-company-site-mgmt-1"></script>
+<script src="leads-site-picker.js?v=leads-company-site-mgmt-1"></script>
 </body>
 </html>

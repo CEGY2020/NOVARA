@@ -54,7 +54,7 @@ def _normalize_crm_path(path: str) -> str:
 
 
 _OPPORTUNITY_LINK_FIELDS = (
-    "OwnerID", "OwnerName", "SiteID", "MgmtCompanyID", "MgmtCompanyName", "EstimatedSystemCount",
+    "OwnerID", "OwnerName", "SiteID", "SiteName", "MgmtCompanyID", "MgmtCompanyName", "EstimatedSystemCount",
 )
 
 
@@ -119,8 +119,8 @@ def _enrich_lead_list(response: dict) -> dict:
         if not lead_id: continue
         raw=table.get_item(Key={"LeadID":lead_id}).get("Item") or {}
         lead["ownerId"]=str(raw.get("OwnerID") or ""); lead["ownerName"]=str(raw.get("OwnerName") or "")
-        lead["siteId"]=str(raw.get("SiteID") or ""); lead["mgmtCompanyId"]=str(raw.get("MgmtCompanyID") or "")
-        lead["mgmtCompanyName"]=str(raw.get("MgmtCompanyName") or "")
+        lead["siteId"]=str(raw.get("SiteID") or ""); lead["siteName"]=str(raw.get("SiteName") or "")
+        lead["mgmtCompanyId"]=str(raw.get("MgmtCompanyID") or ""); lead["mgmtCompanyName"]=str(raw.get("MgmtCompanyName") or "")
         count=raw.get("EstimatedSystemCount"); lead["estimatedSystemCount"]=novara_api.json_safe(count) if count is not None else None
     return _set_response_json(response,payload)
 
