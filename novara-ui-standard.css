@@ -5,12 +5,6 @@ body {
   min-width: 100%;
   min-height: 100%;
   margin: 0;
-  color: #000;
-}
-
-body,
-body * {
-  color: #000;
 }
 
 .dashboard-layout,
@@ -22,13 +16,44 @@ body * {
   width: 100%;
   max-width: none;
   box-sizing: border-box;
+  color: #000;
 }
 
-/* Keep intentionally colored controls readable. */
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6,
+.main-content p,
+.main-content label,
+.main-content span,
+.main-content strong,
+.main-content small,
+.main-content th,
+.main-content td,
+.main-content input,
+.main-content select,
+.main-content textarea,
+.modal-panel,
+.modal-panel h1,
+.modal-panel h2,
+.modal-panel h3,
+.modal-panel h4,
+.modal-panel p,
+.modal-panel label,
+.modal-panel span,
+.modal-panel strong,
+.modal-panel small,
+.modal-panel input,
+.modal-panel select,
+.modal-panel textarea {
+  color: #000;
+}
+
+/* Keep intentionally colored primary actions readable. */
 .primary-btn,
-.primary-btn *,
-.sidebar a.active,
-.sidebar a.active * {
+.primary-btn * {
   color: #fff;
 }
 
