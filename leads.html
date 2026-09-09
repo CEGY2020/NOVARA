@@ -6,6 +6,7 @@
   <title>NOVARA - Leads</title>
   <link rel="stylesheet" href="dashboard.css?v=leads-company-site-mgmt-1">
   <link rel="stylesheet" href="novara-ui-standard.css?v=1">
+  <link rel="stylesheet" href="leads-followup-tools.css?v=1">
 </head>
 <body data-page="leads">
 
@@ -21,9 +22,11 @@
     <div class="view-tabs" role="tablist" aria-label="Leads views"><button type="button" class="view-tab is-active" role="tab" id="tab-list" data-view="list" aria-selected="true" aria-controls="leads-list-view">List</button><button type="button" class="view-tab" role="tab" id="tab-pipeline" data-view="pipeline" aria-selected="false" aria-controls="leads-pipeline-view">Pipeline</button></div>
 
     <div class="leads-toolbar">
+      <label class="filter-field lead-search-field"><span>Search Leads</span><input class="lead-search-input" id="lead-search" type="search" placeholder="Company, site, contact, phone, email…" aria-label="Search leads"></label>
       <label class="filter-field"><span>Stage</span><select id="filter-stage" aria-label="Filter by stage"><option value="">All stages</option><option value="New Lead">New Lead</option><option value="Contacted">Contacted</option><option value="Qualified">Qualified</option><option value="Proposal Sent">Proposal Sent</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
       <label class="filter-field"><span>Assigned To</span><select id="filter-assigned" aria-label="Filter by assigned to"><option value="">Anyone</option></select></label>
-      <label class="filter-field"><span>Follow-up</span><select id="filter-followup" aria-label="Filter by follow-up status"><option value="">All follow-ups</option><option value="needs">Needs Follow-up</option><option value="overdue">Overdue</option><option value="due-soon">Due Soon (7 days)</option><option value="none">No date set</option></select></label>
+      <label class="filter-field"><span>Next Contact</span><select id="filter-followup" aria-label="Filter by next contact date"><option value="">All Leads</option><option value="today">Contact Today</option><option value="overdue">Overdue</option><option value="due-soon">Next 7 Days</option><option value="next-30">Next 30 Days</option><option value="none">No Follow-Up Scheduled</option></select></label>
+      <div class="lead-toolbar-actions"><button type="button" class="primary-btn" id="print-leads-btn">Print Call Sheet</button><button type="button" class="secondary-btn" id="clear-lead-filters-btn">Clear Filters</button></div>
       <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
     </div>
 
@@ -98,5 +101,6 @@
 <script src="phone-format.js?v=leads-company-site-mgmt-1"></script>
 <script src="leads.js?v=leads-company-site-mgmt-1"></script>
 <script src="leads-site-picker.js?v=leads-company-site-mgmt-1"></script>
+<script src="leads-followup-tools.js?v=1"></script>
 </body>
 </html>
