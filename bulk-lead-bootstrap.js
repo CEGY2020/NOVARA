@@ -24,6 +24,12 @@
   uploadBtn.id = "upload-leads-btn";
   uploadBtn.textContent = "Upload Revised Leads";
 
+  var reportLink = document.createElement("a");
+  reportLink.className = "secondary-btn";
+  reportLink.id = "daily-sales-reports-link";
+  reportLink.href = "sales-reports.html";
+  reportLink.textContent = "Daily Sales Reports";
+
   var input = document.createElement("input");
   input.type = "file";
   input.id = "bulk-leads-file";
@@ -33,6 +39,7 @@
   actions.appendChild(printAllBtn);
   actions.appendChild(exportBtn);
   actions.appendChild(uploadBtn);
+  actions.appendChild(reportLink);
   actions.appendChild(input);
 
   var status = document.createElement("p");
