@@ -24,6 +24,12 @@
   uploadBtn.id = "upload-leads-btn";
   uploadBtn.textContent = "Upload Revised Leads";
 
+  var importBtn = document.createElement("button");
+  importBtn.type = "button";
+  importBtn.className = "secondary-btn";
+  importBtn.id = "import-new-leads-btn";
+  importBtn.textContent = "Import New Leads";
+
   var reportLink = document.createElement("a");
   reportLink.className = "secondary-btn";
   reportLink.id = "daily-sales-reports-link";
@@ -36,11 +42,19 @@
   input.accept = ".csv,text/csv";
   input.hidden = true;
 
+  var newLeadsInput = document.createElement("input");
+  newLeadsInput.type = "file";
+  newLeadsInput.id = "new-leads-file";
+  newLeadsInput.accept = ".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv";
+  newLeadsInput.hidden = true;
+
   actions.appendChild(printAllBtn);
   actions.appendChild(exportBtn);
   actions.appendChild(uploadBtn);
+  actions.appendChild(importBtn);
   actions.appendChild(reportLink);
   actions.appendChild(input);
+  actions.appendChild(newLeadsInput);
 
   var status = document.createElement("p");
   status.id = "bulk-leads-status";
@@ -78,8 +92,13 @@
     if (follow) follow.value = saved.follow;
   });
 
-  var script = document.createElement("script");
-  script.src = "bulk-lead-maintenance.js?v=1";
-  script.defer = false;
-  document.body.appendChild(script);
+  var maintenanceScript = document.createElement("script");
+  maintenanceScript.src = "bulk-lead-maintenance.js?v=1";
+  maintenanceScript.defer = false;
+  document.body.appendChild(maintenanceScript);
+
+  var importScript = document.createElement("script");
+  importScript.src = "bulk-new-lead-import.js?v=1";
+  importScript.defer = false;
+  document.body.appendChild(importScript);
 })();
