@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Sales Home</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-pipeline-1">
+  <link rel="stylesheet" href="dashboard.css?v=sales-home-2">
+  <style>
+    .sales-report-email-card{margin-top:18px}.sales-report-email-card label{display:block;font-weight:700;margin-bottom:6px;color:#000}.sales-report-email-card input{width:min(520px,100%);min-height:44px;font-size:17px;padding:8px 10px;color:#000;background:#fff;border:1px solid #9aa4b2;border-radius:7px}.sales-report-email-card .help{color:#333;margin:8px 0 12px}.sales-email-status{font-weight:600;margin-top:10px}.sales-email-status.is-error{color:#a40000}
+  </style>
 </head>
 <body data-page="sales-home" data-role="sales">
 
@@ -31,10 +34,23 @@
         <a class="secondary-btn sales-home-link" href="leads.html#pipeline">Open Pipeline</a>
       </div>
     </section>
+
+    <section class="page-panel sales-report-email-card">
+      <h3>My Daily Lead Email</h3>
+      <p class="help">Choose the email address where you want NOVARA to send your daily assigned lead list. This can be different from your login email.</p>
+      <label for="sales-report-email">Daily lead report email</label>
+      <input id="sales-report-email" type="email" autocomplete="email" placeholder="you@example.com">
+      <div style="margin-top:12px"><button class="primary-btn" id="save-sales-report-email">Save My Email</button></div>
+      <p id="sales-report-email-status" class="sales-email-status" aria-live="polite"></p>
+    </section>
   </main>
 </div>
 
-<script src="role.js?v=leads-pipeline-1"></script>
-<script src="nav.js?v=leads-pipeline-1"></script>
+<script src="api-config.js?v=sales-home-2"></script>
+<script src="role.js?v=sales-home-2"></script>
+<script src="auth.js?v=sales-home-2"></script>
+<script src="api-client.js?v=sales-home-2"></script>
+<script src="nav.js?v=sales-home-2"></script>
+<script src="sales-profile.js?v=1"></script>
 </body>
 </html>
