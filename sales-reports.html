@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="dashboard.css?v=sales-reports-2">
   <link rel="stylesheet" href="novara-ui-standard.css?v=1">
   <style>
-    .sales-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:18px 0}.report-card{background:#fff;border:1px solid #cbd2da;border-radius:10px;padding:18px;color:#000}.report-card h3{margin-top:0;color:#000}.sales-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.sales-settings input,.sales-settings textarea,.sales-settings select{width:100%;min-height:42px;font-size:16px;color:#000;background:#fff;border:1px solid #9aa4b2;border-radius:7px;padding:8px}.sales-settings textarea{min-height:100px}.salesperson-table .report-email{font-size:15px;color:#000}.salesperson-table input[type=number]{width:80px;font-size:16px}.daily-list{margin-top:12px}.daily-list table{width:100%;border-collapse:collapse}.daily-list th,.daily-list td{padding:8px;border-bottom:1px solid #ddd;text-align:left;color:#000}.daily-list th{font-size:13px}.board-note{font-size:14px;color:#333}.report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.progress-table{overflow:auto}.progress-table table{min-width:820px}.progress-table .data-table thead th,.salesperson-table thead th{color:#fff!important;font-weight:700!important;text-shadow:none!important}.status-message{margin-top:10px;font-weight:600}.status-message.is-error{color:#a40000}
+    .sales-report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:18px 0}.report-card{background:#fff;border:1px solid #cbd2da;border-radius:10px;padding:18px;color:#000}.report-card h3{margin-top:0;color:#000}.sales-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.sales-settings input,.sales-settings textarea,.sales-settings select{width:100%;min-height:42px;font-size:16px;color:#000;background:#fff;border:1px solid #9aa4b2;border-radius:7px;padding:8px}.sales-settings textarea{min-height:100px}.salesperson-table .report-email{font-size:15px;color:#000}.salesperson-table input[type=number]{width:80px;font-size:16px}.daily-list{margin-top:12px}.daily-list table{width:100%;border-collapse:collapse}.daily-list th,.daily-list td{padding:8px;border-bottom:1px solid #ddd;text-align:left;color:#000}.daily-list th{font-size:13px}.board-note{font-size:14px;color:#333}.report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.progress-table{overflow:auto}.progress-table table{min-width:820px}.progress-table .data-table thead th,.salesperson-table thead th{color:#fff!important;font-weight:700!important;text-shadow:none!important}.status-message{margin-top:10px;font-weight:600}.status-message.is-error{color:#a40000}.topbar-title-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.back-to-leads{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;min-height:38px;padding:8px 14px}
   </style>
 </head>
 <body data-page="sales-reports">
@@ -15,7 +15,10 @@
   <aside class="sidebar" id="sidebar-root"></aside>
   <main class="main-content">
     <header class="topbar">
-      <div><h2>Daily Sales Reports</h2><p>Salesperson lead lists and restricted management progress reporting</p></div>
+      <div>
+        <div class="topbar-title-row"><a class="secondary-btn back-to-leads" href="leads.html">← Back to Leads</a><h2>Daily Sales Reports</h2></div>
+        <p>Salesperson lead lists and restricted management progress reporting</p>
+      </div>
       <div id="user-profile-root"></div>
     </header>
 
