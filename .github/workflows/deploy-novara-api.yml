@@ -10,6 +10,7 @@ on:
       - "template.yaml"
       - "lambda_function.py"
       - "novara_api.py"
+      - "sales_reports.py"
       - "requirements.txt"
       - "scripts/deploy_novara_api.py"
       - "scripts/write_api_config.py"
