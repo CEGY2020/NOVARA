@@ -7,6 +7,7 @@ on:
       - "scripts/deploy_novara_api_ci.py"
       - "lambda_function.py"
       - "novara_api.py"
+      - "sales_reports.py"
       - "hubspot_crm.py"
       - "site_evaluations.py"
       - "summary_reports.py"
