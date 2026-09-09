@@ -62,12 +62,10 @@ def _save_settings(data: dict) -> dict:
         if not isinstance(row, dict):
             continue
         name = str(row.get("name") or "").strip()
-        email = str(row.get("email") or "").strip().lower()
         if not name:
             continue
         salespeople.append({
             "name": name,
-            "email": email,
             "enabled": bool(row.get("enabled", True)),
         })
 
@@ -107,6 +105,7 @@ def _active_sales_users() -> list[dict]:
             continue
         if str(user.get("role") or "") != "sales":
             continue
+        user["reportEmail"] = str(item.get("SalesReportEmail") or user.get("email") or "").strip().lower()
         users.append(user)
     users.sort(key=lambda u: str(u.get("fullName") or "").lower())
     return users
@@ -169,12 +168,19 @@ def _progress_rows(leads: list[dict], salespeople: list[dict]) -> list[dict]:
 
 
 def _configured_salespeople(settings: dict) -> list[dict]:
-    configured = settings.get("salespeople") or []
-    if configured:
-        return configured
+    live_users = _active_sales_users()
+    enabled_by_name = {
+        str(row.get("name") or "").strip().lower(): bool(row.get("enabled", True))
+        for row in (settings.get("salespeople") or [])
+        if isinstance(row, dict) and str(row.get("name") or "").strip()
+    }
     return [
-        {"name": u.get("fullName") or "", "email": u.get("email") or "", "enabled": True}
-        for u in _active_sales_users()
+        {
+            "name": u.get("fullName") or "",
+            "email": u.get("reportEmail") or u.get("email") or "",
+            "enabled": enabled_by_name.get(str(u.get("fullName") or "").strip().lower(), True),
+        }
+        for u in live_users
         if u.get("fullName")
     ]
 
@@ -304,23 +310,83 @@ def send_daily_reports(force: bool = False) -> dict:
     return {"ok": True, "sales": sales_results, "board": board_results, "date": today}
 
 
-def _require_aem(headers: dict | None) -> tuple[dict | None, str | None]:
+def _authenticated_user(headers: dict | None) -> tuple[dict | None, str | None]:
     user, error = novara_api.optional_auth_user(headers or {})
     if error:
         return None, error
     if not user:
         return None, "Authentication required"
+    return user, None
+
+
+def _require_aem(headers: dict | None) -> tuple[dict | None, str | None]:
+    user, error = _authenticated_user(headers)
+    if error:
+        return None, error
     if str(user.get("role") or "") != "aem":
         return None, "AEM access required"
     return user, None
 
 
+def _sales_report_email_for_user(user: dict) -> str:
+    user_id = str(user.get("userId") or user.get("UserID") or "").strip()
+    if not user_id:
+        return str(user.get("email") or "").strip().lower()
+    novara_api.ensure_users_table()
+    item = novara_api.dynamodb_table(novara_api.USERS_TABLE_NAME).get_item(Key={"UserID": user_id}).get("Item") or {}
+    return str(item.get("SalesReportEmail") or user.get("email") or "").strip().lower()
+
+
+def _save_sales_report_email(user: dict, email: str) -> str:
+    if str(user.get("role") or "") != "sales":
+        raise PermissionError("Sales access required")
+    value = str(email or "").strip().lower()
+    if not value or "@" not in value:
+        raise ValueError("A valid report email is required")
+    user_id = str(user.get("userId") or user.get("UserID") or "").strip()
+    if not user_id:
+        raise ValueError("User ID is required")
+    novara_api.ensure_users_table()
+    novara_api.dynamodb_table(novara_api.USERS_TABLE_NAME).update_item(
+        Key={"UserID": user_id},
+        UpdateExpression="SET SalesReportEmail = :e, UpdatedAt = :t",
+        ExpressionAttributeValues={
+            ":e": value,
+            ":t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    )
+    return value
+
+
 def route(method: str, path: str, *, headers: dict | None = None, body: dict | None = None) -> tuple[int, dict]:
+    method = method.upper()
+    body = body or {}
+
+    if path.rstrip("/").endswith("/sales-reports/me"):
+        user, error = _authenticated_user(headers)
+        if error:
+            return 403, {"error": error}
+        if str(user.get("role") or "") != "sales":
+            return 403, {"error": "Sales access required"}
+        if method == "GET":
+            return 200, {
+                "name": str(user.get("fullName") or ""),
+                "loginEmail": str(user.get("email") or ""),
+                "reportEmail": _sales_report_email_for_user(user),
+            }
+        if method == "PUT":
+            try:
+                value = _save_sales_report_email(user, body.get("reportEmail"))
+                return 200, {"ok": True, "reportEmail": value}
+            except ValueError as exc:
+                return 400, {"error": str(exc)}
+            except PermissionError as exc:
+                return 403, {"error": str(exc)}
+        return 405, {"error": "Method not allowed"}
+
     user, error = _require_aem(headers)
     if error:
         return 403, {"error": error}
-    method = method.upper()
-    body = body or {}
     if method == "GET":
         return 200, report_payload()
     if method == "PUT":
