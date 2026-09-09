@@ -1,0 +1,85 @@
+name: Deploy NOVARA Sales Report Schedule
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sales_reports.py"
+      - "lambda_function.py"
+      - ".github/workflows/deploy-sales-report-schedule.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  schedule:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      NOVARA_AWS_REGION: ${{ vars.NOVARA_AWS_REGION || vars.AWS_REGION || 'us-west-2' }}
+      NOVARA_LAMBDA_FUNCTION: novara-api
+      NOVARA_SALES_RULE: novara-daily-sales-reports-hourly
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve AWS session token
+        id: aws_token
+        env:
+          RAW_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          RAW_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          access = (os.environ.get("RAW_ACCESS_KEY") or "").strip()
+          token = (os.environ.get("RAW_SESSION_TOKEN") or "").strip()
+          use_token = bool(token) and (not access.startswith("AKIA")) and len(token) >= 100
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"use_token={'true' if use_token else 'false'}\n")
+          if not access:
+              raise SystemExit("AWS_ACCESS_KEY_ID secret is empty.")
+          PY
+
+      - name: Configure AWS credentials (IAM user key)
+        if: steps.aws_token.outputs.use_token != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.NOVARA_AWS_REGION }}
+
+      - name: Configure AWS credentials (temporary session)
+        if: steps.aws_token.outputs.use_token == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.NOVARA_AWS_REGION }}
+
+      - name: Create or update hourly EventBridge trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          FUNCTION_ARN=$(aws lambda get-function --function-name "$NOVARA_LAMBDA_FUNCTION" --query 'Configuration.FunctionArn' --output text)
+          RULE_ARN=$(aws events put-rule \
+            --name "$NOVARA_SALES_RULE" \
+            --schedule-expression 'rate(1 hour)' \
+            --state ENABLED \
+            --description 'Hourly trigger; NOVARA sends daily sales reports only at configured Pacific hour.' \
+            --query RuleArn --output text)
+
+          aws lambda add-permission \
+            --function-name "$NOVARA_LAMBDA_FUNCTION" \
+            --statement-id novara-sales-report-eventbridge \
+            --action lambda:InvokeFunction \
+            --principal events.amazonaws.com \
+            --source-arn "$RULE_ARN" >/dev/null 2>&1 || true
+
+          aws events put-targets \
+            --rule "$NOVARA_SALES_RULE" \
+            --targets "Id=novara-sales-report,Arn=$FUNCTION_ARN" >/dev/null
+
+          echo "Sales report schedule is active: $RULE_ARN"
