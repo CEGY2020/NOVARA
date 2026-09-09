@@ -36,6 +36,13 @@
   margin-top: 4px;
 }
 
+/* Dark blue Leads list header needs high-contrast white labels. */
+#leads-list-view .data-table thead th {
+  color: #fff !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+}
+
 #leads-tbody tr[hidden],
 .pipeline-card[hidden] {
   display: none !important;
