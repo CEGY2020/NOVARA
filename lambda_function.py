@@ -9,6 +9,7 @@ from urllib.parse import parse_qs
 
 import hubspot_crm
 import novara_api
+import sales_reports
 import site_evaluations
 import summary_reports
 import workflow_documents
@@ -126,7 +127,14 @@ def _enrich_lead_list(response: dict) -> dict:
 
 
 def handler(event, context):
-    event=event or {}; request_context=event.get("requestContext") or {}; http=request_context.get("http") or {}
+    event = event or {}
+
+    # Hourly EventBridge/SAM schedule. sales_reports decides whether this is the configured
+    # Pacific delivery hour and prevents duplicate daily sends.
+    if event.get("source") == "aws.events" or event.get("detail-type") == "Scheduled Event":
+        return sales_reports.send_daily_reports(force=False)
+
+    request_context=event.get("requestContext") or {}; http=request_context.get("http") or {}
     method=(http.get("method") or event.get("httpMethod") or "GET").upper(); path=http.get("path") or event.get("rawPath") or event.get("path") or "/"
     query=parse_qs(event.get("rawQueryString") or "")
     if not query and isinstance(event.get("queryStringParameters"),dict): query={k:[v] for k,v in event["queryStringParameters"].items() if v is not None}
@@ -134,6 +142,11 @@ def handler(event, context):
     if path.startswith("/api/crm"):
         if method=="OPTIONS": return _crm_lambda_response(204,{})
         status,payload=hubspot_crm.route(method,_normalize_crm_path(path),query=query,body=_event_body(event)); return _crm_lambda_response(status,payload)
+
+    if path.startswith("/api/sales-reports"):
+        if method == "OPTIONS": return _crm_lambda_response(204, {})
+        status, payload = sales_reports.route(method, path, headers=event.get("headers") or {}, body=_event_body(event))
+        return _crm_lambda_response(status, payload)
 
     if path.rstrip("/")=="/api/site-evaluations":
         status,payload=site_evaluations.route(method,path,query=query,body=_event_body(event)); return _crm_lambda_response(status,payload)
