@@ -63,7 +63,7 @@
         return '<tr data-sales-index="' + index + '">' +
           '<td><input type="checkbox" class="sales-email-enabled"' + (person.enabled === false ? '' : ' checked') + '></td>' +
           '<td><strong>' + esc(person.name) + '</strong></td>' +
-          '<td><input type="email" class="sales-email-address" value="' + esc(person.email || '') + '"></td>' +
+          '<td><span class="report-email">' + esc(person.email || 'Not set') + '</span></td>' +
           '<td>' + esc(p.active || 0) + '</td>' +
           '<td>' + esc(p.won || 0) + '</td>' +
           '<td>' + esc(p.lost || 0) + '</td>' +
@@ -100,7 +100,6 @@
       var base = (current.salespeople || [])[index] || {};
       salespeople.push({
         name: base.name || "",
-        email: row.querySelector(".sales-email-address").value.trim(),
         enabled: row.querySelector(".sales-email-enabled").checked
       });
     });
