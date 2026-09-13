@@ -49,18 +49,34 @@
   };
 
   function loadMaps() {
-    if (global.google && global.google.maps && typeof global.google.maps.importLibrary === "function") return Promise.resolve();
+    if (global.google && global.google.maps) return Promise.resolve();
     if (!key) return Promise.reject(new Error("Google Maps API key is not configured."));
     if (global.__novaraMapsPromise) return global.__novaraMapsPromise;
+
     global.__novaraMapsPromise = new Promise(function (resolve, reject) {
+      var callbackName = "__novaraGoogleMapsReady";
+      var timeout = setTimeout(function () {
+        reject(new Error("Google Maps JavaScript API did not finish loading. Check the API key restrictions and billing."));
+      }, 15000);
+
+      global[callbackName] = function () {
+        clearTimeout(timeout);
+        try { delete global[callbackName]; } catch (_) { global[callbackName] = undefined; }
+        if (global.google && global.google.maps) resolve();
+        else reject(new Error("Google Maps JavaScript API loaded but did not initialize."));
+      };
+
       var script = document.createElement("script");
-      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&loading=async&libraries=places&v=weekly";
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&loading=async&libraries=places&v=weekly&callback=" + callbackName;
       script.async = true;
       script.defer = true;
-      script.onload = function () { resolve(); };
-      script.onerror = function () { reject(new Error("Google Maps JavaScript API could not load.")); };
+      script.onerror = function () {
+        clearTimeout(timeout);
+        reject(new Error("Google Maps JavaScript API could not load."));
+      };
       document.head.appendChild(script);
     });
+
     return global.__novaraMapsPromise;
   }
 
@@ -152,12 +168,17 @@
       global.NovaraAddressAutocomplete = { configured: false };
       return;
     }
+
     loadMaps()
       .then(function () {
-        if (!global.google || !global.google.maps || typeof global.google.maps.importLibrary !== "function") {
+        if (!global.google || !global.google.maps) {
           throw new Error("Google Maps JavaScript API did not initialize.");
         }
-        return global.google.maps.importLibrary("places");
+        if (typeof global.google.maps.importLibrary === "function") {
+          return global.google.maps.importLibrary("places");
+        }
+        if (global.google.maps.places) return global.google.maps.places;
+        throw new Error("Google Places library did not initialize.");
       })
       .then(function (places) {
         var PlaceAutocompleteElement = places.PlaceAutocompleteElement || (global.google.maps.places && global.google.maps.places.PlaceAutocompleteElement);
