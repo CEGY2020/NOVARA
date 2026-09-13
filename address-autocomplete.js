@@ -7,6 +7,47 @@
     { address: "field-address", city: "field-city", state: "field-state", zip: "field-zip" }
   ];
 
+  function statusFor(input, message, isError) {
+    if (!input || !input.parentNode) return;
+    var id = input.id + "-google-status";
+    var status = document.getElementById(id);
+    if (!status) {
+      status = document.createElement("small");
+      status.id = id;
+      status.style.display = "block";
+      status.style.marginTop = "4px";
+      status.style.fontSize = "12px";
+      input.parentNode.appendChild(status);
+    }
+    status.textContent = message || "";
+    status.style.color = isError ? "#a12622" : "#555";
+  }
+
+  function prepareOriginalInputs() {
+    targets.forEach(function (cfg) {
+      var input = document.getElementById(cfg.address);
+      if (!input) return;
+      input.setAttribute("autocomplete", "off");
+      input.setAttribute("autocorrect", "off");
+      input.setAttribute("spellcheck", "false");
+      input.setAttribute("data-lpignore", "true");
+      input.setAttribute("data-1p-ignore", "true");
+      statusFor(input, "Loading Google address lookup…", false);
+    });
+  }
+
+  function showGlobalError(message) {
+    targets.forEach(function (cfg) {
+      var input = document.getElementById(cfg.address);
+      if (input) statusFor(input, message, true);
+    });
+  }
+
+  global.gm_authFailure = function () {
+    showGlobalError("Google address lookup could not authenticate. Check the Google API key restrictions and enabled APIs.");
+    global.NovaraAddressAutocomplete = { configured: false, error: "Google Maps authentication failed" };
+  };
+
   function loadMaps() {
     if (global.google && global.google.maps && typeof global.google.maps.importLibrary === "function") return Promise.resolve();
     if (!key) return Promise.reject(new Error("Google Maps API key is not configured."));
@@ -15,6 +56,7 @@
       var script = document.createElement("script");
       script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&loading=async&libraries=places&v=weekly";
       script.async = true;
+      script.defer = true;
       script.onload = function () { resolve(); };
       script.onerror = function () { reject(new Error("Google Maps JavaScript API could not load.")); };
       document.head.appendChild(script);
@@ -53,8 +95,9 @@
     var original = document.getElementById(cfg.address);
     if (!original || original.dataset.novaraAutocompleteReady === "1") return;
 
-    var widget = new PlaceAutocompleteElement({ includedRegionCodes: ["us"] });
-    widget.placeholder = "Start typing an address...";
+    var widget = new PlaceAutocompleteElement();
+    widget.includedRegionCodes = ["us"];
+    widget.placeholder = "Start typing an address…";
     widget.value = original.value || "";
     widget.style.display = "block";
     widget.style.width = "100%";
@@ -65,6 +108,7 @@
     original.parentNode.insertBefore(widget, original);
     original.style.display = "none";
     original.dataset.novaraAutocompleteReady = "1";
+    statusFor(original, "Google address lookup ready", false);
 
     widget.addEventListener("gmp-select", async function (event) {
       try {
@@ -79,13 +123,16 @@
         setValue(cfg.state, parsed.state);
         setValue(cfg.zip, parsed.zip);
         widget.value = parsed.address || place.formattedAddress || widget.value;
+        statusFor(original, "Address selected from Google", false);
       } catch (err) {
         console.error("NOVARA address lookup failed", err);
+        statusFor(original, "Google found the address, but NOVARA could not load its details.", true);
       }
     });
 
     widget.addEventListener("gmp-error", function (event) {
       console.error("NOVARA address lookup error", event);
+      statusFor(original, "Google address lookup returned an error.", true);
     });
 
     var container = original.closest(".modal-backdrop, .inline-create-panel");
@@ -99,21 +146,29 @@
   }
 
   function init() {
+    prepareOriginalInputs();
     if (!key) {
+      showGlobalError("Google address lookup is not configured yet.");
       global.NovaraAddressAutocomplete = { configured: false };
       return;
     }
     loadMaps()
-      .then(function () { return global.google.maps.importLibrary("places"); })
+      .then(function () {
+        if (!global.google || !global.google.maps || typeof global.google.maps.importLibrary !== "function") {
+          throw new Error("Google Maps JavaScript API did not initialize.");
+        }
+        return global.google.maps.importLibrary("places");
+      })
       .then(function (places) {
-        var PlaceAutocompleteElement = places.PlaceAutocompleteElement || global.google.maps.places.PlaceAutocompleteElement;
-        if (!PlaceAutocompleteElement) throw new Error("PlaceAutocompleteElement is unavailable.");
+        var PlaceAutocompleteElement = places.PlaceAutocompleteElement || (global.google.maps.places && global.google.maps.places.PlaceAutocompleteElement);
+        if (!PlaceAutocompleteElement) throw new Error("PlaceAutocompleteElement is unavailable. Enable Places API (New) for this Google Cloud project.");
         return Promise.all(targets.map(function (cfg) { return setupTarget(cfg, PlaceAutocompleteElement); }));
       })
       .then(function () { global.NovaraAddressAutocomplete = { configured: true }; })
       .catch(function (err) {
         console.error("NOVARA address autocomplete was not initialized", err);
-        global.NovaraAddressAutocomplete = { configured: false, error: err.message };
+        showGlobalError(err && err.message ? err.message : "Google address lookup could not start.");
+        global.NovaraAddressAutocomplete = { configured: false, error: err && err.message ? err.message : "Unknown error" };
       });
   }
 
