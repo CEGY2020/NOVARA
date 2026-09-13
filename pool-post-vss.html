@@ -1,7 +1,103 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>NOVARA - Pool Post-VSS</title><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="novara-ui-standard.css?v=1"><style>.vss-card{background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:20px;margin-bottom:18px}.vss-card h3{margin:0 0 14px}.vss-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:14px 20px}.vss-grid label{font-size:18px;font-weight:700;color:#000}.vss-grid input,.vss-grid select,.vss-grid textarea{display:block;width:100%;box-sizing:border-box;margin-top:5px;min-height:46px;font-size:18px;color:#000;padding:8px}.vss-wide{grid-column:1/-1}.vss-actions{display:flex;gap:12px;flex-wrap:wrap}.existing{background:#eef6fb}.status{font-size:17px;font-weight:700;color:#000}@media(max-width:800px){.vss-grid{grid-template-columns:1fr}}</style></head>
-<body data-page="pool-post-vss"><div class="dashboard-layout"><aside class="sidebar" id="sidebar-root"></aside><main class="main-content"><header class="topbar"><div><h2>Pool Post-VSS</h2><p>Enter information collected after the Virtual Site Survey</p></div><div id="user-profile-root"></div></header>
-<section class="vss-card existing"><h3>Existing Lead / Site Information</h3><div class="vss-grid"><label>Lead<select id="leadId"><option value="">Select Lead</option></select></label><label>Site Name<input id="siteName" readonly></label><label>Company Name<input id="companyName" readonly></label><label>Contact Name<input id="contactName" readonly></label><label>Phone<input id="contactPhone" readonly></label><label>Email<input id="contactEmail" readonly></label><label>Management Company<input id="mgmtCompany" readonly></label><label>Site ID<input id="siteId" readonly></label></div></section>
-<form id="vssForm"><section class="vss-card"><h3>VSS Information</h3><div class="vss-grid"><label>VSS Date<input type="date" id="vssDate"></label><label>VSS Completed By<input id="vssCompletedBy"></label><label>Pool Name / ID<input id="poolNameId"></label><label>Pool Type<input id="poolType"></label><label>Pool Length (ft)<input type="number" step="0.1" id="poolLengthFt"></label><label>Pool Width (ft)<input type="number" step="0.1" id="poolWidthFt"></label><label>Pool Surface Area (sq ft)<input type="number" step="0.1" id="poolSurfaceAreaSqFt"></label><label>Pool Volume (gallons)<input type="number" step="1" id="poolVolumeGallons"></label><label>Current Pool Setpoint (°F)<input type="number" step="0.1" id="currentPoolSetpointF"></label><label>Observed Pool Temp (°F)<input type="number" step="0.1" id="observedPoolTempF"></label><label>Normal Open Time<input type="time" id="poolOpenTime"></label><label>Normal Close Time<input type="time" id="poolCloseTime"></label><label>Operating Days<input id="operatingDays"></label><label>Existing Pool Control<input id="existingControl"></label></div></section>
-<section class="vss-card"><h3>Existing Heater Information</h3><div class="vss-grid"><label>Heater Manufacturer<input id="heaterManufacturer"></label><label>Heater Model<input id="heaterModel"></label><label>Heater Quantity<input type="number" step="1" id="heaterQuantity"></label><label>BTU Input / Heater<input type="number" step="1" id="heaterBTUInput"></label><label>Total Connected BTU<input type="number" step="1" id="totalConnectedBTU"></label><label>Fuel<input id="fuel" value="Natural Gas"></label><label class="vss-wide">Heater / Equipment Notes<textarea id="heaterNotes" rows="3"></textarea></label></div></section>
-<section class="vss-card"><h3>Review / Program Status</h3><div class="vss-grid"><label>VSS Status<select id="vssStatus"><option>Complete</option><option>Needs Information</option><option>Revisit</option></select></label><label>Program Eligibility<select id="programEligibility"><option>Pending</option><option>Eligible</option><option>Not Eligible</option></select></label><label>Customer Approval<select id="customerApprovalStatus"><option>Pending</option><option>Verbal Approval</option><option>Approved</option><option>Declined</option></select></label><label class="vss-wide">VSS Notes / Observations<textarea id="vssNotes" rows="5"></textarea></label></div></section><div class="vss-actions"><button class="primary-btn" type="submit">Save Post-VSS</button><button class="secondary-btn" type="button" id="printBtn">Print Form</button></div><p id="vssStatusMessage" class="status" aria-live="polite"></p></form></main></div><script src="api-config.js"></script><script src="auth.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="pool-post-vss.js?v=1"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>NOVARA - Pool Post-VSS</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="novara-ui-standard.css?v=1">
+  <style>
+    .vss-card{background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:20px;margin-bottom:18px}.vss-card h3{margin:0 0 14px}.vss-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:14px 20px}.vss-grid label{font-size:18px;font-weight:700;color:#000}.vss-grid input,.vss-grid select,.vss-grid textarea{display:block;width:100%;box-sizing:border-box;margin-top:5px;min-height:46px;font-size:18px;color:#000;padding:8px}.vss-wide{grid-column:1/-1}.vss-actions{display:flex;gap:12px;flex-wrap:wrap}.existing{background:#eef6fb}.status{font-size:17px;font-weight:700;color:#000}.print-sheet{display:none}.print-line{min-height:24px;margin:3px 0}.print-section{font-weight:700;background:#e6eef5;padding:4px 6px;margin-top:8px}.print-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 18px}.print-title{text-align:center;font-size:18px;font-weight:700}.print-subtitle{text-align:center;font-size:12px;font-weight:700;margin-bottom:8px}
+    @media(max-width:800px){.vss-grid{grid-template-columns:1fr}}
+    @media print{
+      body{background:#fff!important;color:#000!important;font-family:Arial,sans-serif!important;font-size:10pt!important}.sidebar,.topbar,.screen-only,.vss-card,#vssStatusMessage{display:none!important}.dashboard-layout,.main-content{display:block!important;width:100%!important;min-height:0!important;margin:0!important;padding:0!important}.print-sheet{display:block!important;width:100%;max-width:7.5in;margin:0 auto}.print-grid{grid-template-columns:1fr 1fr}.print-section{background:#e6eef5!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.print-notes{line-height:1.65}.print-footer{margin-top:8px;font-size:9pt}@page{size:letter;margin:.4in}}
+  </style>
+</head>
+<body data-page="pool-post-vss">
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar-root"></aside>
+  <main class="main-content">
+    <header class="topbar"><div><h2>Pool Post-VSS</h2><p>POST-VIRTUAL SITE SURVEY (VSS)</p></div><div id="user-profile-root"></div></header>
+
+    <div class="screen-only">
+      <section class="vss-card existing"><h3>A. Existing Lead / Site Information — Prefill From NOVARA</h3><div class="vss-grid">
+        <label>Lead<select id="leadId"><option value="">Select Lead</option></select></label><label>Site ID<input id="siteId" readonly></label>
+        <label>Company Name<input id="companyName" readonly></label><label>Site Name<input id="siteName" readonly></label>
+        <label>Address<input id="siteAddress" readonly></label><label>City / State / ZIP<input id="cityStateZip" readonly></label>
+        <label>Contact<input id="contactName" readonly></label><label>Phone<input id="contactPhone" readonly></label>
+        <label>Email<input id="contactEmail" readonly></label><label>Management Co.<input id="mgmtCompany" readonly></label>
+      </div></section>
+
+      <form id="vssForm">
+        <section class="vss-card"><h3>B. Virtual Site Survey</h3><div class="vss-grid">
+          <label>VSS Date<input type="date" id="vssDate"></label><label>Completed By<input id="vssCompletedBy"></label>
+          <label>Pool Name / ID<input id="poolNameId"></label><label>Pool Type<input id="poolType"></label>
+          <label>Pool Length (ft)<input type="number" step="0.1" id="poolLengthFt"></label><label>Pool Width (ft)<input type="number" step="0.1" id="poolWidthFt"></label>
+          <label>Pool Surface Area (sq ft)<input type="number" step="0.1" id="poolSurfaceAreaSqFt"></label><label>Pool Volume (gallons)<input type="number" step="1" id="poolVolumeGallons"></label>
+          <label>Current Setpoint (°F)<input type="number" step="0.1" id="currentPoolSetpointF"></label><label>Observed Pool Temp (°F)<input type="number" step="0.1" id="observedPoolTempF"></label>
+          <label>Open Time<input type="time" id="poolOpenTime"></label><label>Close Time<input type="time" id="poolCloseTime"></label>
+          <label>Operating Days<input id="operatingDays"></label><label>Existing Pool Control<input id="existingControl"></label>
+        </div></section>
+
+        <section class="vss-card"><h3>C. Existing Heater Information</h3><div class="vss-grid">
+          <label>Heater Manufacturer<input id="heaterManufacturer"></label><label>Heater Model<input id="heaterModel"></label>
+          <label>Heater Quantity<input type="number" step="1" id="heaterQuantity"></label><label>BTU Input / Heater<input type="number" step="1" id="heaterBTUInput"></label>
+          <label>Total Connected BTU<input type="number" step="1" id="totalConnectedBTU"></label><label>Fuel<select id="fuel"><option>Natural Gas</option><option>Other</option></select></label>
+          <label class="vss-wide">Heater / Equipment Notes<textarea id="heaterNotes" rows="3"></textarea></label>
+        </div></section>
+
+        <section class="vss-card"><h3>D. VSS Status</h3><div class="vss-grid">
+          <label>VSS<select id="vssStatus"><option>Complete</option><option>Needs Information</option><option>Revisit</option></select></label>
+          <label>Eligibility<select id="programEligibility"><option>Pending</option><option>Eligible</option><option>Not Eligible</option></select></label>
+          <label>Customer Approval<select id="customerApprovalStatus"><option>Pending</option><option>Verbal</option><option>Approved</option><option>Declined</option></select></label>
+          <label>More Information Required<select id="moreInformationRequired"><option>No</option><option>Yes</option></select></label>
+        </div></section>
+
+        <section class="vss-card"><h3>E. VSS Notes / Observations</h3><div class="vss-grid"><label class="vss-wide">Notes<textarea id="vssNotes" rows="6"></textarea></label></div></section>
+        <div class="vss-actions"><button class="primary-btn" type="submit">Save Post-VSS</button><button class="secondary-btn" type="button" id="printBtn">Print VSS Form</button></div>
+        <p id="vssStatusMessage" class="status" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <section class="print-sheet" id="printSheet">
+      <div class="print-title">NOVARA™ POOL</div>
+      <div class="print-title">POST-VIRTUAL SITE SURVEY (VSS)</div>
+      <div class="print-subtitle">PRINT FORM — Existing lead/site information is prefilled from NOVARA</div>
+      <div class="print-section">A. EXISTING LEAD / SITE INFORMATION — PREFILL FROM NOVARA</div>
+      <div class="print-grid">
+        <div class="print-line">Lead ID: [<span data-print="leadId"></span>]</div><div class="print-line">Site ID: [<span data-print="siteId"></span>]</div>
+        <div class="print-line">Company Name: [<span data-print="companyName"></span>]</div><div class="print-line">Site Name: [<span data-print="siteName"></span>]</div>
+        <div class="print-line">Address: [<span data-print="siteAddress"></span>]</div><div class="print-line">City / State / ZIP: [<span data-print="cityStateZip"></span>]</div>
+        <div class="print-line">Contact: [<span data-print="contactName"></span>]</div><div class="print-line">Phone: [<span data-print="contactPhone"></span>]</div>
+        <div class="print-line">Email: [<span data-print="contactEmail"></span>]</div><div class="print-line">Management Co.: [<span data-print="mgmtCompany"></span>]</div>
+      </div>
+      <div class="print-section">B. VIRTUAL SITE SURVEY</div>
+      <div class="print-grid">
+        <div class="print-line">VSS Date: [<span data-print="vssDate"></span>]</div><div class="print-line">Completed By: [<span data-print="vssCompletedBy"></span>]</div>
+        <div class="print-line">Pool Name / ID: [<span data-print="poolNameId"></span>]</div><div class="print-line">Pool Type: [<span data-print="poolType"></span>]</div>
+        <div class="print-line">Pool Length: [<span data-print="poolLengthFt"></span>] ft</div><div class="print-line">Pool Width: [<span data-print="poolWidthFt"></span>] ft</div>
+        <div class="print-line">Pool Surface Area: [<span data-print="poolSurfaceAreaSqFt"></span>] sq ft</div><div class="print-line">Pool Volume: [<span data-print="poolVolumeGallons"></span>] gallons</div>
+        <div class="print-line">Current Setpoint: [<span data-print="currentPoolSetpointF"></span>] °F</div><div class="print-line">Observed Pool Temp: [<span data-print="observedPoolTempF"></span>] °F</div>
+        <div class="print-line">Open Time: [<span data-print="poolOpenTime"></span>]</div><div class="print-line">Close Time: [<span data-print="poolCloseTime"></span>]</div>
+        <div class="print-line">Operating Days: [<span data-print="operatingDays"></span>]</div><div class="print-line">Existing Pool Control: [<span data-print="existingControl"></span>]</div>
+      </div>
+      <div class="print-section">C. EXISTING HEATER INFORMATION</div>
+      <div class="print-grid">
+        <div class="print-line">Heater Manufacturer: [<span data-print="heaterManufacturer"></span>]</div><div class="print-line">Heater Model: [<span data-print="heaterModel"></span>]</div>
+        <div class="print-line">Heater Quantity: [<span data-print="heaterQuantity"></span>]</div><div class="print-line">BTU Input / Heater: [<span data-print="heaterBTUInput"></span>] BTU/hr</div>
+        <div class="print-line">Total Connected BTU: [<span data-print="totalConnectedBTU"></span>]</div><div class="print-line">Fuel: [<span data-print="fuel"></span>]</div>
+      </div>
+      <div class="print-line">Heater / Equipment Notes: [<span data-print="heaterNotes"></span>]</div>
+      <div class="print-section">D. VSS STATUS</div>
+      <div class="print-grid">
+        <div class="print-line">VSS: [<span data-print="vssStatus"></span>]</div><div class="print-line">Eligibility: [<span data-print="programEligibility"></span>]</div>
+        <div class="print-line">Customer Approval: [<span data-print="customerApprovalStatus"></span>]</div><div class="print-line">More Information Required: [<span data-print="moreInformationRequired"></span>]</div>
+      </div>
+      <div class="print-section">E. VSS NOTES / OBSERVATIONS</div>
+      <div class="print-notes"><span data-print="vssNotes"></span><br>________________________________________________________________________________<br>________________________________________________________________________________<br>________________________________________________________________________________<br>________________________________________________________________________________</div>
+      <div class="print-footer"><strong>NOVARA ENTRY:</strong> Enter the handwritten information into the Pool Post-VSS screen. Create one record for each pool.</div>
+    </section>
+  </main>
+</div>
+<script src="api-config.js"></script><script src="auth.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="pool-post-vss.js?v=2"></script>
+</body></html>
