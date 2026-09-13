@@ -43,8 +43,26 @@
     });
   }
 
+  function googleErrorMessage(event) {
+    var candidates = [
+      event && event.message,
+      event && event.error && event.error.message,
+      event && event.detail && event.detail.message,
+      event && event.detail && event.detail.error && event.detail.error.message,
+      event && event.status,
+      event && event.detail && event.detail.status
+    ];
+    for (var i = 0; i < candidates.length; i++) {
+      if (candidates[i]) return String(candidates[i]);
+    }
+    try {
+      if (event && event.detail) return JSON.stringify(event.detail);
+    } catch (_) {}
+    return "Google Places request failed. Check billing, API restrictions, and website restrictions.";
+  }
+
   global.gm_authFailure = function () {
-    showGlobalError("Google address lookup could not authenticate. Check the Google API key restrictions and enabled APIs.");
+    showGlobalError("Google Maps authentication failed. Check the API key website and API restrictions.");
     global.NovaraAddressAutocomplete = { configured: false, error: "Google Maps authentication failed" };
   };
 
@@ -142,13 +160,13 @@
         statusFor(original, "Address selected from Google", false);
       } catch (err) {
         console.error("NOVARA address lookup failed", err);
-        statusFor(original, "Google found the address, but NOVARA could not load its details.", true);
+        statusFor(original, "Google found the address, but NOVARA could not load its details: " + (err && err.message ? err.message : "unknown error"), true);
       }
     });
 
     widget.addEventListener("gmp-error", function (event) {
       console.error("NOVARA address lookup error", event);
-      statusFor(original, "Google address lookup returned an error.", true);
+      statusFor(original, "Google error: " + googleErrorMessage(event), true);
     });
 
     var container = original.closest(".modal-backdrop, .inline-create-panel");
