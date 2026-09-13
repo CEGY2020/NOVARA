@@ -1,0 +1,122 @@
+(function (global) {
+  "use strict";
+
+  var key = String(global.NOVARA_GOOGLE_MAPS_API_KEY || "").trim();
+  var targets = [
+    { address: "lead-new-site-address", city: "lead-new-site-city", state: "lead-new-site-state", zip: "lead-new-site-zip" },
+    { address: "field-address", city: "field-city", state: "field-state", zip: "field-zip" }
+  ];
+
+  function loadMaps() {
+    if (global.google && global.google.maps && typeof global.google.maps.importLibrary === "function") return Promise.resolve();
+    if (!key) return Promise.reject(new Error("Google Maps API key is not configured."));
+    if (global.__novaraMapsPromise) return global.__novaraMapsPromise;
+    global.__novaraMapsPromise = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&loading=async&libraries=places&v=weekly";
+      script.async = true;
+      script.onload = function () { resolve(); };
+      script.onerror = function () { reject(new Error("Google Maps JavaScript API could not load.")); };
+      document.head.appendChild(script);
+    });
+    return global.__novaraMapsPromise;
+  }
+
+  function setValue(id, value) {
+    var node = document.getElementById(id);
+    if (!node) return;
+    node.value = value || "";
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function parseAddress(components) {
+    var out = { address: "", city: "", state: "", zip: "" };
+    var streetNumber = "", route = "", zipBase = "", zipSuffix = "";
+    (components || []).forEach(function (component) {
+      var types = component.types || [];
+      if (types.indexOf("street_number") !== -1) streetNumber = component.longText || "";
+      if (types.indexOf("route") !== -1) route = component.shortText || component.longText || "";
+      if (types.indexOf("locality") !== -1) out.city = component.longText || "";
+      if (!out.city && types.indexOf("postal_town") !== -1) out.city = component.longText || "";
+      if (!out.city && types.indexOf("sublocality_level_1") !== -1) out.city = component.longText || "";
+      if (types.indexOf("administrative_area_level_1") !== -1) out.state = component.shortText || component.longText || "";
+      if (types.indexOf("postal_code") !== -1) zipBase = component.longText || "";
+      if (types.indexOf("postal_code_suffix") !== -1) zipSuffix = component.longText || "";
+    });
+    out.address = [streetNumber, route].filter(Boolean).join(" ").trim();
+    out.zip = zipBase + (zipSuffix ? "-" + zipSuffix : "");
+    return out;
+  }
+
+  async function setupTarget(cfg, PlaceAutocompleteElement) {
+    var original = document.getElementById(cfg.address);
+    if (!original || original.dataset.novaraAutocompleteReady === "1") return;
+
+    var widget = new PlaceAutocompleteElement({ includedRegionCodes: ["us"] });
+    widget.placeholder = "Start typing an address...";
+    widget.value = original.value || "";
+    widget.style.display = "block";
+    widget.style.width = "100%";
+    widget.style.boxSizing = "border-box";
+    widget.style.minHeight = "42px";
+    widget.dataset.novaraFor = cfg.address;
+
+    original.parentNode.insertBefore(widget, original);
+    original.style.display = "none";
+    original.dataset.novaraAutocompleteReady = "1";
+
+    widget.addEventListener("gmp-select", async function (event) {
+      try {
+        var prediction = event.placePrediction;
+        if (!prediction) return;
+        var place = prediction.toPlace();
+        await place.fetchFields({ fields: ["addressComponents", "formattedAddress"] });
+        var parsed = parseAddress(place.addressComponents);
+        if (!parsed.address && place.formattedAddress) parsed.address = place.formattedAddress.split(",")[0].trim();
+        setValue(cfg.address, parsed.address);
+        setValue(cfg.city, parsed.city);
+        setValue(cfg.state, parsed.state);
+        setValue(cfg.zip, parsed.zip);
+        widget.value = parsed.address || place.formattedAddress || widget.value;
+      } catch (err) {
+        console.error("NOVARA address lookup failed", err);
+      }
+    });
+
+    widget.addEventListener("gmp-error", function (event) {
+      console.error("NOVARA address lookup error", event);
+    });
+
+    var container = original.closest(".modal-backdrop, .inline-create-panel");
+    if (container && typeof MutationObserver !== "undefined") {
+      new MutationObserver(function () {
+        if (!container.hidden) {
+          setTimeout(function () { widget.value = original.value || ""; }, 0);
+        }
+      }).observe(container, { attributes: true, attributeFilter: ["hidden"] });
+    }
+  }
+
+  function init() {
+    if (!key) {
+      global.NovaraAddressAutocomplete = { configured: false };
+      return;
+    }
+    loadMaps()
+      .then(function () { return global.google.maps.importLibrary("places"); })
+      .then(function (places) {
+        var PlaceAutocompleteElement = places.PlaceAutocompleteElement || global.google.maps.places.PlaceAutocompleteElement;
+        if (!PlaceAutocompleteElement) throw new Error("PlaceAutocompleteElement is unavailable.");
+        return Promise.all(targets.map(function (cfg) { return setupTarget(cfg, PlaceAutocompleteElement); }));
+      })
+      .then(function () { global.NovaraAddressAutocomplete = { configured: true }; })
+      .catch(function (err) {
+        console.error("NOVARA address autocomplete was not initialized", err);
+        global.NovaraAddressAutocomplete = { configured: false, error: err.message };
+      });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})(window);
