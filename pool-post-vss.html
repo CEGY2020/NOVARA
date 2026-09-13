@@ -22,6 +22,7 @@
     <div class="screen-only">
       <section class="vss-card existing"><h3>A. Existing Lead / Site Information — Prefill From NOVARA</h3><div class="vss-grid">
         <label>Lead<select id="leadId"><option value="">Select Lead</option></select></label><label>Site ID<input id="siteId" readonly></label>
+        <label>Pool Record<select id="poolRecord"><option value="">New Pool</option></select></label><label>Record Status<input id="poolRecordStatus" value="New Pool" readonly></label>
         <label>Company Name<input id="companyName" readonly></label><label>Site Name<input id="siteName" readonly></label>
         <label>Address<input id="siteAddress" readonly></label><label>City / State / ZIP<input id="cityStateZip" readonly></label>
         <label>Contact<input id="contactName" readonly></label><label>Phone<input id="contactPhone" readonly></label>
@@ -31,7 +32,7 @@
       <form id="vssForm">
         <section class="vss-card"><h3>B. Virtual Site Survey</h3><div class="vss-grid">
           <label>VSS Date<input type="date" id="vssDate"></label><label>Completed By<input id="vssCompletedBy"></label>
-          <label>Pool Name / ID<input id="poolNameId"></label><label>Pool Type<input id="poolType"></label>
+          <label>Pool Name / ID<input id="poolNameId" required></label><label>Pool Type<input id="poolType"></label>
           <label>Pool Length (ft)<input type="number" step="0.1" id="poolLengthFt"></label><label>Pool Width (ft)<input type="number" step="0.1" id="poolWidthFt"></label>
           <label>Pool Surface Area (sq ft)<input type="number" step="0.1" id="poolSurfaceAreaSqFt"></label><label>Pool Volume (gallons)<input type="number" step="1" id="poolVolumeGallons"></label>
           <label>Current Setpoint (°F)<input type="number" step="0.1" id="currentPoolSetpointF"></label><label>Observed Pool Temp (°F)<input type="number" step="0.1" id="observedPoolTempF"></label>
@@ -99,5 +100,5 @@
     </section>
   </main>
 </div>
-<script src="api-config.js"></script><script src="auth.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="pool-post-vss.js?v=2"></script>
+<script src="api-config.js"></script><script src="auth.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="pool-post-vss.js?v=3"></script>
 </body></html>
