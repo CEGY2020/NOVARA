@@ -49,6 +49,45 @@
   display: none !important;
 }
 
+/* Company + Add New shares a row with the input. When its create panel opens,
+   force the panel onto its own full-width line so it never gets squeezed into
+   a narrow third column beside the button. */
+#lead-add-company-btn {
+  flex: 0 0 auto;
+}
+
+#lead-add-company-btn ~ #lead-new-company-panel,
+#lead-new-company-panel {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.form-field:has(#lead-add-company-btn) .inline-picker-row {
+  flex-wrap: wrap;
+}
+
+#lead-new-company-panel .form-grid {
+  display: block;
+}
+
+#lead-new-company-panel .form-field input {
+  width: 100%;
+}
+
+#lead-new-company-panel .inline-create-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+#lead-new-company-panel .primary-btn,
+#lead-new-company-panel .secondary-btn {
+  white-space: nowrap;
+}
+
 #leads-tbody tr[hidden],
 .pipeline-card[hidden] {
   display: none !important;
