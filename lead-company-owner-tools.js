@@ -26,8 +26,9 @@
     return "OWN" + String(max + 1).padStart(3, "0");
   }
 
-  /* COMPANY NAME: make the existing field a real lookup/autocomplete while
-     preserving the same field ID/value expected by leads.js. */
+  /* COMPANY NAME: existing companies are derived from saved leads. Keep the
+     lookup, but make + Add New open a visible inline entry panel so the button
+     has an obvious, complete workflow instead of only clearing the field. */
   var companyList = document.createElement("datalist");
   companyList.id = "lead-company-options";
   companyInput.setAttribute("list", companyList.id);
@@ -52,6 +53,19 @@
   companyHint.textContent = "Type to look up an existing company, or click + Add New.";
   companyInput.parentNode.appendChild(companyHint);
 
+  var companyPanel = document.createElement("div");
+  companyPanel.id = "lead-new-company-panel";
+  companyPanel.className = "inline-create-panel";
+  companyPanel.hidden = true;
+  companyPanel.innerHTML =
+    '<strong>Add New Company</strong>' +
+    '<div class="form-grid" style="margin-top:12px">' +
+      '<label class="form-field"><span>Company Name <em>*</em></span><input id="lead-new-company-name" maxlength="160" autocomplete="organization"></label>' +
+    '</div>' +
+    '<div class="inline-create-actions"><button type="button" class="primary-btn" id="lead-use-new-company">Use New Company</button><button type="button" class="secondary-btn" id="lead-cancel-new-company">Cancel</button></div>' +
+    '<p id="lead-new-company-status" class="field-hint" aria-live="polite"></p>';
+  companyInput.parentNode.appendChild(companyPanel);
+
   function loadCompanies() {
     if (typeof NovaraApi.getLeads !== "function") return;
     NovaraApi.getLeads().then(function (response) {
@@ -71,20 +85,44 @@
       }).join("");
       companyHint.textContent = names.length
         ? names.length + " existing compan" + (names.length === 1 ? "y" : "ies") + " available. Type to search or click + Add New."
-        : "No existing companies yet. Click + Add New and type the company name.";
+        : "No existing companies yet. Click + Add New.";
     }).catch(function () {
       companyHint.textContent = "Type a company name, or click + Add New.";
     });
   }
 
   addCompanyBtn.addEventListener("click", function () {
-    companyInput.value = "";
-    companyInput.removeAttribute("list");
-    companyHint.textContent = "Enter the new company name. It will be available in the lookup after this lead is saved.";
-    companyInput.focus();
+    companyPanel.hidden = false;
+    var input = document.getElementById("lead-new-company-name");
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+    var status = document.getElementById("lead-new-company-status");
+    if (status) status.textContent = "Enter the new company name, then click Use New Company.";
   });
-  companyInput.addEventListener("blur", function () {
-    if (!companyInput.hasAttribute("list")) companyInput.setAttribute("list", companyList.id);
+
+  document.getElementById("lead-cancel-new-company").addEventListener("click", function () {
+    companyPanel.hidden = true;
+    var status = document.getElementById("lead-new-company-status");
+    if (status) status.textContent = "";
+  });
+
+  document.getElementById("lead-use-new-company").addEventListener("click", function () {
+    var nameEl = document.getElementById("lead-new-company-name");
+    var statusEl = document.getElementById("lead-new-company-status");
+    var name = nameEl ? nameEl.value.trim() : "";
+    if (!name) {
+      if (statusEl) statusEl.textContent = "Company Name is required.";
+      if (nameEl) nameEl.focus();
+      return;
+    }
+    companyInput.value = name;
+    companyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    companyInput.dispatchEvent(new Event("change", { bubbles: true }));
+    companyPanel.hidden = true;
+    if (statusEl) statusEl.textContent = "";
+    companyHint.textContent = "New company selected. Save the lead to add it to the company lookup.";
   });
 
   /* OWNER: add + Add New beside the existing owner lookup and create a real
