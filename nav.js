@@ -6,6 +6,7 @@
     { id: "systems", label: "Systems", href: "systems.html" },
     { id: "owners", label: "Owners", href: "owners.html" },
     { id: "mgmt-companies", label: "Management Companies", href: "mgmt-companies.html" },
+    { id: "master-data-import", label: "Master Data Upload", href: "master-data-import.html" },
     { id: "leads", label: "Leads", href: "leads.html" },
     { id: "pool-post-vss", label: "Pool Post-VSS", href: "pool-post-vss.html" },
     { id: "users", label: "Users", href: "users.html" },
