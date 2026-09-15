@@ -12,7 +12,7 @@
     el.classList.toggle("is-error", Boolean(error));
   }
   function escapeHtml(v) {
-    return text(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    return text(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#39;");
   }
   function parseCsv(input) {
     var rows=[], row=[], field="", quotes=false, i=0;
@@ -20,11 +20,11 @@
     while (i < input.length) {
       var ch=input[i];
       if (quotes) {
-        if (ch==='"' && input[i+1]==='"') { field+='"'; i+=2; continue; }
-        if (ch==='"') { quotes=false; i++; continue; }
+        if (ch==='\"' && input[i+1]==='\"') { field+='\"'; i+=2; continue; }
+        if (ch==='\"') { quotes=false; i++; continue; }
         field+=ch; i++; continue;
       }
-      if (ch==='"') { quotes=true; i++; }
+      if (ch==='\"') { quotes=true; i++; }
       else if (ch===',') { row.push(field); field=""; i++; }
       else if (ch==='\r' || ch==='\n') { row.push(field); field=""; rows.push(row); row=[]; if(ch==='\r'&&input[i+1]==='\n') i+=2; else i++; }
       else { field+=ch; i++; }
@@ -57,6 +57,8 @@
     items.forEach(function(item){ chain=chain.then(function(){ return worker(item).then(function(v){results.push({ok:true,item:item,value:v});}).catch(function(e){results.push({ok:false,item:item,error:e});}); }); });
     return chain.then(function(){return results;});
   }
+  function isOwnerType(type) { return /^owner$/i.test(text(type)); }
+  function isMgmtType(type) { return /^(management company|management|mgmt)$/i.test(text(type)); }
 
   function previewCompanies() {
     var file=$('companies-file').files&&$('companies-file').files[0];
@@ -65,7 +67,7 @@
       var usable=[], skipped=[];
       rows.forEach(function(r){
         var type=text(r.CompanyType||r.RelationshipType);
-        if(/^owner$/i.test(type)||/^management company$/i.test(type)||/^management$/i.test(type)) usable.push(r); else skipped.push(r);
+        if(isOwnerType(type)||isMgmtType(type)) usable.push(r); else skipped.push(r);
       });
       state.companies={rows:rows,usable:usable,skipped:skipped};
       $('companies-preview').innerHTML=tablePreview(rows,['CompanyName','CompanyType','RelationshipType','ProgramsSeen','ExampleSite']);
@@ -89,7 +91,7 @@
       var mgmtIds=mgmts.map(function(x){return x.mgmtCompanyId;});
       return processSequential(state.companies.usable,function(r){
         var name=text(r.CompanyName); var type=text(r.CompanyType||r.RelationshipType);
-        if(/^owner$/i.test(type)){
+        if(isOwnerType(type)){
           if(ownerNames[norm(name)]) return Promise.resolve({skipped:true});
           var id=nextId('OWN',ownerIds); ownerIds.push(id); ownerNames[norm(name)]=true;
           return api.createOwner({OwnerID:id,Name:name,Address:text(r.Address),City:text(r.City),State:text(r.State),Zip:text(r.Zip),ContactName:text(r.ContactName),ContactEmail:text(r.Email||r.ContactEmail),ContactPhone:text(r.Phone||r.ContactPhone),Notes:text(r.Notes),Status:'Active'});
