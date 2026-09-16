@@ -1,6 +1,6 @@
 name: Deploy NOVARA API
 
-# Deploys Lambda + API Gateway for /api/readings and /api/sites, then updates
+# Deploys Lambda + API Gateway for NOVARA JSON APIs, then updates
 # api-config.js so static hosts (Amplify / GitHub Pages) call real JSON APIs.
 
 on:
@@ -10,6 +10,7 @@ on:
       - "template.yaml"
       - "lambda_function.py"
       - "novara_api.py"
+      - "master_data_api.py"
       - "sales_reports.py"
       - "requirements.txt"
       - "scripts/deploy_novara_api.py"
@@ -35,6 +36,8 @@ jobs:
       NOVARA_SYSTEMS_TABLE: ${{ vars.NOVARA_SYSTEMS_TABLE || 'NOVARASystems' }}
       NOVARA_OWNERS_TABLE: ${{ vars.NOVARA_OWNERS_TABLE || 'NOVARAOwners' }}
       NOVARA_MGMT_COMPANIES_TABLE: ${{ vars.NOVARA_MGMT_COMPANIES_TABLE || 'NOVARAMgmtCompanies' }}
+      NOVARA_COMPANIES_TABLE: ${{ vars.NOVARA_COMPANIES_TABLE || 'NOVARACompanies' }}
+      NOVARA_CONTACTS_TABLE: ${{ vars.NOVARA_CONTACTS_TABLE || 'NOVARAContacts' }}
       NOVARA_LEADS_TABLE: ${{ vars.NOVARA_LEADS_TABLE || 'NOVARALeads' }}
       NOVARA_USERS_TABLE: ${{ vars.NOVARA_USERS_TABLE || 'NOVARAUsers' }}
       NOVARA_SETTINGS_TABLE: ${{ vars.NOVARA_SETTINGS_TABLE || 'NOVARASettings' }}
