@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/photos, /api/owners, /api/mgmt-companies, /api/leads, /api/users, /api/settings/utilityapi, /api/utility-bills)
+Description: NOVARA DynamoDB API for Amplify (/api/readings, /api/sites, /api/systems, /api/photos, /api/owners, /api/mgmt-companies, /api/master-data, /api/leads, /api/users, /api/settings/utilityapi, /api/utility-bills)
 
 Parameters:
   ReadingsTableName:
@@ -21,6 +21,12 @@ Parameters:
   MgmtCompaniesTableName:
     Type: String
     Default: NOVARAMgmtCompanies
+  CompaniesTableName:
+    Type: String
+    Default: NOVARACompanies
+  ContactsTableName:
+    Type: String
+    Default: NOVARAContacts
   LeadsTableName:
     Type: String
     Default: NOVARALeads
@@ -91,7 +97,7 @@ Resources:
       FunctionName: novara-api
       Handler: lambda_function.handler
       CodeUri: .
-      Description: NOVARA readings/sites/systems/photos/owners/mgmt-companies/leads/users/settings/utility-bills JSON API backed by DynamoDB + S3
+      Description: NOVARA readings/sites/systems/photos/owners/mgmt-companies/master-data/leads/users/settings/utility-bills JSON API backed by DynamoDB + S3
       Environment:
         Variables:
           NOVARA_READINGS_TABLE: !Ref ReadingsTableName
@@ -101,6 +107,8 @@ Resources:
           NOVARA_PHOTOS_BUCKET: !Ref NovaraPhotosBucket
           NOVARA_OWNERS_TABLE: !Ref OwnersTableName
           NOVARA_MGMT_COMPANIES_TABLE: !Ref MgmtCompaniesTableName
+          NOVARA_COMPANIES_TABLE: !Ref CompaniesTableName
+          NOVARA_CONTACTS_TABLE: !Ref ContactsTableName
           NOVARA_LEADS_TABLE: !Ref LeadsTableName
           NOVARA_USERS_TABLE: !Ref UsersTableName
           NOVARA_PREAPPROVED_TABLE: !Ref PreapprovedTableName
@@ -130,6 +138,8 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PhotosTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CompaniesTableName}
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ContactsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}
@@ -141,6 +151,8 @@ Resources:
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PhotosTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OwnersTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MgmtCompaniesTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CompaniesTableName}/index/*
+                - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ContactsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${LeadsTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${UsersTableName}/index/*
                 - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PreapprovedTableName}/index/*
@@ -496,6 +508,12 @@ Outputs:
   MgmtCompaniesEndpoint:
     Description: Management companies endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/mgmt-companies"
+  CompaniesEndpoint:
+    Description: Permanent company lookup/master-data endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/master-data/companies"
+  ContactsEndpoint:
+    Description: Permanent contact lookup/master-data endpoint
+    Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/master-data/contacts"
   LeadsEndpoint:
     Description: Leads endpoint
     Value: !Sub "https://${NovaraHttpApi}.execute-api.${AWS::Region}.amazonaws.com/api/leads"
