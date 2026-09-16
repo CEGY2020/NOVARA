@@ -16,23 +16,37 @@
     return "Verify";
   }
 
-  function applyRegionToOpenCompany(){
-    var filter=document.getElementById("utility-filter");
-    var selected=filter?text(filter.value):"";
-    if(!selected)return;
+  function rowHasProgram(row,selectedProgram){
+    if(!selectedProgram)return true;
+    var tags=row.querySelectorAll(".program-tag");
+    for(var i=0;i<tags.length;i++){
+      if(text(tags[i].textContent)===selectedProgram)return true;
+    }
+    return false;
+  }
+
+  function applyFiltersToOpenCompany(){
+    var utilityFilter=document.getElementById("utility-filter");
+    var programFilter=document.getElementById("program-filter");
+    var selectedUtility=utilityFilter?text(utilityFilter.value):"";
+    var selectedProgram=programFilter?text(programFilter.value):"";
+    if(!selectedUtility && !selectedProgram)return;
 
     var siteBody=document.getElementById("detail-sites-body");
     if(!siteBody)return;
     var visibleSiteNames={};
     var visibleSites=0;
     var totalSites=0;
+
     Array.prototype.forEach.call(siteBody.querySelectorAll("tr"),function(row){
       var cells=row.querySelectorAll("td");
       if(cells.length<5)return;
       totalSites++;
       var siteName=text(cells[0].textContent);
       var city=text(cells[4].textContent);
-      var match=regionForCity(city)===selected;
+      var utilityMatch=!selectedUtility || regionForCity(city)===selectedUtility;
+      var programMatch=rowHasProgram(row,selectedProgram);
+      var match=utilityMatch && programMatch;
       row.style.display=match?"":"none";
       if(match){visibleSites++;visibleSiteNames[norm(siteName)]=true;}
     });
@@ -52,10 +66,15 @@
       });
     }
 
+    var filterLabel=[];
+    if(selectedProgram)filterLabel.push(selectedProgram);
+    if(selectedUtility)filterLabel.push(selectedUtility);
+    var labelText=filterLabel.join(" / ");
+
     var sitesHeading=document.getElementById("sites-heading");
     var contactsHeading=document.getElementById("contacts-heading");
-    if(sitesHeading)sitesHeading.textContent="Linked Sites — "+selected+" ("+visibleSites+" in region / "+totalSites+" total)";
-    if(contactsHeading)contactsHeading.textContent="Linked Contacts — "+selected+" ("+visibleContacts+" in region / "+totalContacts+" total)";
+    if(sitesHeading)sitesHeading.textContent="Linked Sites — "+labelText+" ("+visibleSites+" matching / "+totalSites+" total)";
+    if(contactsHeading)contactsHeading.textContent="Linked Contacts — "+labelText+" ("+visibleContacts+" matching / "+totalContacts+" total)";
 
     var detailFields=document.getElementById("detail-fields");
     if(detailFields){
@@ -63,9 +82,9 @@
         var label=card.querySelector("span"),value=card.querySelector("strong");
         if(!label||!value)return;
         var key=text(label.textContent);
-        if(key==="Utility Region")value.textContent=selected;
-        if(key==="Linked Sites")value.textContent=visibleSites+" in "+selected+" / "+totalSites+" total";
-        if(key==="Linked Contacts")value.textContent=visibleContacts+" in "+selected+" / "+totalContacts+" total";
+        if(key==="Utility Region" && selectedUtility)value.textContent=selectedUtility;
+        if(key==="Linked Sites")value.textContent=visibleSites+" matching / "+totalSites+" total";
+        if(key==="Linked Contacts")value.textContent=visibleContacts+" matching / "+totalContacts+" total";
       });
     }
   }
@@ -73,11 +92,11 @@
   var body=document.getElementById("companies-body");
   if(body){
     body.addEventListener("click",function(event){
-      if(event.target.closest(".company-link"))setTimeout(applyRegionToOpenCompany,0);
+      if(event.target.closest(".company-link"))setTimeout(applyFiltersToOpenCompany,0);
     });
   }
   var utility=document.getElementById("utility-filter");
-  if(utility){
-    utility.addEventListener("change",function(){setTimeout(applyRegionToOpenCompany,0);});
-  }
+  if(utility){utility.addEventListener("change",function(){setTimeout(applyFiltersToOpenCompany,0);});}
+  var program=document.getElementById("program-filter");
+  if(program){program.addEventListener("change",function(){setTimeout(applyFiltersToOpenCompany,0);});}
 })();
