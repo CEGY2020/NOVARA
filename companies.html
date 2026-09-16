@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="dashboard.css">
   <link rel="stylesheet" href="novara-ui-standard.css">
   <style>
-    .companies-toolbar{display:grid;grid-template-columns:minmax(280px,1fr) 180px 180px auto;gap:12px;align-items:end;margin-bottom:18px}
+    .companies-toolbar{display:grid;grid-template-columns:minmax(280px,1fr) 180px 180px 180px 150px auto;gap:12px;align-items:end;margin-bottom:18px}
     .companies-toolbar label{display:flex;flex-direction:column;gap:6px;font-weight:700;color:#000}
     .companies-toolbar input,.companies-toolbar select{width:100%;padding:12px 13px;border:1px solid #b9c8d3;border-radius:8px;background:#fff;color:#000;font-size:16px}
     .companies-summary{margin:8px 0 16px;color:#000;font-size:15px}
@@ -33,8 +33,8 @@
     .subsection .data-table th{background:#dbeaf5!important;color:#000!important;font-weight:700!important}
     .subsection .data-table td{color:#000}
     .muted-black{color:#333}
-    @media(max-width:1050px){.companies-toolbar{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:700px){.companies-toolbar{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
+    @media(max-width:1350px){.companies-toolbar{grid-template-columns:1fr 1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:800px){.companies-toolbar{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body data-page="companies" data-role="aem">
@@ -70,6 +70,19 @@
               <option value="HVAC">HVAC</option>
               <option value="Restaurant">Restaurant</option>
               <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>Utility Region
+            <select id="region-filter">
+              <option value="">All</option>
+              <option value="socalgas">SoCalGas Region</option>
+              <option value="sdge">SDG&amp;E Region</option>
+              <option value="pge">PG&amp;E Region</option>
+            </select>
+          </label>
+          <label>State
+            <select id="state-filter">
+              <option value="">All States</option>
             </select>
           </label>
           <button id="clear-company-search" type="button" class="secondary-btn">Clear</button>
