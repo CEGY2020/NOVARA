@@ -18,17 +18,43 @@
   function rowSearchText(company){
     var cid=companyId(company), mid=masterId(company), sites=companySites(cid), contacts=companyContacts(cid,mid);
     var chunks=[company.CompanyName,company.CompanyID,company.MasterID,company.RelationshipType,company.ExampleSite,programs(company).join(' ')];
-    sites.forEach(function(s){chunks.push(s.SiteName,s.SiteID,s.Address,s.City,s.State,s.Phone,s.CustomerNumber,s.SiteKey);});
+    sites.forEach(function(s){chunks.push(s.SiteName,s.SiteID,s.Address,s.City,s.State,s.Phone,s.CustomerNumber,s.SiteKey,s.UtilityRegion,s.GasRegion,s.Region,s.Utility,s.SourceRefs,s.Source);});
     contacts.forEach(function(c){chunks.push(c.ContactName,c.ContactID,c.SiteName,c.Email,c.Phone);});
     return norm(chunks.join(' '));
   }
   function matchProgram(company,selected){if(!selected)return true;return programs(company).indexOf(selected)!==-1;}
+  function regionText(company){
+    var cid=companyId(company), sites=companySites(cid), values=[company.UtilityRegion,company.GasRegion,company.Region,company.Utility,company.SourceRefs,company.Source];
+    sites.forEach(function(s){values.push(s.UtilityRegion,s.GasRegion,s.Region,s.Utility,s.SourceRefs,s.Source);});
+    return norm(values.join(' ')).replace(/&/g,'and');
+  }
+  function matchRegion(company,selected){
+    if(!selected)return true;
+    var r=regionText(company);
+    if(selected==='socalgas')return r.indexOf('socalgas')!==-1||r.indexOf('southern california gas')!==-1;
+    if(selected==='sdge')return r.indexOf('sdgande')!==-1||r.indexOf('sdge')!==-1||r.indexOf('san diego gas')!==-1;
+    if(selected==='pge')return r.indexOf('pgande')!==-1||r.indexOf('pge')!==-1||r.indexOf('pacific gas')!==-1;
+    return true;
+  }
+  function matchState(company,selected){
+    if(!selected)return true;
+    var cid=companyId(company), sites=companySites(cid);
+    return sites.some(function(s){return text(s.State).toUpperCase()===selected.toUpperCase();});
+  }
+  function populateStates(){
+    var seen={};
+    state.sites.forEach(function(s){var st=text(s.State).toUpperCase();if(st)seen[st]=true;});
+    var list=Object.keys(seen).sort();
+    $("state-filter").innerHTML='<option value="">All States</option>'+list.map(function(st){return '<option value="'+esc(st)+'">'+esc(st)+'</option>';}).join('');
+  }
 
   function render(){
-    var q=norm($("company-search").value), rel=text($("relationship-filter").value), prog=text($("program-filter").value);
+    var q=norm($("company-search").value), rel=text($("relationship-filter").value), prog=text($("program-filter").value), region=text($("region-filter").value), stateFilter=text($("state-filter").value);
     state.filtered=state.companies.filter(function(c){
       if(rel&&text(c.RelationshipType)!==rel)return false;
       if(!matchProgram(c,prog))return false;
+      if(!matchRegion(c,region))return false;
+      if(!matchState(c,stateFilter))return false;
       if(q&&rowSearchText(c).indexOf(q)===-1)return false;
       return true;
     });
@@ -83,6 +109,7 @@
       state.companies=(values[0]&&values[0].companies)||[];
       state.sites=(values[1]&&values[1].sites)||[];
       state.contacts=(values[2]&&values[2].contacts)||[];
+      populateStates();
       render();
     }).catch(function(err){$("companies-status").textContent=err&&err.message?err.message:'Could not load company lookup data.';});
   }
@@ -90,8 +117,10 @@
   $("company-search").addEventListener('input',render);
   $("relationship-filter").addEventListener('change',render);
   $("program-filter").addEventListener('change',render);
+  $("region-filter").addEventListener('change',render);
+  $("state-filter").addEventListener('change',render);
   $("clear-company-search").addEventListener('click',function(){
-    $("company-search").value='';$("relationship-filter").value='';$("program-filter").value='';render();$("company-search").focus();
+    $("company-search").value='';$("relationship-filter").value='';$("program-filter").value='';$("region-filter").value='';$("state-filter").value='';render();$("company-search").focus();
   });
   $("companies-body").addEventListener('click',function(event){var btn=event.target.closest('.company-link');if(btn)showCompany(btn.getAttribute('data-company-id'));});
   $("close-company-detail").addEventListener('click',function(){$("company-detail").hidden=true;});
