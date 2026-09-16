@@ -22,8 +22,31 @@
   var PGE_CITIES=["citrus heights","dublin","emeryville","fremont","fresno","milpitas","oakland","palo alto","pleasant hill","roseville","saint helena","st helena","san francisco","san jose","san lorenzo","san mateo","stockton","sunnyvale","vallejo"];
   var SOCALGAS_CITIES=["anaheim","bakersfield","brea","buena park","burbank","cerritos","chatsworth","chino","city of industry","corona","costa mesa","culver city","cypress","desert hot springs","diamond bar","downey","encino","fountain valley","fullerton","garden grove","gardena","glendale","hawaiian gardens","hawthorne","hermosa beach","hollywood","huntington beach","indio","irvine","la habra","la mirada","la quinta","la verne","laguna woods","lake forest","lakewood","lancaster","long beach","los angeles","marina del rey","menifee","monrovia","montclair","newport beach","newport coast","north hills","north hollywood","northridge","norwalk","ontario","orange","oxnard","palm desert","palm springs","palos verdes peninsula","pasadena","pico rivera","placentia","rancho palos verdes","rancho santa margarita","redondo beach","rosemead","san bernardino","san marino","santa ana","santa monica","seal beach","studio city","temecula","torrance","tustin","tustin ranch","valencia","valley village","van nuys","ventura","w hollywood","west covina","west hollywood","whittier","woodland hills","yorba linda"];
   function inList(city,list){return list.indexOf(cityNorm(city))!==-1;}
-  function siteUtilityRegion(site){var stateCode=text(site.State||site.state).toUpperCase(),city=text(site.City||site.city);if(stateCode&&stateCode!=="CA")return "Verify";if(inList(city,SDGE_CITIES))return "SDG&E";if(inList(city,PGE_CITIES))return "PG&E";if(inList(city,SOCALGAS_CITIES))return "SoCalGas";return "Verify";}
-  function companyUtilityRegions(company){var regions={},sites=companySites(companyId(company));sites.forEach(function(s){regions[siteUtilityRegion(s)]=true;});return Object.keys(regions);}
+  function explicitSiteRegion(site){
+    var raw=norm([site.UtilityRegion,site.utilityRegion,site.Utility,site.utility,site.Region,site.region,site.Source,site.source,site.SourceRefs,site.sourceRefs].join(' '));
+    if(!raw)return "";
+    if(raw.indexOf('socalgas')!==-1||raw.indexOf('so cal gas')!==-1)return "SoCalGas";
+    if(raw.indexOf('sdg&e')!==-1||raw.indexOf('sdge')!==-1||raw.indexOf('san diego gas')!==-1)return "SDG&E";
+    if(raw.indexOf('pg&e')!==-1||raw.indexOf('pge')!==-1||raw.indexOf('pacific gas')!==-1)return "PG&E";
+    return "";
+  }
+  function siteUtilityRegion(site){
+    var explicit=explicitSiteRegion(site),stateCode=text(site.State||site.state).toUpperCase(),city=text(site.City||site.city);
+    if(explicit)return explicit;
+    if(stateCode&&stateCode!=="CA")return "Verify";
+    if(inList(city,SDGE_CITIES))return "SDG&E";
+    if(inList(city,PGE_CITIES))return "PG&E";
+    if(inList(city,SOCALGAS_CITIES))return "SoCalGas";
+    return "Verify";
+  }
+  function companyUtilityRegions(company){
+    var sites=companySites(companyId(company)),explicitRegions={},regions={};
+    sites.forEach(function(s){var explicit=explicitSiteRegion(s);if(explicit)explicitRegions[explicit]=true;});
+    var assigned=Object.keys(explicitRegions);
+    if(assigned.length)return assigned;
+    sites.forEach(function(s){regions[siteUtilityRegion(s)]=true;});
+    return Object.keys(regions);
+  }
   function companyStates(company){var states={};companySites(companyId(company)).forEach(function(s){var st=text(s.State||s.state).toUpperCase();if(st)states[st]=true;});return Object.keys(states);}
 
   function rowSearchText(company){
@@ -77,7 +100,6 @@
     $("record-edit-fields").innerHTML=fieldHtml('Site Name','rec-site-name',r.SiteName)+fieldHtml('Site ID','rec-site-id',r.SiteID)+fieldHtml('Company ID','rec-company-id',r.CompanyID)+fieldHtml('Address','rec-address',r.Address)+fieldHtml('City','rec-city',r.City)+fieldHtml('State','rec-state',r.State)+fieldHtml('ZIP','rec-zip',r.Zip)+fieldHtml('Phone','rec-phone',r.Phone)+selectHtml('Needs Review','rec-needs-review',yes(r.NeedsReview)?'YES':'NO',['NO','YES'])+fieldHtml('Review Reason','rec-review-reason',r.ReviewReason,'text',true)+programEditHtml(r);
     $('rec-site-id').readOnly=true;$("record-edit-status").textContent='';$("record-edit-panel").hidden=false;$("company-edit-panel").hidden=true;$("record-edit-panel").scrollIntoView({behavior:'smooth',block:'center'});
   }
-
   function openContactEdit(contactId){
     var r=state.contacts.find(function(x){return text(x.ContactID)===contactId;});if(!r)return;state.editingRecord={type:'contact',row:r};$("record-edit-title").textContent='Edit Contact — '+text(r.ContactName);
     $("record-edit-fields").innerHTML=fieldHtml('Contact Name','rec-contact-name',r.ContactName)+fieldHtml('Contact ID','rec-contact-id',r.ContactID)+fieldHtml('Company ID','rec-company-id',r.CompanyID)+fieldHtml('Site ID','rec-site-id',r.SiteID)+fieldHtml('Site Name','rec-site-name',r.SiteName)+fieldHtml('Email','rec-email',r.Email,'email')+fieldHtml('Phone','rec-phone',r.Phone)+selectHtml('Needs Review','rec-needs-review',yes(r.NeedsReview)?'YES':'NO',['NO','YES'])+fieldHtml('Review Reason','rec-review-reason',r.ReviewReason,'text',true)+programEditHtml(r);
