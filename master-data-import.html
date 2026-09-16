@@ -14,7 +14,7 @@
       <header class="topbar">
         <div>
           <h2>Master Data Upload</h2>
-          <p>Import permanent NOVARA companies and sites without creating Leads.</p>
+          <p>Import permanent NOVARA companies, sites, and contacts for lookup without creating Leads.</p>
         </div>
         <div id="user-profile-root"></div>
       </header>
@@ -22,12 +22,12 @@
       <section class="card">
         <h3>Import order</h3>
         <p><strong>1. Companies &nbsp; 2. Sites &nbsp; 3. Contacts</strong></p>
-        <p class="muted">Leads are never created by this tool. Ambiguous Owner / Management Company records are skipped for review rather than guessed.</p>
+        <p class="muted">Use the cleaned final import CSV files. MasterID links the records. CompanyID, SiteID, and ContactID remain the permanent record IDs. Records marked NeedsReview may still be loaded for lookup and corrected later. This tool never creates Leads.</p>
       </section>
 
       <section class="card">
         <h3>1. Companies</h3>
-        <p>Upload a CSV containing CompanyName plus CompanyType. CompanyType must be <strong>Owner</strong> or <strong>Management Company</strong>. Rows marked for review are not imported.</p>
+        <p>Upload the <strong>Companies Import</strong> CSV. Each company must have MasterID, CompanyID, and CompanyName. OWNER, MGMT, and OMC - Review are all retained; uncertain relationships are not guessed.</p>
         <input id="companies-file" type="file" accept=".csv,text/csv">
         <button id="companies-preview-btn" type="button" class="primary-btn">Preview Companies</button>
         <button id="companies-import-btn" type="button" class="secondary-btn" disabled>Import Companies</button>
@@ -37,7 +37,7 @@
 
       <section class="card">
         <h3>2. Sites</h3>
-        <p>Upload the cleaned Sites CSV. Existing sites are matched by normalized site name + address + city and will be skipped rather than duplicated.</p>
+        <p>Upload the <strong>Sites Import</strong> CSV. SiteID and SiteKey are both checked so an existing property is skipped rather than duplicated. CompanyID and MasterID are stored with the site for lookup.</p>
         <input id="sites-file" type="file" accept=".csv,text/csv">
         <button id="sites-preview-btn" type="button" class="primary-btn">Preview Sites</button>
         <button id="sites-import-btn" type="button" class="secondary-btn" disabled>Import Sites</button>
@@ -47,9 +47,10 @@
 
       <section class="card">
         <h3>3. Contacts</h3>
-        <p>NOVARA does not yet have a separate permanent Contacts object. Uploading the Contacts CSV here validates and stages the rows only; it does <strong>not</strong> convert them into Leads or discard them.</p>
+        <p>Upload the <strong>Contacts Import</strong> CSV. Contacts are stored as permanent NOVARA lookup records linked by MasterID, CompanyID, and SiteID. They are not converted to Leads.</p>
         <input id="contacts-file" type="file" accept=".csv,text/csv">
-        <button id="contacts-preview-btn" type="button" class="primary-btn">Validate Contacts</button>
+        <button id="contacts-preview-btn" type="button" class="primary-btn">Preview Contacts</button>
+        <button id="contacts-import-btn" type="button" class="secondary-btn" disabled>Import Contacts</button>
         <div id="contacts-status" class="status-text"></div>
         <div id="contacts-preview" class="table-wrap"></div>
       </section>
