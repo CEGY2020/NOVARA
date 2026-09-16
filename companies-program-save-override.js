@@ -8,6 +8,46 @@
   var form=el("company-edit-form");
   if(!form||!window.NovaraApi)return;
 
+  function sitePayload(r,desired){
+    return {
+      MasterID:text(r.MasterID),
+      SiteID:text(r.SiteID),
+      CompanyID:text(r.CompanyID),
+      SiteKey:text(r.SiteKey),
+      SiteName:text(r.SiteName),
+      Address:text(r.Address),
+      City:text(r.City),
+      State:text(r.State),
+      Zip:text(r.Zip),
+      Phone:text(r.Phone),
+      CustomerNumber:text(r.CustomerNumber),
+      ProgramPool:desired.ProgramPool,
+      ProgramDHW:desired.ProgramDHW,
+      ProgramHVAC:desired.ProgramHVAC,
+      ProgramRestaurant:desired.ProgramRestaurant,
+      ProgramOther:desired.ProgramOther,
+      RelatedCompany:text(r.RelatedCompany),
+      SourceCount:text(r.SourceCount),
+      SourceRefs:text(r.SourceRefs),
+      ImportAsLead:"NO",
+      NeedsReview:text(r.NeedsReview)||"NO",
+      ReviewReason:text(r.ReviewReason),
+      Status:text(r.Status)||"Needs Review"
+    };
+  }
+
+  function updateSitesSequentially(sites,desired,status){
+    var index=0;
+    function next(){
+      if(index>=sites.length)return Promise.resolve(sites.length);
+      var site=sites[index];
+      if(status)status.textContent="Updating linked site "+(index+1)+" of "+sites.length+"…";
+      index++;
+      return NovaraApi.updateMasterSite(sitePayload(site,desired)).then(next);
+    }
+    return next();
+  }
+
   form.addEventListener("submit",function(event){
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -46,48 +86,21 @@
       .then(function(){
         var syncBox=el("sync-company-programs-sites");
         if(syncBox && !syncBox.checked)return null;
-        if(status)status.textContent="Company saved. Updating linked sites…";
+        if(status)status.textContent="Company saved. Loading linked sites…";
         return NovaraApi.getMasterSites({companyId:companyId});
       })
       .then(function(result){
-        if(!result)return null;
+        if(result===null)return null;
         var sites=(result&&result.sites)||[];
-        if(!sites.length)return [];
-        if(status)status.textContent="Updating "+sites.length+" linked site"+(sites.length===1?"":"s")+"…";
-        return Promise.all(sites.map(function(r){
-          return NovaraApi.updateMasterSite({
-            MasterID:text(r.MasterID),
-            SiteID:text(r.SiteID),
-            CompanyID:text(r.CompanyID),
-            SiteKey:text(r.SiteKey),
-            SiteName:text(r.SiteName),
-            Address:text(r.Address),
-            City:text(r.City),
-            State:text(r.State),
-            Zip:text(r.Zip),
-            Phone:text(r.Phone),
-            CustomerNumber:text(r.CustomerNumber),
-            ProgramPool:desired.ProgramPool,
-            ProgramDHW:desired.ProgramDHW,
-            ProgramHVAC:desired.ProgramHVAC,
-            ProgramRestaurant:desired.ProgramRestaurant,
-            ProgramOther:desired.ProgramOther,
-            RelatedCompany:text(r.RelatedCompany),
-            SourceCount:text(r.SourceCount),
-            SourceRefs:text(r.SourceRefs),
-            ImportAsLead:"NO",
-            NeedsReview:text(r.NeedsReview)||"NO",
-            ReviewReason:text(r.ReviewReason),
-            Status:text(r.Status)||"Needs Review"
-          });
-        }));
+        if(!sites.length)return 0;
+        return updateSitesSequentially(sites,desired,status);
       })
-      .then(function(results){
+      .then(function(updatedCount){
         if(status){
-          if(results===null)status.textContent="Company saved.";
-          else status.textContent="Saved. Company and linked site programs updated.";
+          if(updatedCount===null)status.textContent="Company saved.";
+          else status.textContent="Saved. Company and "+updatedCount+" linked site"+(updatedCount===1?"":"s")+" updated.";
         }
-        setTimeout(function(){window.location.reload();},700);
+        setTimeout(function(){window.location.reload();},900);
       })
       .catch(function(err){
         if(status)status.textContent="Save failed: "+(err&&err.message?err.message:"Unknown error");
