@@ -8,6 +8,7 @@ from decimal import Decimal
 from urllib.parse import parse_qs
 
 import hubspot_crm
+import master_data_api
 import novara_api
 import sales_reports
 import site_evaluations
@@ -209,6 +210,12 @@ def handler(event, context):
         if method == "OPTIONS":
             return _crm_lambda_response(204, {})
         status, payload = hubspot_crm.route(method, _normalize_crm_path(path), query=query, body=_event_body(event))
+        return _crm_lambda_response(status, payload)
+
+    if path.startswith("/api/master-data/"):
+        if method == "OPTIONS":
+            return _crm_lambda_response(204, {})
+        status, payload = master_data_api.route(method, path, query=query, body=_event_body(event))
         return _crm_lambda_response(status, payload)
 
     if "/api/sales-reports" in path:
