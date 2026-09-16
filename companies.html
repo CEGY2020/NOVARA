@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NOVARA Companies</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="novara-ui-standard.css">
+  <style>
+    .companies-toolbar{display:grid;grid-template-columns:minmax(280px,1fr) 180px 180px auto;gap:12px;align-items:end;margin-bottom:18px}
+    .companies-toolbar label{display:flex;flex-direction:column;gap:6px;font-weight:700;color:#000}
+    .companies-toolbar input,.companies-toolbar select{width:100%;padding:12px 13px;border:1px solid #b9c8d3;border-radius:8px;background:#fff;color:#000;font-size:16px}
+    .companies-summary{margin:8px 0 16px;color:#000;font-size:15px}
+    .companies-table-wrap{overflow:auto;border-radius:10px}
+    .companies-table{min-width:980px}
+    .companies-table th{background:#dbeaf5!important;color:#000!important;font-weight:700!important;white-space:nowrap}
+    .companies-table td{color:#000}
+    .company-link{border:0;background:transparent;padding:0;color:#075985;font:inherit;font-weight:700;cursor:pointer;text-align:left}
+    .company-link:hover{text-decoration:underline}
+    .program-tags{display:flex;flex-wrap:wrap;gap:5px}
+    .program-tag{display:inline-block;padding:3px 7px;border-radius:999px;background:#edf5fa;color:#000;font-size:12px;font-weight:700;border:1px solid #c8dce9}
+    .detail-panel{margin-top:22px;background:#fff;border-radius:14px;box-shadow:var(--panel-shadow);padding:22px}
+    .detail-panel[hidden]{display:none}
+    .detail-heading{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:16px}
+    .detail-heading h3{font-size:25px;color:#000;margin:0}
+    .detail-heading p{color:#000;margin:5px 0 0}
+    .detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px}
+    .detail-field{background:#f7fafc;border:1px solid #dbe4ea;border-radius:8px;padding:10px}
+    .detail-field span{display:block;font-size:12px;font-weight:700;color:#445;margin-bottom:4px}
+    .detail-field strong{color:#000;word-break:break-word}
+    .subsection{margin-top:20px}
+    .subsection h4{font-size:19px;color:#000;margin:0 0 10px}
+    .subsection .data-table th{background:#dbeaf5!important;color:#000!important;font-weight:700!important}
+    .subsection .data-table td{color:#000}
+    .muted-black{color:#333}
+    @media(max-width:1050px){.companies-toolbar{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:700px){.companies-toolbar{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body data-page="companies" data-role="aem">
+  <div class="dashboard-layout">
+    <aside class="sidebar" id="sidebar-root"></aside>
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <h2>Companies</h2>
+          <p>Search permanent NOVARA company master data and view linked sites and contacts.</p>
+        </div>
+        <div id="user-profile-root"></div>
+      </header>
+
+      <section class="card">
+        <div class="companies-toolbar">
+          <label>Search
+            <input id="company-search" type="search" placeholder="Company, ID, site, contact, phone, email..." autocomplete="off">
+          </label>
+          <label>Relationship
+            <select id="relationship-filter">
+              <option value="">All</option>
+              <option value="OWNER">OWNER</option>
+              <option value="MGMT">MGMT</option>
+              <option value="OMC - Review">OMC - Review</option>
+            </select>
+          </label>
+          <label>Program
+            <select id="program-filter">
+              <option value="">All</option>
+              <option value="Pool">Pool</option>
+              <option value="DHW">DHW</option>
+              <option value="HVAC">HVAC</option>
+              <option value="Restaurant">Restaurant</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <button id="clear-company-search" type="button" class="secondary-btn">Clear</button>
+        </div>
+        <div id="companies-status" class="companies-summary">Loading companies…</div>
+        <div class="companies-table-wrap">
+          <table class="data-table companies-table">
+            <thead><tr><th>Company Name</th><th>Company ID</th><th>Master ID</th><th>Relationship</th><th>Programs</th><th>Sites</th><th>Contacts</th><th>Review</th></tr></thead>
+            <tbody id="companies-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="company-detail" class="detail-panel" hidden>
+        <div class="detail-heading">
+          <div><h3 id="detail-company-name"></h3><p id="detail-programs"></p></div>
+          <button id="close-company-detail" type="button" class="secondary-btn">Close</button>
+        </div>
+        <div id="detail-fields" class="detail-grid"></div>
+        <div class="subsection">
+          <h4 id="sites-heading">Linked Sites</h4>
+          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Site</th><th>Site ID</th><th>Address</th><th>City</th><th>Phone</th><th>Programs</th><th>Review</th></tr></thead><tbody id="detail-sites-body"></tbody></table></div>
+        </div>
+        <div class="subsection">
+          <h4 id="contacts-heading">Linked Contacts</h4>
+          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Contact</th><th>Contact ID</th><th>Site</th><th>Email</th><th>Phone</th><th>Programs</th><th>Review</th></tr></thead><tbody id="detail-contacts-body"></tbody></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="role.js"></script>
+  <script src="api-config.js"></script>
+  <script src="api-client.js"></script>
+  <script src="nav.js"></script>
+  <script src="companies.js"></script>
+</body>
+</html>
