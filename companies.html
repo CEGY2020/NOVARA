@@ -9,7 +9,7 @@
   <style>
     .companies-toolbar{display:grid;grid-template-columns:minmax(280px,1fr) 180px 180px 200px 150px auto;gap:12px;align-items:end;margin-bottom:18px}
     .companies-toolbar label{display:flex;flex-direction:column;gap:6px;font-weight:700;color:#000}
-    .companies-toolbar input,.companies-toolbar select{width:100%;padding:12px 13px;border:1px solid #b9c8d3;border-radius:8px;background:#fff;color:#000;font-size:16px}
+    .companies-toolbar input,.companies-toolbar select,.edit-form input,.edit-form select,.edit-form textarea{width:100%;padding:12px 13px;border:1px solid #b9c8d3;border-radius:8px;background:#fff;color:#000;font-size:16px}
     .companies-summary{margin:8px 0 16px;color:#000;font-size:15px}
     .companies-table-wrap{overflow:auto;border-radius:10px}
     .companies-table{min-width:980px}
@@ -24,6 +24,7 @@
     .detail-heading{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:16px}
     .detail-heading h3{font-size:25px;color:#000;margin:0}
     .detail-heading p{color:#000;margin:5px 0 0}
+    .detail-actions{display:flex;gap:8px;flex-wrap:wrap}
     .detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px}
     .detail-field{background:#f7fafc;border:1px solid #dbe4ea;border-radius:8px;padding:10px}
     .detail-field span{display:block;font-size:12px;font-weight:700;color:#445;margin-bottom:4px}
@@ -32,9 +33,20 @@
     .subsection h4{font-size:19px;color:#000;margin:0 0 10px}
     .subsection .data-table th{background:#dbeaf5!important;color:#000!important;font-weight:700!important}
     .subsection .data-table td{color:#000}
-    .muted-black{color:#333}
-    @media(max-width:1300px){.companies-toolbar{grid-template-columns:1fr 1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:700px){.companies-toolbar{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
+    .edit-panel{margin:18px 0;padding:18px;border:2px solid #b7cfdf;border-radius:12px;background:#f8fbfd}
+    .edit-panel[hidden]{display:none}
+    .edit-panel h4{margin:0 0 14px;color:#000;font-size:20px}
+    .edit-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+    .edit-form label{display:flex;flex-direction:column;gap:6px;color:#000;font-weight:700}
+    .edit-form .wide{grid-column:1/-1}
+    .check-row{display:flex!important;flex-direction:row!important;align-items:center;gap:18px!important;flex-wrap:wrap}
+    .check-row label{display:flex;flex-direction:row;align-items:center;gap:6px;font-weight:600}
+    .check-row input{width:auto}
+    .edit-buttons{grid-column:1/-1;display:flex;gap:10px;align-items:center}
+    .edit-status{color:#000;font-weight:700}
+    .small-edit{padding:6px 10px;font-size:13px}
+    @media(max-width:1300px){.companies-toolbar{grid-template-columns:1fr 1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}.edit-form{grid-template-columns:1fr 1fr}}
+    @media(max-width:700px){.companies-toolbar{grid-template-columns:1fr}.detail-grid,.edit-form{grid-template-columns:1fr}}
   </style>
 </head>
 <body data-page="companies" data-role="aem">
@@ -42,82 +54,65 @@
     <aside class="sidebar" id="sidebar-root"></aside>
     <main class="main-content">
       <header class="topbar">
-        <div>
-          <h2>Companies</h2>
-          <p>Search permanent NOVARA company master data and view linked sites and contacts.</p>
-        </div>
+        <div><h2>Companies</h2><p>Search and maintain permanent NOVARA company master data, linked sites, and contacts.</p></div>
         <div id="user-profile-root"></div>
       </header>
 
       <section class="card">
         <div class="companies-toolbar">
-          <label>Search
-            <input id="company-search" type="search" placeholder="Company, ID, site, contact, phone, email..." autocomplete="off">
-          </label>
-          <label>Relationship
-            <select id="relationship-filter">
-              <option value="">All</option>
-              <option value="OWNER">OWNER</option>
-              <option value="MGMT">MGMT</option>
-              <option value="OMC - Review">OMC - Review</option>
-            </select>
-          </label>
-          <label>Program
-            <select id="program-filter">
-              <option value="">All</option>
-              <option value="Pool">Pool</option>
-              <option value="DHW">DHW</option>
-              <option value="HVAC">HVAC</option>
-              <option value="Restaurant">Restaurant</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-          <label>Utility Region
-            <select id="utility-filter">
-              <option value="">All</option>
-              <option value="SoCalGas">SoCalGas Region</option>
-              <option value="SDG&E">SDG&E Region</option>
-              <option value="PG&E">PG&E Region</option>
-              <option value="Verify">Other / Verify</option>
-            </select>
-          </label>
-          <label>State
-            <select id="state-filter"><option value="">All</option></select>
-          </label>
+          <label>Search<input id="company-search" type="search" placeholder="Company, ID, site, contact, phone, email..." autocomplete="off"></label>
+          <label>Relationship<select id="relationship-filter"><option value="">All</option><option value="OWNER">OWNER</option><option value="MGMT">MGMT</option><option value="OMC - Review">OMC - Review</option></select></label>
+          <label>Program<select id="program-filter"><option value="">All</option><option value="Pool">Pool</option><option value="DHW">DHW</option><option value="HVAC">HVAC</option><option value="Restaurant">Restaurant</option><option value="Other">Other</option></select></label>
+          <label>Utility Region<select id="utility-filter"><option value="">All</option><option value="SoCalGas">SoCalGas Region</option><option value="SDG&E">SDG&E Region</option><option value="PG&E">PG&E Region</option><option value="Verify">Other / Verify</option></select></label>
+          <label>State<select id="state-filter"><option value="">All</option></select></label>
           <button id="clear-company-search" type="button" class="secondary-btn">Clear</button>
         </div>
         <div id="companies-status" class="companies-summary">Loading companies…</div>
-        <div class="companies-table-wrap">
-          <table class="data-table companies-table">
-            <thead><tr><th>Company Name</th><th>Company ID</th><th>Master ID</th><th>Relationship</th><th>Programs</th><th>Sites</th><th>Contacts</th><th>Review</th></tr></thead>
-            <tbody id="companies-body"></tbody>
-          </table>
-        </div>
+        <div class="companies-table-wrap"><table class="data-table companies-table"><thead><tr><th>Company Name</th><th>Company ID</th><th>Master ID</th><th>Relationship</th><th>Programs</th><th>Sites</th><th>Contacts</th><th>Review</th></tr></thead><tbody id="companies-body"></tbody></table></div>
       </section>
 
       <section id="company-detail" class="detail-panel" hidden>
         <div class="detail-heading">
           <div><h3 id="detail-company-name"></h3><p id="detail-programs"></p></div>
-          <button id="close-company-detail" type="button" class="secondary-btn">Close</button>
+          <div class="detail-actions"><button id="edit-company-btn" type="button" class="primary-btn">Edit Company</button><button id="close-company-detail" type="button" class="secondary-btn">Close</button></div>
         </div>
         <div id="detail-fields" class="detail-grid"></div>
+
+        <div id="company-edit-panel" class="edit-panel" hidden>
+          <h4>Edit Company</h4>
+          <form id="company-edit-form" class="edit-form">
+            <label>Company Name<input id="edit-company-name" required></label>
+            <label>Company ID<input id="edit-company-id" readonly></label>
+            <label>Master ID<input id="edit-master-id"></label>
+            <label>Relationship<select id="edit-relationship"><option value="OWNER">OWNER</option><option value="MGMT">MGMT</option><option value="OMC - Review">OMC - Review</option></select></label>
+            <label>Example Site<input id="edit-example-site"></label>
+            <label>Needs Review<select id="edit-needs-review"><option value="NO">NO</option><option value="YES">YES</option></select></label>
+            <label class="wide">Review Reason<textarea id="edit-review-reason" rows="2"></textarea></label>
+            <div class="wide check-row"><span>Programs:</span><label><input id="edit-program-pool" type="checkbox"> Pool</label><label><input id="edit-program-dhw" type="checkbox"> DHW</label><label><input id="edit-program-hvac" type="checkbox"> HVAC</label><label><input id="edit-program-restaurant" type="checkbox"> Restaurant</label><label><input id="edit-program-other" type="checkbox"> Other</label></div>
+            <div class="edit-buttons"><button type="submit" class="primary-btn">Save Company</button><button id="cancel-company-edit" type="button" class="secondary-btn">Cancel</button><span id="company-edit-status" class="edit-status"></span></div>
+          </form>
+        </div>
+
+        <div id="record-edit-panel" class="edit-panel" hidden>
+          <h4 id="record-edit-title">Edit Record</h4>
+          <form id="record-edit-form" class="edit-form">
+            <div id="record-edit-fields" style="display:contents"></div>
+            <div class="edit-buttons"><button type="submit" class="primary-btn">Save Changes</button><button id="cancel-record-edit" type="button" class="secondary-btn">Cancel</button><span id="record-edit-status" class="edit-status"></span></div>
+          </form>
+        </div>
+
         <div class="subsection">
           <h4 id="sites-heading">Linked Sites</h4>
-          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Site</th><th>Site ID</th><th>Address</th><th>City</th><th>Phone</th><th>Programs</th><th>Review</th></tr></thead><tbody id="detail-sites-body"></tbody></table></div>
+          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Site</th><th>Site ID</th><th>Company ID</th><th>Address</th><th>City</th><th>Phone</th><th>Programs</th><th>Review</th><th>Action</th></tr></thead><tbody id="detail-sites-body"></tbody></table></div>
         </div>
         <div class="subsection">
           <h4 id="contacts-heading">Linked Contacts</h4>
-          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Contact</th><th>Contact ID</th><th>Site</th><th>Email</th><th>Phone</th><th>Programs</th><th>Review</th></tr></thead><tbody id="detail-contacts-body"></tbody></table></div>
+          <div class="companies-table-wrap"><table class="data-table"><thead><tr><th>Contact</th><th>Contact ID</th><th>Site</th><th>Company ID</th><th>Email</th><th>Phone</th><th>Programs</th><th>Review</th><th>Action</th></tr></thead><tbody id="detail-contacts-body"></tbody></table></div>
         </div>
       </section>
     </main>
   </div>
 
-  <script src="auth.js"></script>
-  <script src="role.js"></script>
-  <script src="api-config.js"></script>
-  <script src="api-client.js"></script>
-  <script src="nav.js"></script>
-  <script src="companies.js"></script>
+  <script src="auth.js"></script><script src="role.js"></script><script src="api-config.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="companies.js"></script>
 </body>
 </html>
