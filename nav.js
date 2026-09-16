@@ -2,6 +2,7 @@
 (function () {
   var AEM_NAV_ITEMS = [
     { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
+    { id: "companies", label: "Companies", href: "companies.html" },
     { id: "sites", label: "Sites", href: "sites.html" },
     { id: "systems", label: "Systems", href: "systems.html" },
     { id: "owners", label: "Owners", href: "owners.html" },
