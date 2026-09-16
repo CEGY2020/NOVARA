@@ -25,9 +25,11 @@
     if(!siteBody)return;
     var visibleSiteNames={};
     var visibleSites=0;
+    var totalSites=0;
     Array.prototype.forEach.call(siteBody.querySelectorAll("tr"),function(row){
       var cells=row.querySelectorAll("td");
       if(cells.length<5)return;
+      totalSites++;
       var siteName=text(cells[0].textContent);
       var city=text(cells[4].textContent);
       var match=regionForCity(city)===selected;
@@ -37,10 +39,12 @@
 
     var contactBody=document.getElementById("detail-contacts-body");
     var visibleContacts=0;
+    var totalContacts=0;
     if(contactBody){
       Array.prototype.forEach.call(contactBody.querySelectorAll("tr"),function(row){
         var cells=row.querySelectorAll("td");
         if(cells.length<3)return;
+        totalContacts++;
         var siteName=norm(cells[2].textContent);
         var match=!!visibleSiteNames[siteName];
         row.style.display=match?"":"none";
@@ -50,8 +54,8 @@
 
     var sitesHeading=document.getElementById("sites-heading");
     var contactsHeading=document.getElementById("contacts-heading");
-    if(sitesHeading)sitesHeading.textContent="Linked Sites — "+selected+" ("+visibleSites+")";
-    if(contactsHeading)contactsHeading.textContent="Linked Contacts — "+selected+" ("+visibleContacts+")";
+    if(sitesHeading)sitesHeading.textContent="Linked Sites — "+selected+" ("+visibleSites+" in region / "+totalSites+" total)";
+    if(contactsHeading)contactsHeading.textContent="Linked Contacts — "+selected+" ("+visibleContacts+" in region / "+totalContacts+" total)";
 
     var detailFields=document.getElementById("detail-fields");
     if(detailFields){
@@ -60,8 +64,8 @@
         if(!label||!value)return;
         var key=text(label.textContent);
         if(key==="Utility Region")value.textContent=selected;
-        if(key==="Linked Sites")value.textContent=String(visibleSites);
-        if(key==="Linked Contacts")value.textContent=String(visibleContacts);
+        if(key==="Linked Sites")value.textContent=visibleSites+" in "+selected+" / "+totalSites+" total";
+        if(key==="Linked Contacts")value.textContent=visibleContacts+" in "+selected+" / "+totalContacts+" total";
       });
     }
   }
