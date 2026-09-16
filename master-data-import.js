@@ -42,7 +42,8 @@
   function tablePreview(rows, columns) {
     if (!rows.length) return "<p>No rows found.</p>";
     var shown=rows.slice(0,10);
-    var html='<table class="data-table"><thead><tr>'+columns.map(function(c){return '<th>'+escapeHtml(c)+'</th>';}).join('')+'</tr></thead><tbody>';
+    var headerStyle=' style="background:#dbeaf5!important;color:#000!important;font-weight:700;border-bottom:2px solid #9bbbd2"';
+    var html='<table class="data-table"><thead><tr>'+columns.map(function(c){return '<th'+headerStyle+'>'+escapeHtml(c)+'</th>';}).join('')+'</tr></thead><tbody>';
     shown.forEach(function(r){ html+='<tr>'+columns.map(function(c){return '<td>'+escapeHtml(r[c])+'</td>';}).join('')+'</tr>'; });
     html+='</tbody></table>';
     if(rows.length>10) html+='<p class="muted">Showing 10 of '+rows.length+' rows.</p>';
