@@ -17,6 +17,8 @@
   var pipelineView = document.getElementById("leads-pipeline-view");
   var filterStage = document.getElementById("filter-stage");
   var filterAssigned = document.getElementById("filter-assigned");
+  var filterLeadType = document.getElementById("filter-lead-type");
+  var filterUtilityTerritory = document.getElementById("filter-utility-territory");
   var filterFollowUp = document.getElementById("filter-followup");
   var addBtn = document.getElementById("add-lead-btn");
   var modal = document.getElementById("lead-modal");
@@ -97,6 +99,23 @@
       return "DHW NG";
     }
     return text;
+  }
+
+  var SDGE_CITIES = ["aliso viejo","bonita","bonsall","carlsbad","chula vista","coronado","dana point","del mar","descanso","el cajon","encinitas","escondido","fallbrook","imperial beach","la jolla","la mesa","laguna beach","laguna hills","laguna niguel","lakeside","lemon grove","mission beach","mission valley","mission viejo","national city","oceanside","otay mesa","pacific beach","poway","ramona","rancho bernardo","rancho san diego","rancho santa fe","san clemente","san diego","san diego / mission hills","san juan capistrano","san marcos","san ysidro","santee","solana beach","spring valley","vista","leucadia"];
+  var PGE_CITIES = ["citrus heights","dublin","emeryville","fremont","fresno","milpitas","oakland","palo alto","pleasant hill","roseville","saint helena","st helena","san francisco","san jose","san lorenzo","san mateo","stockton","sunnyvale","vallejo"];
+  var SOCALGAS_CITIES = ["anaheim","bakersfield","brea","buena park","burbank","cerritos","chatsworth","chino","city of industry","corona","costa mesa","culver city","cypress","desert hot springs","diamond bar","downey","encino","fountain valley","fullerton","garden grove","gardena","glendale","hawaiian gardens","hawthorne","hermosa beach","hollywood","huntington beach","indio","irvine","la habra","la mirada","la quinta","la verne","laguna woods","lake forest","lakewood","lancaster","long beach","los angeles","marina del rey","menifee","monrovia","montclair","newport beach","newport coast","north hills","north hollywood","northridge","norwalk","ontario","orange","oxnard","palm desert","palm springs","palos verdes peninsula","pasadena","pico rivera","placentia","rancho palos verdes","rancho santa margarita","redondo beach","rosemead","san bernardino","san marino","santa ana","santa monica","seal beach","studio city","temecula","torrance","tustin","tustin ranch","valencia","valley village","van nuys","ventura","w hollywood","west covina","west hollywood","whittier","woodland hills","yorba linda"];
+
+  function utilityTerritory(lead) {
+    if (!lead) return "Verify";
+    var explicit = String(lead.utilityTerritory || lead.utilityRegion || lead.gasRegion || "").trim();
+    if (explicit) return explicit;
+    var state = String(lead.state || "").trim().toUpperCase();
+    var city = String(lead.city || "").toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+    if (state && state !== "CA") return "Verify";
+    if (SDGE_CITIES.indexOf(city) !== -1) return "SDG&E";
+    if (PGE_CITIES.indexOf(city) !== -1) return "PG&E";
+    if (SOCALGAS_CITIES.indexOf(city) !== -1) return "SoCalGas";
+    return "Verify";
   }
 
   function todayIsoDate() {
@@ -375,6 +394,12 @@
       assignedTo: filterAssigned
         ? String(filterAssigned.value || "").trim()
         : "",
+      leadType: filterLeadType
+        ? String(filterLeadType.value || "").trim()
+        : "",
+      utilityTerritory: filterUtilityTerritory
+        ? String(filterUtilityTerritory.value || "").trim()
+        : "",
       followUp: filterFollowUp
         ? String(filterFollowUp.value || "").trim()
         : "",
@@ -412,6 +437,12 @@
         if (assigned !== filters.assignedTo) {
           return false;
         }
+      }
+      if (filters.leadType && normalizeSystemTypeValue(lead.systemType || "") !== filters.leadType) {
+        return false;
+      }
+      if (filters.utilityTerritory && utilityTerritory(lead) !== filters.utilityTerritory) {
+        return false;
       }
       if (!matchesFollowUpFilter(lead, filters.followUp)) {
         return false;
@@ -482,7 +513,7 @@
     if (!tbody) return;
     if (!leads.length) {
       tbody.innerHTML =
-        '<tr><td colspan="8">No leads match the current filters.</td></tr>';
+        '<tr><td colspan="10">No leads match the current filters.</td></tr>';
       return;
     }
 
@@ -507,6 +538,12 @@
           "</td>" +
           "<td>" +
           escapeHtml(contact) +
+          "</td>" +
+          "<td>" +
+          escapeHtml(normalizeSystemTypeValue(lead.systemType || "") || "—") +
+          "</td>" +
+          "<td>" +
+          escapeHtml(utilityTerritory(lead)) +
           "</td>" +
           "<td>" +
           escapeHtml(lead.stage || "—") +
@@ -641,6 +678,12 @@
     if (filters.assignedTo) {
       parts.push("assigned to " + filters.assignedTo);
     }
+    if (filters.leadType) {
+      parts.push("lead type " + filters.leadType);
+    }
+    if (filters.utilityTerritory) {
+      parts.push(filters.utilityTerritory);
+    }
     var followLabel = followUpFilterLabel(filters.followUp);
     if (followLabel) {
       parts.push(followLabel);
@@ -760,7 +803,7 @@
         leadsById = {};
         if (tbody) {
           tbody.innerHTML =
-            '<tr><td colspan="8">Unable to load leads.</td></tr>';
+            '<tr><td colspan="10">Unable to load leads.</td></tr>';
         }
         if (pipelineBoard) {
           pipelineBoard.innerHTML =
@@ -956,6 +999,12 @@
   }
   if (filterAssigned) {
     filterAssigned.addEventListener("change", renderViews);
+  }
+  if (filterLeadType) {
+    filterLeadType.addEventListener("change", renderViews);
+  }
+  if (filterUtilityTerritory) {
+    filterUtilityTerritory.addEventListener("change", renderViews);
   }
   if (filterFollowUp) {
     filterFollowUp.addEventListener("change", renderViews);
