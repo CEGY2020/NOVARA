@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NOVARA - Leads</title>
-  <link rel="stylesheet" href="dashboard.css?v=leads-company-site-mgmt-1">
+  <link rel="stylesheet" href="dashboard.css?v=leads-type-utility-1">
   <link rel="stylesheet" href="novara-ui-standard.css?v=1">
   <link rel="stylesheet" href="leads-followup-tools.css?v=1">
 </head>
@@ -22,12 +22,14 @@
       <label class="filter-field lead-search-field"><span>Search Leads</span><input class="lead-search-input" id="lead-search" type="search" placeholder="Company, site, contact, phone, email…" aria-label="Search leads"></label>
       <label class="filter-field"><span>Stage</span><select id="filter-stage" aria-label="Filter by stage"><option value="">All stages</option><option value="New Lead">New Lead</option><option value="Contacted">Contacted</option><option value="Qualified">Qualified</option><option value="Proposal Sent">Proposal Sent</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
       <label class="filter-field"><span>Assigned To</span><select id="filter-assigned" aria-label="Filter by assigned to"><option value="">Anyone</option></select></label>
+      <label class="filter-field"><span>Lead Type</span><select id="filter-lead-type" aria-label="Filter by lead type"><option value="">All Lead Types</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
+      <label class="filter-field"><span>Utility Territory</span><select id="filter-utility-territory" aria-label="Filter by utility territory"><option value="">All Territories</option><option value="SoCalGas">SoCalGas</option><option value="SDG&E">SDG&amp;E</option><option value="PG&E">PG&amp;E</option><option value="Verify">Verify</option></select></label>
       <label class="filter-field"><span>Next Contact</span><select id="filter-followup" aria-label="Filter by next contact date"><option value="">All Leads</option><option value="today">Contact Today</option><option value="overdue">Overdue</option><option value="due-soon">Next 7 Days</option><option value="next-30">Next 30 Days</option><option value="none">No Follow-Up Scheduled</option></select></label>
       <div class="lead-toolbar-actions"><button type="button" class="primary-btn" id="print-leads-btn">Print Call Sheet</button><button type="button" class="secondary-btn" id="clear-lead-filters-btn">Clear Filters</button></div>
       <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
     </div>
 
-    <div id="leads-list-view" class="leads-view" role="tabpanel" aria-labelledby="tab-list"><table class="data-table"><thead><tr><th>Lead ID</th><th>Company / Site</th><th>Contact</th><th>Stage</th><th>Next Follow-up</th><th>Assigned To</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody id="leads-tbody"><tr><td colspan="8">Loading…</td></tr></tbody></table></div>
+    <div id="leads-list-view" class="leads-view" role="tabpanel" aria-labelledby="tab-list"><table class="data-table"><thead><tr><th>Lead ID</th><th>Company / Site</th><th>Contact</th><th>Lead Type</th><th>Utility Territory</th><th>Stage</th><th>Next Follow-up</th><th>Assigned To</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody id="leads-tbody"><tr><td colspan="10">Loading…</td></tr></tbody></table></div>
     <div id="leads-pipeline-view" class="leads-view" role="tabpanel" aria-labelledby="tab-pipeline" hidden><div id="pipeline-board" class="pipeline-board" aria-live="polite"><p class="pipeline-empty">Loading pipeline…</p></div></div>
   </main>
 </div>
@@ -49,7 +51,7 @@
         <label class="form-field"><span>Contact Email</span><input type="email" id="field-contactEmail" name="ContactEmail" maxlength="160" autocomplete="email"></label>
         <label class="form-field"><span>Contact Phone</span><input type="tel" id="field-contactPhone" name="ContactPhone" maxlength="40" autocomplete="tel"></label>
         <label class="form-field"><span>Source</span><select id="field-source" name="Source"><option value="">Select…</option><option value="Carlos">Carlos</option><option value="Cam">Cam</option><option value="Cold Call">Cold Call</option><option value="Katia">Katia</option><option value="PHEEP">PHEEP</option><option value="Steve">Steve</option><option value="Referral">Referral</option><option value="Website">Website</option><option value="Rinnai">Rinnai</option><option value="Trade Show">Trade Show</option><option value="Other">Other</option></select></label>
-        <label class="form-field"><span>System Type</span><select id="field-systemType" name="SystemType"><option value="">Select…</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
+        <label class="form-field"><span>Lead Type</span><select id="field-systemType" name="SystemType"><option value="">Select…</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
         <label class="form-field"><span>Stage</span><select id="field-stage" name="Stage"><option value="New Lead">New Lead</option><option value="Contacted">Contacted</option><option value="Qualified">Qualified</option><option value="Proposal Sent">Proposal Sent</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
         <label class="form-field form-field-followup"><span>Next Follow-up</span><input type="date" id="field-nextFollowUp" name="NextFollowUp"><small class="field-hint">Set or clear the next outreach date. Overdue and dates within 7 days are highlighted in the list and pipeline.</small></label>
         <label class="form-field"><span>Assigned To</span><input type="text" id="field-assignedTo" name="AssignedTo" maxlength="120" autocomplete="off"></label>
@@ -63,16 +65,16 @@
   </div>
 </div>
 
-<script src="api-config.js?v=leads-company-site-mgmt-1"></script>
-<script src="api-client.js?v=leads-company-site-mgmt-1"></script>
-<script src="role.js?v=leads-company-site-mgmt-1"></script>
-<script src="nav.js?v=leads-company-site-mgmt-1"></script>
-<script src="phone-format.js?v=leads-company-site-mgmt-1"></script>
+<script src="api-config.js?v=leads-type-utility-1"></script>
+<script src="api-client.js?v=leads-type-utility-1"></script>
+<script src="role.js?v=leads-type-utility-1"></script>
+<script src="nav.js?v=leads-type-utility-1"></script>
+<script src="phone-format.js?v=leads-type-utility-1"></script>
 <script src="maps-config.js?v=1"></script>
 <script src="address-autocomplete.js?v=2"></script>
-<script src="leads.js?v=leads-company-site-mgmt-1"></script>
-<script src="leads-site-picker.js?v=leads-company-site-mgmt-1"></script>
+<script src="leads.js?v=leads-type-utility-1"></script>
+<script src="leads-site-picker.js?v=leads-type-utility-1"></script>
 <script src="lead-company-owner-tools.js?v=2"></script>
-<script src="leads-followup-tools.js?v=1"></script>
+<script src="leads-followup-tools.js?v=leads-type-utility-1"></script>
 </body>
 </html>
