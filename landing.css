@@ -447,3 +447,36 @@ a {
         max-width: 150px;
     }
 }
+
+
+/* Optima ProLink wave-page text links */
+.landing-page .hero-ctas {
+    gap: 22px;
+}
+
+.landing-page .hero-ctas .btn,
+.landing-page .hero-ctas .btn-primary,
+.landing-page .hero-ctas .btn-ghost {
+    min-width: 0;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    color: var(--white);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.landing-page .hero-ctas .btn:hover,
+.landing-page .hero-ctas .btn-primary:hover,
+.landing-page .hero-ctas .btn-ghost:hover {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--white);
+    text-decoration: underline;
+    transform: none;
+}
