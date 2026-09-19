@@ -243,7 +243,7 @@
     if (global.NovaraRole && NovaraRole.clearSelectedRole) {
       NovaraRole.clearSelectedRole();
     }
-    window.location.href = redirectTo || "video-landing.html";
+    window.location.href = redirectTo || "index.html";
   }
 
   global.NovaraAuth = {
