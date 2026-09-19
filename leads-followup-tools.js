@@ -5,6 +5,8 @@
   var followUpFilter = document.getElementById("filter-followup");
   var stageFilter = document.getElementById("filter-stage");
   var assignedFilter = document.getElementById("filter-assigned");
+  var leadTypeFilter = document.getElementById("filter-lead-type");
+  var utilityTerritoryFilter = document.getElementById("filter-utility-territory");
   var searchInput = document.getElementById("lead-search");
   var printBtn = document.getElementById("print-leads-btn");
   var clearBtn = document.getElementById("clear-lead-filters-btn");
@@ -96,6 +98,7 @@
       lead && lead.assignedTo,
       lead && lead.source,
       lead && lead.systemType,
+      utilityTerritory(lead),
       lead && lead.notes,
     ]
       .map(text)
@@ -109,6 +112,28 @@
     return searchHaystack(lead).indexOf(query) !== -1;
   }
 
+  var SDGE_CITIES = ["aliso viejo","bonita","bonsall","carlsbad","chula vista","coronado","dana point","del mar","descanso","el cajon","encinitas","escondido","fallbrook","imperial beach","la jolla","la mesa","laguna beach","laguna hills","laguna niguel","lakeside","lemon grove","mission beach","mission valley","mission viejo","national city","oceanside","otay mesa","pacific beach","poway","ramona","rancho bernardo","rancho san diego","rancho santa fe","san clemente","san diego","san diego / mission hills","san juan capistrano","san marcos","san ysidro","santee","solana beach","spring valley","vista","leucadia"];
+  var PGE_CITIES = ["citrus heights","dublin","emeryville","fremont","fresno","milpitas","oakland","palo alto","pleasant hill","roseville","saint helena","st helena","san francisco","san jose","san lorenzo","san mateo","stockton","sunnyvale","vallejo"];
+  var SOCALGAS_CITIES = ["anaheim","bakersfield","brea","buena park","burbank","cerritos","chatsworth","chino","city of industry","corona","costa mesa","culver city","cypress","desert hot springs","diamond bar","downey","encino","fountain valley","fullerton","garden grove","gardena","glendale","hawaiian gardens","hawthorne","hermosa beach","hollywood","huntington beach","indio","irvine","la habra","la mirada","la quinta","la verne","laguna woods","lake forest","lakewood","lancaster","long beach","los angeles","marina del rey","menifee","monrovia","montclair","newport beach","newport coast","north hills","north hollywood","northridge","norwalk","ontario","orange","oxnard","palm desert","palm springs","palos verdes peninsula","pasadena","pico rivera","placentia","rancho palos verdes","rancho santa margarita","redondo beach","rosemead","san bernardino","san marino","santa ana","santa monica","seal beach","studio city","temecula","torrance","tustin","tustin ranch","valencia","valley village","van nuys","ventura","w hollywood","west covina","west hollywood","whittier","woodland hills","yorba linda"];
+
+  function normalizedLeadType(lead) {
+    var value = text(lead && lead.systemType).trim();
+    return value === "DHW" ? "DHW NG" : value;
+  }
+
+  function utilityTerritory(lead) {
+    if (!lead) return "Verify";
+    var explicit = text(lead.utilityTerritory || lead.utilityRegion || lead.gasRegion).trim();
+    if (explicit) return explicit;
+    var state = text(lead.state).trim().toUpperCase();
+    var city = text(lead.city).toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+    if (state && state !== "CA") return "Verify";
+    if (SDGE_CITIES.indexOf(city) !== -1) return "SDG&E";
+    if (PGE_CITIES.indexOf(city) !== -1) return "PG&E";
+    if (SOCALGAS_CITIES.indexOf(city) !== -1) return "SoCalGas";
+    return "Verify";
+  }
+
   function matchesStageAndAssigned(lead) {
     var stage = stageFilter ? text(stageFilter.value).trim() : "";
     var assigned = assignedFilter ? text(assignedFilter.value).trim() : "";
@@ -117,8 +142,16 @@
     return true;
   }
 
+  function matchesLeadTypeAndUtility(lead) {
+    var leadType = leadTypeFilter ? text(leadTypeFilter.value).trim() : "";
+    var utility = utilityTerritoryFilter ? text(utilityTerritoryFilter.value).trim() : "";
+    if (leadType && normalizedLeadType(lead) !== leadType) return false;
+    if (utility && utilityTerritory(lead) !== utility) return false;
+    return true;
+  }
+
   function matchesAllFilters(lead) {
-    return matchesStageAndAssigned(lead) && matchesFollowUp(lead) && matchesSearch(lead);
+    return matchesStageAndAssigned(lead) && matchesLeadTypeAndUtility(lead) && matchesFollowUp(lead) && matchesSearch(lead);
   }
 
   function leadPriority(lead) {
@@ -215,6 +248,8 @@
     }
     if (stageFilter && stageFilter.value) parts.push(stageFilter.value);
     if (assignedFilter && assignedFilter.value) parts.push("assigned to " + assignedFilter.value);
+    if (leadTypeFilter && leadTypeFilter.value) parts.push("lead type " + leadTypeFilter.value);
+    if (utilityTerritoryFilter && utilityTerritoryFilter.value) parts.push(utilityTerritoryFilter.value);
     if (searchInput && searchInput.value.trim()) parts.push('search “' + searchInput.value.trim() + '”');
     return parts.join(", ");
   }
@@ -330,10 +365,12 @@
     if (searchInput) searchInput.value = "";
     if (stageFilter) stageFilter.value = "";
     if (assignedFilter) assignedFilter.value = "";
+    if (leadTypeFilter) leadTypeFilter.value = "";
+    if (utilityTerritoryFilter) utilityTerritoryFilter.value = "";
     if (followUpFilter) followUpFilter.value = "";
 
     // Trigger the base Leads page to rebuild its rows after resetting its filters.
-    [stageFilter, assignedFilter, followUpFilter].forEach(function (el) {
+    [stageFilter, assignedFilter, leadTypeFilter, utilityTerritoryFilter, followUpFilter].forEach(function (el) {
       if (el) el.dispatchEvent(new Event("change", { bubbles: true }));
     });
     queueApply();
@@ -343,6 +380,8 @@
   if (followUpFilter) followUpFilter.addEventListener("change", queueApply);
   if (stageFilter) stageFilter.addEventListener("change", queueApply);
   if (assignedFilter) assignedFilter.addEventListener("change", queueApply);
+  if (leadTypeFilter) leadTypeFilter.addEventListener("change", queueApply);
+  if (utilityTerritoryFilter) utilityTerritoryFilter.addEventListener("change", queueApply);
   if (printBtn) printBtn.addEventListener("click", printCallSheet);
   if (clearBtn) clearBtn.addEventListener("click", clearFilters);
 
