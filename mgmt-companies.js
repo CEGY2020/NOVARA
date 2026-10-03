@@ -14,6 +14,7 @@
   var mgmtCompanyIdInput = document.getElementById("field-mgmtCompanyId");
 
   var companiesById = {};
+  var editingCompanyId = "";
   /** Authoritative create|edit mode. Do not rely only on #mgmt-company-mode — form.reset() restores its default. */
   var currentMode = "create";
 
@@ -79,7 +80,7 @@
 
   function collectPayload() {
     return {
-      MgmtCompanyID: fieldValue("field-mgmtCompanyId"),
+      MgmtCompanyID: currentMode === "edit" ? editingCompanyId : fieldValue("field-mgmtCompanyId"),
       Name: fieldValue("field-name"),
       Address: fieldValue("field-address"),
       City: fieldValue("field-city"),
@@ -97,7 +98,7 @@
     var maxNum = 0;
     var pattern = /^MGT(\d+)$/i;
     Object.keys(companiesById).forEach(function (id) {
-      var match = pattern.exec(String(id || "").trim());
+      var match = pattern.exec(String(companiesById[id].mgmtCompanyCode || id || "").trim());
       if (!match) return;
       var num = parseInt(match[1], 10);
       if (Number.isFinite(num) && num > maxNum) {
@@ -127,6 +128,7 @@
 
     // Must set mode AFTER reset — #mgmt-company-mode defaults to "create" in the HTML.
     currentMode = mode;
+    editingCompanyId = mode === "edit" && company ? company.mgmtCompanyId : "";
     if (modeInput) {
       modeInput.value = mode;
     }
@@ -140,9 +142,9 @@
       modalTitle.textContent = "Edit Management Company";
       modalSubtitle.textContent =
         "Update " +
-        (company.mgmtCompanyId || "management company") +
+        (company.mgmtCompanyCode || company.mgmtCompanyId || "management company") +
         " in NOVARAMgmtCompanies";
-      setFieldValue("field-mgmtCompanyId", company.mgmtCompanyId);
+      setFieldValue("field-mgmtCompanyId", company.mgmtCompanyCode || company.mgmtCompanyId);
       setFieldValue("field-name", company.name || company.mgmtCompanyName);
       setFieldValue("field-address", company.address || "");
       setFieldValue("field-city", company.city || "");
@@ -198,7 +200,7 @@
           escapeHtml(company.mgmtCompanyId) +
           '" tabindex="0">' +
           "<td>" +
-          escapeHtml(company.mgmtCompanyId) +
+          escapeHtml(company.mgmtCompanyCode || company.mgmtCompanyId) +
           "</td>" +
           "<td>" +
           escapeHtml(company.name || company.mgmtCompanyName) +
@@ -401,3 +403,4 @@
 
   loadCompanies();
 })();
+
