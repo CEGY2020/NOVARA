@@ -44,7 +44,7 @@ class Store:
         pending = copy.deepcopy(self.tables)
         for operation in TransactItems:
             p = operation['Put']; item=p['Item']; name=p['TableName']
-            primary={'companies':'CompanyID','sites':'SiteID','contacts':'ContactID','leads':'LeadID','settings':'SettingKey'}[name]
+            primary={'companies':'CompanyID','sites':'SiteID','contacts':'ContactID','leads':'LeadID','settings':'SettingKey','owners':'OwnerID','managers':'MgmtCompanyID'}[name]
             db=pending.setdefault(name, {}); old=db.get(item[primary])
             if 'attribute_not_exists' in p['ConditionExpression']:
                 if old is not None: raise Conflict()

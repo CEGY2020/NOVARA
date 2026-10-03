@@ -17,6 +17,7 @@ from xml.etree import ElementTree as ET
 
 import master_data_api as master
 import novara_api as api
+import structured_forms
 
 MAX_FILE = 2 * 1024 * 1024
 MAX_TEXT = 60000
@@ -112,7 +113,7 @@ def preview(body):
                 matches.append(match[2])
         if len(set(matches)) == 1:
             fields[target] = matches[0]
-    return {"fileName": name, "text": source, "fields": fields,
+    return {"fileName": name, "text": source, "fields": fields, "structured": structured_forms.parse(source),
             "warning": "Review one site at a time. Multi-site tables and unlabeled fields require your selection."
             if source else "No readable text found. Enter the details manually; the original form will still be attached."}
 
@@ -274,16 +275,17 @@ def route(method, path, headers=None, query=None, body=None):
             return 200, preview(body or {})
         if method == "POST" and path.endswith("/import"):
             return 200, commit(body or {}, user)
+        if method == "POST" and path.endswith("/import-structured"):
+            return 200, structured_forms.commit(body or {}, user)
         if method == "GET" and path.endswith("/records"):
             data = snapshot()
             data["leads"] = [{k: r.get(k, "") for k in ("LeadID", "CompanyName", "SiteName", "SiteID", "Stage")} for r in data["leads"]]
-            data.pop("contacts")
             return 200, api.json_safe(data)
         if method == "GET" and path.endswith("/documents"):
             api.ensure_settings_table()
             rows, params = [], {"FilterExpression": "begins_with(SettingKey, :prefix) AND attribute_exists(FileName)",
                 "ExpressionAttributeValues": {":prefix": "FORM-"},
-                "ProjectionExpression": "SettingKey, FileName, SiteID, LeadID, CompanyID, UploadedBy, UpdatedAt"}
+                "ProjectionExpression": "SettingKey, FileName, SiteID, LeadID, CompanyID, SiteIDs, LeadIDs, ContactIDs, ImportVersion, UploadedBy, UpdatedAt"}
             table = api.dynamodb_table(api.SETTINGS_TABLE_NAME)
             while True:
                 page = table.scan(**params)
