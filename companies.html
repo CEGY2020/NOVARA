@@ -48,6 +48,7 @@
     @media(max-width:1450px){.companies-toolbar{grid-template-columns:1fr 1fr 1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}.edit-form{grid-template-columns:1fr 1fr}}
     @media(max-width:700px){.companies-toolbar{grid-template-columns:1fr}.detail-grid,.edit-form{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="mgmt-companies.css?v=5">
 </head>
 <body data-page="companies" data-role="aem">
   <div class="dashboard-layout">
@@ -66,7 +67,7 @@
           <label>Utility Region<select id="utility-filter"><option value="">All</option><option value="SoCalGas">SoCalGas Region</option><option value="SDG&E">SDG&E Region</option><option value="PG&E">PG&E Region</option><option value="Verify">Other / Verify</option></select></label>
           <label>State<select id="state-filter"><option value="">All</option></select></label>
           <button id="clear-company-search" type="button" class="secondary-btn">Clear</button>
-          <button id="print-pool-socalgas" type="button" class="primary-btn">Print Pool SoCalGas Sites</button>
+          <button id="master-company-report" type="button" class="secondary-btn">View report</button><button id="master-company-print" type="button" class="secondary-btn">Print list</button><button id="print-pool-socalgas" type="button" class="primary-btn">Print Pool SoCalGas Sites</button>
         </div>
         <div id="companies-status" class="companies-summary">Loading companies…</div>
         <div class="companies-table-wrap"><table class="data-table companies-table"><thead><tr><th>Company Name</th><th>Company ID</th><th>Master ID</th><th>Relationship</th><th>Programs</th><th>Sites</th><th>Contacts</th><th>Review</th></tr></thead><tbody id="companies-body"></tbody></table></div>
@@ -75,7 +76,7 @@
       <section id="company-detail" class="detail-panel" hidden>
         <div class="detail-heading">
           <div><h3 id="detail-company-name"></h3><p id="detail-programs"></p></div>
-          <div class="detail-actions"><button id="edit-company-btn" type="button" class="primary-btn">Edit Company</button><button id="close-company-detail" type="button" class="secondary-btn">Close</button></div>
+          <div class="detail-actions"><button id="master-company-report-one" type="button" class="secondary-btn">View / Print Report</button><button id="master-company-delete" type="button" class="secondary-btn">Delete Company</button><button id="edit-company-btn" type="button" class="primary-btn">Edit Company</button><button id="close-company-detail" type="button" class="secondary-btn">Close</button></div>
         </div>
         <div id="detail-fields" class="detail-grid"></div>
 
@@ -114,6 +115,8 @@
     </main>
   </div>
 
-  <script src="auth.js"></script><script src="role.js"></script><script src="api-config.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="companies.js?v=20260916-1"></script><script src="companies-edit-fix.js?v=20260916-1"></script><script src="companies-region-view.js?v=20260916-2"></script><script src="companies-site-filter.js?v=20260916-1"></script><script src="companies-site-edit-fix.js?v=20260916-1"></script><script src="companies-program-sync.js?v=20260916-2"></script><script src="companies-program-save-override.js?v=20260916-2"></script><script src="companies-print-pool-sites.js?v=20260916-1"></script>
+  <section id="company-report" hidden aria-label="Company report"><div class="report-actions"><button type="button" id="company-report-back">Back to companies</button><button type="button" id="company-report-print">Print / Save PDF</button></div><div id="company-report-content"></div></section>
+  <script src="auth.js"></script><script src="role.js"></script><script src="api-config.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="companies.js?v=20261003-5"></script><script src="companies-edit-fix.js?v=20260916-1"></script><script src="companies-region-view.js?v=20260916-2"></script><script src="companies-site-filter.js?v=20260916-1"></script><script src="companies-site-edit-fix.js?v=20260916-1"></script><script src="companies-program-sync.js?v=20260916-2"></script><script src="companies-program-save-override.js?v=20260916-2"></script><script src="companies-print-pool-sites.js?v=20260916-1"></script>
 </body>
 </html>
+

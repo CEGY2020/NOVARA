@@ -220,7 +220,7 @@ def handler(event, context):
     if path.startswith("/api/master-data/"):
         if method == "OPTIONS":
             return _crm_lambda_response(204, {})
-        status, payload = master_data_api.route(method, path, query=query, body=_event_body(event))
+        status, payload = master_data_api.route(method, path, query=query, body=_event_body(event), headers=event.get("headers") or {})
         return _crm_lambda_response(status, payload)
 
     if "/api/sales-reports" in path:
@@ -253,3 +253,6 @@ def handler(event, context):
 
 
 # Management company public IDs use the persistent MGT sequence.
+
+
+# Management directory supports guarded deletion and printable reports.
