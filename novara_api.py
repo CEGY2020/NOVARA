@@ -1690,6 +1690,48 @@ def normalize_mgmt_company(item: dict) -> dict:
     }
 
 
+def management_company_codes(ids):
+    """Persist short public IDs separately from immutable relationship keys."""
+    import re
+    from botocore.exceptions import ClientError
+
+    ensure_settings_table()
+    table = dynamodb_table(SETTINGS_TABLE_NAME)
+    key = {"SettingKey": "MANAGEMENT-COMPANY-ID-REGISTRY"}
+    for attempt in range(8):
+        old = table.get_item(Key=key, ConsistentRead=True).get("Item") or {}
+        codes = dict(old.get("Codes") or {})
+        original = dict(codes)
+        used = set(codes.values())
+        # Reserve real MGT IDs first, including existing records and new creates.
+        for identity in sorted(set(ids)):
+            if re.fullmatch(r"MGT[0-9]+", identity):
+                if identity not in codes and identity in used:
+                    raise ValueError(f"MgmtCompanyID '{identity}' already exists")
+                codes[identity] = identity
+                used.add(identity)
+        number = max([int(code[3:]) for code in used] or [0])
+        for identity in sorted(set(ids)):
+            if identity not in codes:
+                number += 1
+                codes[identity] = f"MGT{number:03d}"
+        if codes == original:
+            return codes
+        revision = int(old.get("Revision", 0))
+        kwargs = dict(Item={**key, "Codes": codes, "Revision": revision + 1})
+        if old:
+            kwargs.update(ConditionExpression="#r = :r", ExpressionAttributeNames={"#r": "Revision"}, ExpressionAttributeValues={":r": revision})
+        else:
+            kwargs["ConditionExpression"] = "attribute_not_exists(SettingKey)"
+        try:
+            table.put_item(**kwargs)
+            return codes
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+    raise RuntimeError("Management company IDs are busy; please retry")
+
+
 def scan_mgmt_companies() -> dict:
     ensure_mgmt_companies_table()
     table = dynamodb_table(MGMT_COMPANIES_TABLE_NAME)
@@ -1704,6 +1746,9 @@ def scan_mgmt_companies() -> dict:
         scan_kwargs["ExclusiveStartKey"] = last_key
 
     companies = [normalize_mgmt_company(json_safe(item)) for item in items]
+    codes = management_company_codes([row["mgmtCompanyId"] for row in companies])
+    for row in companies:
+        row["mgmtCompanyCode"] = codes[row["mgmtCompanyId"]]
     companies.sort(
         key=lambda row: (
             (row.get("name") or "").lower(),
@@ -1791,6 +1836,9 @@ def save_mgmt_company(item: dict, *, mode: str = "upsert") -> dict:
 
     ensure_mgmt_companies_table()
     table = dynamodb_table(MGMT_COMPANIES_TABLE_NAME)
+    # Register existing IDs before reserving a new sequential public ID.
+    scan_mgmt_companies()
+    management_company_codes([item["MgmtCompanyID"]])
     kwargs = {"Item": item}
     if mode == "create":
         kwargs["ConditionExpression"] = "attribute_not_exists(MgmtCompanyID)"
@@ -5700,4 +5748,5 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
         method, path, params, body, headers=headers
     )
     return api_response(status, payload)
+
 

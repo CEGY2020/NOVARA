@@ -250,3 +250,6 @@ def handler(event, context):
     if path.startswith("/api/leads/") and method in ("PUT", "PATCH"):
         return _persist_opportunity_links(event, response)
     return response
+
+
+# Management company public IDs use the persistent MGT sequence.
