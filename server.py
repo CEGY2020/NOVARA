@@ -239,6 +239,16 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/master-data/companies/"):
+            import master_data_api
+            status, payload = master_data_api.route("DELETE", parsed.path, headers=dict(self.headers))
+            self._send_json(status, payload)
+            return
+        company_id = novara_api._mgmt_company_id_from_path(parsed.path)
+        if company_id is not None:
+            status, payload = novara_api.handle_mgmt_company_delete_request(company_id, headers=dict(self.headers))
+            self._send_json(status, payload)
+            return
         preapproved_email = novara_api._preapproved_email_from_path(parsed.path)
         if preapproved_email is not None:
             status, payload = novara_api.handle_preapproved_remove_request(
@@ -456,3 +466,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

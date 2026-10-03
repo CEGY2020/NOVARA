@@ -1,0 +1,65 @@
+/* Management directory: compact, readable screen and paper layout. */
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]),:is(body[data-page="mgmt-companies"],body[data-page="companies"]) * {font-family:Arial,sans-serif!important;font-size:12pt!important;color:#000!important;line-height:1.25;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) {background:#fff;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .sidebar {background:#eee;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .sidebar a,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) button {background:#f0f0f0;border:1px solid #888;border-radius:4px;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) button {padding:6px 9px;cursor:pointer;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) button:focus-visible,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) input:focus-visible {outline:2px solid #000;outline-offset:2px;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) button:disabled {opacity:.6;cursor:wait;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .topbar {margin-bottom:12px;padding-bottom:8px;gap:12px;flex-wrap:wrap;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) h2,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) h3 {margin:0 0 6px;font-weight:bold;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) p {margin:6px 0;}
+.company-toolbar {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;}
+.company-toolbar input {flex:1;min-width:220px;padding:6px;border:1px solid #888;}
+.company-table-wrap {overflow-x:auto;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table {width:100%;border-collapse:collapse;background:white;border-radius:0;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table th,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table td {padding:7px 8px;border-bottom:1px solid #bbb;text-align:left;vertical-align:top;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table th {background:#eee;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table th:first-child,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .data-table td:first-child {white-space:nowrap;width:1%;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .company-sort {background:transparent;border:0;padding:0;text-align:left;font-weight:bold;}
+.company-row-actions {display:flex;gap:5px;flex-wrap:wrap;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .form-field input,:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .form-field textarea {padding:6px;background:#fff;}
+:is(body[data-page="mgmt-companies"],body[data-page="companies"]) .form-grid {gap:10px;}
+#company-report {max-width:1000px;margin:20px auto;padding:16px;background:#fff;}
+.report-actions {display:flex;gap:10px;margin-bottom:16px;}
+.company-report-card {border:1px solid #888;padding:12px;margin:12px 0;break-inside:avoid;}
+.company-report-card dl {display:grid;grid-template-columns:150px 1fr;gap:6px;margin:8px 0;}
+.company-report-card dt {font-weight:bold;}
+.company-report-card dd {margin:0;overflow-wrap:anywhere;white-space:pre-wrap;}
+body.company-report-open .dashboard-layout {display:none;}
+[hidden] {display:none!important;}
+@media print {
+ @page {size:landscape;margin:12mm;}
+ :is(body[data-page="mgmt-companies"],body[data-page="companies"]) {background:#fff!important;}
+ .sidebar,.topbar-actions,.company-toolbar,.report-actions,.modal-backdrop,#mgmt-companies-status {display:none!important;}
+ .dashboard-layout,.main-content {display:block!important;margin:0!important;padding:0!important;width:100%!important;}
+ body.company-report-open .dashboard-layout {display:none!important;}
+ .company-table-wrap {overflow:visible;}
+ .data-table th:last-child,.data-table td:last-child {display:none;}
+ .data-table thead {display:table-header-group;}
+ .data-table tr {break-inside:avoid;}
+ .company-sort {border:0!important;background:white!important;}
+ #company-report {margin:0;padding:0;max-width:none;}
+}
+
+body[data-page="companies"] .companies-toolbar {grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px;}
+body[data-page="companies"] .companies-toolbar input,body[data-page="companies"] .companies-toolbar select,body[data-page="companies"] .edit-form input,body[data-page="companies"] .edit-form select,body[data-page="companies"] .edit-form textarea {padding:6px;border-radius:4px;}
+body[data-page="companies"] .companies-table {min-width:850px;}
+body[data-page="companies"] .detail-panel {padding:12px;}
+body[data-page="companies"] .detail-grid {gap:8px;}
+body[data-page="companies"] .company-link {border:0;background:transparent;padding:0;}
+.master-sort {border:0!important;background:transparent!important;padding:0!important;font-weight:bold;text-align:left;}
+.company-report-table {border-collapse:collapse;width:100%;margin:8px 0;}
+.company-report-table th,.company-report-table td {padding:6px;border:1px solid #aaa;text-align:left;vertical-align:top;overflow-wrap:anywhere;}
+.company-report-table tr {break-inside:avoid;}
+@media print {
+ body[data-page="companies"] .companies-toolbar,body[data-page="companies"] #user-profile-root,body[data-page="companies"] #company-detail,body[data-page="companies"] .companies-summary {display:none!important;}
+ body[data-page="companies"] .companies-table-wrap {overflow:visible;}
+ body[data-page="companies"] .companies-table {min-width:0;table-layout:fixed;}
+ body[data-page="companies"] .data-table th:last-child,body[data-page="companies"] .data-table td:last-child {display:table-cell;}
+ body[data-page="companies"] .data-table td {overflow-wrap:anywhere;white-space:normal!important;}
+ .company-report-table thead {display:table-header-group;}
+ .company-report-section {break-before:page;}
+ .company-report-section:first-of-type {break-before:auto;}
+}
+body[data-page="companies"] .data-table th:first-child,body[data-page="companies"] .data-table td:first-child {white-space:normal;width:auto;}

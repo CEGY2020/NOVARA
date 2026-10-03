@@ -50,7 +50,7 @@
   function companyStates(company){var states={};companySites(companyId(company)).forEach(function(s){var st=text(s.State||s.state).toUpperCase();if(st)states[st]=true;});return Object.keys(states);}
 
   function rowSearchText(company){
-    var cid=companyId(company),mid=masterId(company),sites=companySites(cid),contacts=companyContacts(cid,mid),chunks=[company.CompanyName,company.CompanyID,company.MasterID,company.RelationshipType,company.ExampleSite,programs(company).join(' '),companyUtilityRegions(company).join(' '),companyStates(company).join(' ')];
+    var cid=companyId(company),mid=masterId(company),sites=companySites(cid),contacts=companyContacts(cid,mid),chunks=[company.Address,company.City,company.State,company.Zip,company.Phone,company.Email,company.Notes,company.CompanyName,company.CompanyID,company.MasterID,company.RelationshipType,company.ExampleSite,programs(company).join(' '),companyUtilityRegions(company).join(' '),companyStates(company).join(' ')];
     sites.forEach(function(s){chunks.push(s.SiteName,s.SiteID,s.Address,s.City,s.State,s.Phone,s.CustomerNumber,s.SiteKey);});
     contacts.forEach(function(c){chunks.push(c.ContactName,c.ContactID,c.SiteName,c.Email,c.Phone);});
     return norm(chunks.join(' '));
@@ -64,6 +64,7 @@
     state.filtered=state.companies.filter(function(c){if(rel&&text(c.RelationshipType)!==rel)return false;if(!matchProgram(c,prog)||!matchUtility(c,utility)||!matchState(c,st))return false;if(q&&rowSearchText(c).indexOf(q)===-1)return false;return true;});
     var body=$("companies-body");
     body.innerHTML=state.filtered.length?state.filtered.map(function(c){var cid=companyId(c),mid=masterId(c),sites=companySites(cid),contacts=companyContacts(cid,mid);return '<tr><td><button class="company-link" data-company-id="'+esc(cid)+'">'+esc(c.CompanyName||c.companyName)+'</button></td><td>'+esc(cid)+'</td><td>'+esc(mid)+'</td><td>'+esc(c.RelationshipType||'—')+'</td><td>'+programsHtml(c)+'</td><td>'+sites.length+'</td><td>'+contacts.length+'</td><td>'+esc(yes(c.NeedsReview)?'YES':'NO')+'</td></tr>';}).join(''):'<tr><td colspan="8">No matching companies found.</td></tr>';
+    tableSorts.forEach(function(sort,table){sortTable(table,sort.index,sort.direction);});
     $("companies-status").textContent=state.filtered.length+' of '+state.companies.length+' companies shown.';
   }
 
@@ -136,5 +137,52 @@
   $("record-edit-form").addEventListener('submit',saveRecord);$("cancel-record-edit").addEventListener('click',function(){$("record-edit-panel").hidden=true;state.editingRecord=null;});
   $("close-company-detail").addEventListener('click',function(){$("company-detail").hidden=true;state.currentCompanyId='';});
 
+
+  var tableSorts = new Map();
+  function sortTable(table, index, direction) {
+    var body=table.tBodies[0];
+    Array.from(body.rows).sort(function(a,b){
+      return direction * text(a.cells[index] && a.cells[index].textContent).localeCompare(text(b.cells[index] && b.cells[index].textContent),undefined,{numeric:true,sensitivity:'base'});
+    }).forEach(function(row){body.appendChild(row);});
+    tableSorts.set(table,{index:index,direction:direction});
+    Array.from(table.tHead.rows[0].cells).forEach(function(cell,i){cell.setAttribute('aria-sort',i===index?(direction===1?'ascending':'descending'):'none');var arrow=cell.querySelector('.sort-arrow');if(arrow)arrow.textContent=i===index?(direction===1?' ▲':' ▼'):' ↕';});
+  }
+  document.querySelectorAll('.data-table').forEach(function(table){
+    Array.from(table.tHead.rows[0].cells).forEach(function(cell,index){
+      if(text(cell.textContent)==='Action')return;
+      var label=text(cell.textContent);cell.innerHTML='<button type="button" class="master-sort">'+esc(label)+'<span class="sort-arrow" aria-hidden="true"> ↕</span></button>';
+      cell.setAttribute('aria-sort','none');
+      cell.querySelector('button').addEventListener('click',function(){var old=tableSorts.get(table);sortTable(table,index,old&&old.index===index?-old.direction:1);});
+    });
+  });
+  function reportTable(headers, rows) {
+    return '<table class="company-report-table"><thead><tr>'+headers.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(row){return '<tr>'+row.map(function(v){return '<td>'+esc(v||'—')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table>';
+  }
+  function showCompanyReport(rows) {
+    $('company-report-content').innerHTML='<h2>Company Report</h2><p>'+esc(new Date().toLocaleDateString())+' · '+rows.length+' companies</p>'+rows.map(function(c){
+      var cid=companyId(c),sites=companySites(cid),contacts=companyContacts(cid,masterId(c));
+      var fields=[['Company ID',cid],['Master ID',masterId(c)],['Relationship',c.RelationshipType],['Programs',programs(c).join(', ')],['Office address',[c.Address,c.City,c.State,c.Zip].filter(Boolean).join(', ')],['Office phone',c.Phone],['Email',c.Email],['Notes',c.Notes],['Review',c.ReviewReason],['Contact history',(c.ContactHistory||[]).map(function(log){return [log.DateTime,log.Method,log.Person,log.Outcome,log.NextAction,log.FollowUp].filter(Boolean).join(' · ');}).join('\n')]];
+      return '<section class="company-report-section"><h3>'+esc(c.CompanyName||c.companyName)+'</h3><div class="company-report-card"><dl>'+fields.map(function(f){return '<dt>'+esc(f[0])+'</dt><dd>'+esc(f[1]||'—')+'</dd>';}).join('')+'</dl></div><h3>Linked Sites ('+sites.length+')</h3>'+reportTable(['Site','Address','Phone','Pool area (sq ft)','Estimated annual savings'],sites.map(function(site){return [site.SiteName,[site.Address,site.City,site.State,site.Zip].filter(Boolean).join(', '),site.Phone,site.PoolAreaSqFt,site.EstimatedAnnualSavings?'$'+site.EstimatedAnnualSavings:''];}))+'<h3>Linked Contacts ('+contacts.length+')</h3>'+reportTable(['Name','Title / role','Site','Email','Phone','Office phone'],contacts.map(function(contact){return [contact.ContactName,contact.Title,contact.SiteName||contact.SiteID,contact.Email,contact.Phone,contact.OfficePhone];}))+'</section>';
+    }).join('');
+    $('company-report').hidden=false;document.body.classList.add('company-report-open');$('company-report-back').focus();
+  }
+  $('master-company-report').addEventListener('click',function(){
+    var rows=Array.from($('companies-body').rows).filter(function(row){return row.style.display!=='none';}).map(function(row){var button=row.querySelector('.company-link');return button?state.companies.find(function(c){return companyId(c)===button.getAttribute('data-company-id');}):null;}).filter(Boolean);
+    showCompanyReport(rows);
+  });
+  $('master-company-report-one').addEventListener('click',function(){var c=state.companies.find(function(c){return companyId(c)===state.currentCompanyId;});if(c)showCompanyReport([c]);});
+  $('master-company-print').addEventListener('click',function(){window.print();});
+  $('company-report-print').addEventListener('click',function(){window.print();});
+  $('company-report-back').addEventListener('click',function(){$('company-report').hidden=true;document.body.classList.remove('company-report-open');$('master-company-report').focus();});
+  $('master-company-delete').addEventListener('click',function(){
+    var c=state.companies.find(function(c){return companyId(c)===state.currentCompanyId;});if(!c)return;
+    if(!window.confirm('Delete '+text(c.CompanyName)+' ('+companyId(c)+')? This cannot be undone. Linked sites, contacts and leads must be reassigned first.'))return;
+    var button=$('master-company-delete');button.disabled=true;
+    NovaraApi.sendJson('/api/master-data/companies/'+encodeURIComponent(companyId(c)),'DELETE').then(function(){
+      state.companies=state.companies.filter(function(row){return companyId(row)!==companyId(c);});state.currentCompanyId='';$('company-detail').hidden=true;render();
+    }).catch(function(err){window.alert(err.message||'Unable to delete company.');}).finally(function(){button.disabled=false;});
+  });
+
   load();
 })();
+

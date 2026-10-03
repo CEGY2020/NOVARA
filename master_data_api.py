@@ -236,10 +236,50 @@ def _filter_rows(rows: list[dict], query: dict | None) -> list[dict]:
     return result
 
 
-def route(method: str, path: str, *, query: dict | None = None, body: dict | None = None) -> tuple[int, dict]:
+def delete_company(company_id, headers=None):
+    from botocore.exceptions import ClientError
+    user, error = novara_api.optional_auth_user(headers)
+    if error or not user:
+        return 401, {"error": error or "Sign in to delete a company."}
+    if user.get("role") != "aem":
+        return 403, {"error": "An AEM administrator must delete companies."}
+    try:
+        ensure_companies_table()
+        table = novara_api.dynamodb_table(COMPANIES_TABLE_NAME)
+        existing = table.get_item(Key={"CompanyID": company_id}, ConsistentRead=True).get("Item")
+        if not existing:
+            return 404, {"error": "Company was not found."}
+        master_id = _text(existing.get("MasterID"))
+        for name, label in [(SITES_TABLE_NAME, "sites"), (CONTACTS_TABLE_NAME, "contacts"),
+                            (novara_api.LEADS_TABLE_NAME, "leads"), (novara_api.USERS_TABLE_NAME, "users")]:
+            linked = novara_api.dynamodb_table(name)
+            kwargs = {"ConsistentRead": True}
+            while True:
+                response = linked.scan(**kwargs)
+                for row in response.get("Items", []):
+                    direct = any(_text(row.get(key)) == company_id for key in ("CompanyID", "companyId", "SourceCompanyID"))
+                    master_link = bool(master_id) and _text(row.get("MasterID") or row.get("masterId")) == master_id
+                    if direct or master_link:
+                        return 409, {"error": f"This company has linked {label}. Reassign or remove those links before deleting the company."}
+                if not response.get("LastEvaluatedKey"):
+                    break
+                kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+        table.delete_item(Key={"CompanyID": company_id}, ConditionExpression="attribute_exists(CompanyID)")
+        return 200, {"ok": True, "deleted": True, "companyId": company_id}
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return 404, {"error": "Company was not found."}
+        return 500, {"error": "Unable to delete company; no linked records were removed."}
+
+
+def route(method: str, path: str, *, query: dict | None = None, body: dict | None = None, headers: dict | None = None) -> tuple[int, dict]:
     method = (method or "GET").upper()
     normalized = "/" + (path or "").strip("/")
     body = body or {}
+
+    if normalized.startswith("/api/master-data/companies/") and method == "DELETE":
+        from urllib.parse import unquote
+        return delete_company(unquote(normalized[len("/api/master-data/companies/"):]), headers)
 
     if normalized == "/api/master-data/companies":
         ensure_companies_table()
@@ -283,3 +323,4 @@ def route(method: str, path: str, *, query: dict | None = None, body: dict | Non
         return 405, {"error": "Method not allowed"}
 
     return 404, {"error": f"Unknown master-data path '{path}'"}
+

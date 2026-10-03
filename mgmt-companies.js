@@ -13,6 +13,12 @@
   var cancelBtn = document.getElementById("mgmt-company-cancel-btn");
   var mgmtCompanyIdInput = document.getElementById("field-mgmtCompanyId");
 
+  var allCompanies = [];
+  var visibleCompanies = [];
+  var sortKey = "name";
+  var sortDirection = 1;
+  var nextAvailableId = "";
+  var searchInput = document.getElementById("company-search");
   var companiesById = {};
   var editingCompanyId = "";
   /** Authoritative create|edit mode. Do not rely only on #mgmt-company-mode — form.reset() restores its default. */
@@ -95,6 +101,7 @@
 
   /** Next sequential MgmtCompanyID from NOVARAMgmtCompanies rows matching MGT###. */
   function nextMgmtCompanyId() {
+    if (nextAvailableId) return nextAvailableId;
     var maxNum = 0;
     var pattern = /^MGT(\d+)$/i;
     Object.keys(companiesById).forEach(function (id) {
@@ -187,7 +194,7 @@
     companiesById = {};
     if (!companies.length) {
       tbody.innerHTML =
-        '<tr><td colspan="6">No management companies found in NOVARAMgmtCompanies.</td></tr>';
+        '<tr><td colspan="6">No matching management companies.</td></tr>';
       return;
     }
 
@@ -243,17 +250,9 @@
     return request
       .then(function (data) {
         var companies = (data && data.mgmtCompanies) || [];
-        renderCompanies(companies);
-        if (!companies.length) {
-          setStatus("No management companies found in NOVARAMgmtCompanies.", false);
-        } else {
-          setStatus(
-            companies.length +
-              " management compan" +
-              (companies.length === 1 ? "y" : "ies"),
-            false
-          );
-        }
+        allCompanies = companies;
+        nextAvailableId = data.nextMgmtCompanyId || "";
+        applyView();
       })
       .catch(function (err) {
         tbody.innerHTML =
@@ -374,6 +373,14 @@
   }
 
   tbody.addEventListener("click", function (event) {
+    var actionBtn = event.target.closest("[data-company-action]");
+    if (actionBtn) {
+      var company = companiesById[actionBtn.getAttribute("data-mgmt-company-id")];
+      if (!company) return;
+      if (actionBtn.getAttribute("data-company-action") === "report") showReport([company]);
+      else deleteCompany(company, actionBtn);
+      return;
+    }
     var editBtn = event.target.closest(".edit-mgmt-company-btn");
     if (editBtn) {
       event.stopPropagation();
@@ -385,6 +392,7 @@
   });
 
   tbody.addEventListener("keydown", function (event) {
+    if (event.target.closest("button")) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     var row = event.target.closest("tr.mgmt-company-row");
     if (!row) return;
@@ -401,6 +409,73 @@
     }
   });
 
+  function sortValue(company, key) {
+    if (key === "location") return formatLocation(company);
+    if (key === "contact") return company.contactName || company.contactEmail || "";
+    if (key === "name") return company.name || company.mgmtCompanyName || "";
+    return company[key] || "";
+  }
+
+  function applyView() {
+    var query = String(searchInput.value || "").trim().toLowerCase();
+    visibleCompanies = allCompanies.filter(function (company) {
+      return [company.mgmtCompanyCode, company.name, company.mgmtCompanyName, company.address,
+        company.city, company.state, company.zip, company.contactName, company.contactEmail,
+        company.contactPhone, formatPhoneValue(company.contactPhone), company.notes].join(" ").toLowerCase().includes(query);
+    }).sort(function (a, b) {
+      return sortDirection * String(sortValue(a, sortKey)).localeCompare(String(sortValue(b, sortKey)), undefined, {numeric:true,sensitivity:"base"});
+    });
+    renderCompanies(visibleCompanies);
+    setStatus(visibleCompanies.length + " of " + allCompanies.length + " management companies", false);
+    document.querySelectorAll(".company-sort").forEach(function (button) {
+      var active = button.dataset.sort === sortKey;
+      button.parentElement.setAttribute("aria-sort", active ? (sortDirection === 1 ? "ascending" : "descending") : "none");
+      button.querySelector("span").textContent = active ? (sortDirection === 1 ? "▲" : "▼") : "↕";
+    });
+  }
+
+  function showReport(companies) {
+    var content = document.getElementById("company-report-content");
+    content.innerHTML = "<h2>Management Company Report</h2><p>" + escapeHtml(new Date().toLocaleDateString()) +
+      " · " + companies.length + " companies</p>" +
+      (companies.length ? companies.map(function (company) {
+        var fields = [["Mgmt Company ID", company.mgmtCompanyCode || company.mgmtCompanyId],
+          ["Address", [company.address, formatLocation(company), company.zip].filter(Boolean).join(", ")],
+          ["Contact", company.contactName], ["Email", company.contactEmail],
+          ["Phone", formatPhoneValue(company.contactPhone)], ["Notes", company.notes]];
+        return '<article class="company-report-card"><h3>' + escapeHtml(company.name || company.mgmtCompanyName) +
+          "</h3><dl>" + fields.map(function (field) { return "<dt>" + escapeHtml(field[0]) + "</dt><dd>" + escapeHtml(field[1] || "—") + "</dd>"; }).join("") + "</dl></article>";
+      }).join("") : "<p>No matching companies.</p>");
+    document.getElementById("company-report").hidden = false;
+    document.body.classList.add("company-report-open");
+    document.getElementById("company-report-back").focus();
+  }
+
+  function deleteCompany(company, button) {
+    if (!window.confirm("Delete " + (company.name || company.mgmtCompanyName) + " (" + company.mgmtCompanyCode + ")? This cannot be undone. Companies with linked records must be unlinked first.")) return;
+    button.disabled = true;
+    window.NovaraApi.sendJson("/api/mgmt-companies/" + encodeURIComponent(company.mgmtCompanyId), "DELETE")
+      .then(function () { return loadCompanies(); })
+      .catch(function (err) { button.disabled = false; setStatus(err.message || "Unable to delete company.", true); });
+  }
+
+  searchInput.addEventListener("input", applyView);
+  document.querySelectorAll(".company-sort").forEach(function (button) {
+    button.addEventListener("click", function () {
+      sortDirection = sortKey === button.dataset.sort ? -sortDirection : 1;
+      sortKey = button.dataset.sort;
+      applyView();
+    });
+  });
+  document.getElementById("company-report-all").addEventListener("click", function () { showReport(visibleCompanies); });
+  document.getElementById("company-print-list").addEventListener("click", function () { window.print(); });
+  document.getElementById("company-report-print").addEventListener("click", function () { window.print(); });
+  document.getElementById("company-report-back").addEventListener("click", function () {
+    document.getElementById("company-report").hidden = true;
+    document.body.classList.remove("company-report-open");
+    document.getElementById("company-report-all").focus();
+  });
   loadCompanies();
 })();
+
 

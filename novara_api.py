@@ -1759,6 +1759,7 @@ def scan_mgmt_companies() -> dict:
         "table": MGMT_COMPANIES_TABLE_NAME,
         "count": len(companies),
         "mgmtCompanies": companies,
+        "nextMgmtCompanyId": f"MGT{max([int(code[3:]) for code in codes.values()] or [0]) + 1:03d}",
     }
 
 
@@ -1865,6 +1866,47 @@ def save_mgmt_company(item: dict, *, mode: str = "upsert") -> dict:
         "table": MGMT_COMPANIES_TABLE_NAME,
         "mgmtCompany": normalize_mgmt_company(item),
     }
+
+
+def handle_mgmt_company_delete_request(company_id, *, headers=None):
+    """Delete an unlinked management company; never cascade to customer records."""
+    from botocore.exceptions import ClientError
+    user, error = optional_auth_user(headers)
+    if error or not user:
+        return 401, {"error": error or "Sign in to delete a management company."}
+    if user.get("role") != "aem":
+        return 403, {"error": "An AEM administrator must delete management companies."}
+    try:
+        ensure_mgmt_companies_table()
+        table = dynamodb_table(MGMT_COMPANIES_TABLE_NAME)
+        existing = table.get_item(Key={"MgmtCompanyID": company_id}, ConsistentRead=True).get("Item")
+        if not existing:
+            return 404, {"error": "Management company was not found."}
+        name = str(existing.get("Name") or existing.get("MgmtCompanyName") or "").strip().casefold()
+        for table_name, label in [(SITES_TABLE_NAME, "sites"),
+                                  (os.environ.get("NOVARA_COMPANIES_TABLE", "NOVARACompanies"), "company records"),
+                                  (os.environ.get("NOVARA_CONTACTS_TABLE", "NOVARAContacts"), "contacts"),
+                                  (LEADS_TABLE_NAME, "leads"), (USERS_TABLE_NAME, "users")]:
+            linked_table = dynamodb_table(table_name)
+            kwargs = {"ConsistentRead": True}
+            while True:
+                response = linked_table.scan(**kwargs)
+                for row in response.get("Items", []):
+                    id_match = any(str(row.get(key) or "") == company_id for key in ("MgmtCompanyID", "mgmtCompanyId", "ManagementCompanyID"))
+                    name_match = bool(name) and any(str(row.get(key) or "").strip().casefold() == name for key in ("MgmtCompany", "MgmtCompanyName", "ManagementCompany", "mgmtCompany"))
+                    if id_match or name_match:
+                        return 409, {"error": f"This company has linked {label}. Reassign or remove those links before deleting the company."}
+                if not response.get("LastEvaluatedKey"):
+                    break
+                kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+        # Keep the public ID reserved even after deletion.
+        scan_mgmt_companies()
+        table.delete_item(Key={"MgmtCompanyID": company_id}, ConditionExpression="attribute_exists(MgmtCompanyID)")
+        return 200, {"ok": True, "deleted": True, "mgmtCompanyId": company_id}
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return 404, {"error": "Management company was not found."}
+        return 500, {"error": "Unable to delete company; no linked records were removed."}
 
 
 def ensure_leads_table() -> str:
@@ -5482,6 +5524,8 @@ def route_request(
         return 405, {"error": "Method not allowed"}
     mgmt_company_path_id = _mgmt_company_id_from_path(normalized)
     if mgmt_company_path_id is not None:
+        if method == "DELETE":
+            return handle_mgmt_company_delete_request(mgmt_company_path_id, headers=headers)
         if method == "PUT":
             return handle_mgmt_company_write_request(
                 body, mode="update", company_id=mgmt_company_path_id
@@ -5748,5 +5792,6 @@ def handle_lambda_event(event: dict, _context=None) -> dict:
         method, path, params, body, headers=headers
     )
     return api_response(status, payload)
+
 
 
