@@ -9,6 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import novara_api
+import customer_forms
 
 DEFAULT_PORT = int(os.environ.get("PORT", "8000"))
 
@@ -32,6 +33,10 @@ class NovaraHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/customer-forms/"):
+            status, payload = customer_forms.route("GET", parsed.path, headers=dict(self.headers), query=parse_qs(parsed.query))
+            self._send_json(status, payload)
+            return
         photo_content_id = novara_api._photo_content_id_from_path(parsed.path)
         if photo_content_id is not None:
             try:
@@ -138,6 +143,13 @@ class NovaraHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/customer-forms/"):
+            body = self._read_json_body()
+            if body is not None:
+                status, payload = customer_forms.route("POST", parsed.path, headers=dict(self.headers), body=body)
+                self._send_json(status, payload)
+            return
         parsed = urlparse(self.path)
         if parsed.path in ("/api/users/signup", "/api/users"):
             body = self._read_json_body()
