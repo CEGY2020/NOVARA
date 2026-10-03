@@ -685,6 +685,7 @@
     return request
       .then(function (data) {
         var sites = filterSitesForCurrentUser((data && data.sites) || []);
+        if (window.NovaraNav) sites = sites.filter(NovaraNav.matchesApplication);
         renderSites(sites);
         if (!sites.length) {
           setStatus(
