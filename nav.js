@@ -29,8 +29,48 @@
   var currentUser=readStoredUser(),role=readStoredRole()||document.body.getAttribute("data-role")||"aem";if(window.NovaraRole&&NovaraRole.normalizeRole)role=NovaraRole.normalizeRole(role)||role;if(ROLE_NAV[role]==null)role="aem";if(window.NovaraRole&&NovaraRole.setSelectedRole)NovaraRole.setSelectedRole(role);var NAV_ITEMS=(ROLE_NAV[role]||AEM_NAV_ITEMS).slice();var isLoggedInAem=currentUser&&String(currentUser.role||"").toLowerCase()==="aem";if(!isLoggedInAem)NAV_ITEMS=NAV_ITEMS.filter(function(item){return item.id!=="users"});
   function currentHash(){return String(window.location.hash||"").replace(/^#/,"").toLowerCase()}function pageFileName(){return window.location.pathname.split("/").pop()||""}
   function isItemActive(item){if(role==="sales"&&currentPage==="leads"){var onPipeline=currentHash()==="pipeline";if(item.id==="sales-pipeline")return onPipeline;if(item.id==="sales-leads")return !onPipeline;return false}if(role==="mgmt"&&currentPage==="mgmt-home"){var hash=currentHash();if(item.id==="mgmt-team")return hash==="team";if(item.id==="mgmt-home")return hash!=="team"}if(item.id===currentPage)return true;if(!item.href||item.href.indexOf("#")===-1)return false;var parts=item.href.split("#"),path=parts[0],hash2=(parts[1]||"").toLowerCase();if(path&&pageFileName()!==path)return false;return currentHash()===hash2}
-  function renderSidebar(root){var links=NAV_ITEMS.map(function(item){var active=isItemActive(item)?' class="active"':"";return '<a href="'+item.href+'"'+active+'>'+item.label+'</a>'}).join("\n");root.innerHTML='<div class="brand"><img class="brand-logo" src="images/novara-logo.png" alt="NOVARA"></div><nav>'+links+'</nav><div class="sidebar-footer"><p>Advanced Energy Management</p><p>Version 1.0</p></div>'}
+  var APPLICATIONS = ["RHW", "DHW", "HVAC", "Pool"];
+  var requestedApplication = new URLSearchParams(window.location.search).get("application");
+  var application = APPLICATIONS.indexOf(requestedApplication) >= 0 ? requestedApplication : "";
+  function escapeText(value) { return String(value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function appHref(href, app) { var parts=href.split("#"); return parts[0]+(parts[0].indexOf("?")>=0?"&":"?")+"application="+encodeURIComponent(app)+(parts[1]?"#"+parts[1]:""); }
+  function matchesApplication(record) {
+    if (!application) return true;
+    var type=String(record.systemType || record.SystemType || "").toUpperCase();
+    if (application === "RHW") return /RHW|RESTAURANT/.test(type);
+    if (application === "DHW") return /DHW|DOMESTIC/.test(type);
+    return type.indexOf(application.toUpperCase()) >= 0;
+  }
+  function portfolioItems(app) {
+    var items=[{id:"portfolio",label:"Portfolio",href:"portfolio.html"}];
+    [["sites","Sites","sites.html"],["systems","Systems","systems.html"],["owners","Owners","owners.html"],["mgmt-companies","Management Companies","mgmt-companies.html"],["companies","Contacts","contacts.html"],["systems","Equipment / Assets","systems.html"],["alarms","Alerts","active-alarms.html"]].forEach(function(entry){
+      if (NAV_ITEMS.some(function(item){return item.id===entry[0]})) items.push({id:entry[0],label:entry[1],href:entry[2]});
+    });
+    if(role==="aem") items.splice(items.length-2,0,{id:"providers",label:"Service Providers / Contractors",href:"portfolio.html#service-providers"});
+    return items.map(function(item){return {id:item.id,label:item.label,href:appHref(item.href,app)}});
+  }
+  function renderSidebar(root) {
+    document.body.classList.add("top-navigation-layout");
+    root.className="app-navigation";
+    root.setAttribute("aria-label","Platform navigation");
+    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-1";document.head.appendChild(css);
+    var menus=APPLICATIONS.map(function(app){
+      return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(function(item){return '<a href="'+item.href+'">'+item.label+'</a>'}).join("")+'</div></details>';
+    }).join("");
+    var customers=NAV_ITEMS.some(function(item){return item.id==="companies"});
+    var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
+    var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
+    root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'">Optima ProLink</a><nav aria-label="Main menu">'+menus+(customers?'<a href="companies.html"'+(currentPage==="companies"||currentPage==="contacts"?' aria-current="page"':'')+'>Customers</a>':'')+(leads?'<a href="leads.html"'+(currentPage==="leads"?' aria-current="page"':'')+'>Leads</a>':'')+'<a href="user-guide.html"'+(currentPage==="user-guide"?' aria-current="page"':'')+'>User Guide</a></nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(function(item){return '<a href="'+item.href+'">'+item.label+'</a>'}).join("")+'</div></details>':'');
+    root.addEventListener("toggle",function(event){if(!event.target.open)return;root.querySelectorAll("details").forEach(function(menu){if(menu!==event.target)menu.open=false});},true);
+    document.addEventListener("click",function(event){if(!root.contains(event.target))root.querySelectorAll("details").forEach(function(menu){menu.open=false});});
+    root.addEventListener("keydown",function(event){if(event.key==="Escape")root.querySelectorAll("details").forEach(function(menu){if(menu.open){menu.open=false;menu.querySelector("summary").focus()}});});
+    if(application && currentPage!=="portfolio"){
+      var context=document.createElement("div");context.className="application-context";
+      context.innerHTML='<strong>'+application+'</strong> <span>'+(["sites","systems","companies"].indexOf(currentPage)>=0?'Application view':'Shared portfolio records')+'</span> <a href="'+escapeText(window.location.pathname.split("/").pop())+'">View all applications</a>';
+      var main=document.querySelector("main");if(main)main.insertBefore(context,main.firstChild);
+    }
+  }
   function renderUserProfile(root){var title=ROLE_TITLES[role]||"Administrator",displayName=(currentUser&&currentUser.fullName)||(currentUser&&currentUser.email)||"NOVARA User",companyLabel=currentUser&&currentUser.company?" · "+currentUser.company:"",initials="?";if(window.NovaraAuth&&NovaraAuth.initialsFor)initials=NovaraAuth.initialsFor(currentUser||{fullName:displayName});else initials=String(displayName).split(/\s+/).filter(Boolean).slice(0,2).map(function(part){return part.charAt(0).toUpperCase()}).join("")||"?";root.className="user-profile";root.innerHTML='<div class="user-avatar">'+initials+'</div><div><strong>'+displayName+'</strong><span>'+title+companyLabel+'</span></div><a href="index.html" class="logout-btn" id="novara-logout-btn">Logout</a>';var logoutBtn=root.querySelector("#novara-logout-btn");if(logoutBtn)logoutBtn.addEventListener("click",function(event){event.preventDefault();if(window.NovaraAuth&&NovaraAuth.logout){NovaraAuth.logout("index.html");return}try{sessionStorage.removeItem("novaraUser");sessionStorage.removeItem("novaraToken");sessionStorage.removeItem("novaraTokenExpires");sessionStorage.removeItem("novaraRole");localStorage.removeItem("novaraUser");localStorage.removeItem("novaraToken");localStorage.removeItem("novaraTokenExpires")}catch(e){}window.location.href="index.html"})}
-  function refreshActive(){var root=document.getElementById("sidebar-root");if(!root)return;var nav=root.querySelector("nav");if(!nav){renderSidebar(root);return}var links=nav.querySelectorAll("a");NAV_ITEMS.forEach(function(item,index){if(!links[index])return;if(isItemActive(item))links[index].classList.add("active");else links[index].classList.remove("active")})}
-  var sidebarRoot=document.getElementById("sidebar-root"),profileRoot=document.getElementById("user-profile-root");if(sidebarRoot)renderSidebar(sidebarRoot);if(profileRoot)renderUserProfile(profileRoot);window.addEventListener("hashchange",refreshActive);window.NovaraNav={refreshActive:refreshActive,role:role,items:NAV_ITEMS};
+  function refreshActive(){var root=document.getElementById("sidebar-root");if(!root)return;root.querySelectorAll("a").forEach(function(link){if(link.getAttribute("href")===(pageFileName()+window.location.search))link.setAttribute("aria-current","page");else link.removeAttribute("aria-current");});}
+  var sidebarRoot=document.getElementById("sidebar-root"),profileRoot=document.getElementById("user-profile-root");if(sidebarRoot)renderSidebar(sidebarRoot);if(profileRoot)renderUserProfile(profileRoot);window.addEventListener("hashchange",refreshActive);window.NovaraNav={refreshActive:refreshActive,role:role,items:NAV_ITEMS,application:application,matchesApplication:matchesApplication,portfolioItems:portfolioItems};
 })();
