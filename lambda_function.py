@@ -14,6 +14,7 @@ import sales_reports
 import site_evaluations
 import summary_reports
 import workflow_documents
+import customer_forms
 
 
 def _crm_lambda_response(status: int, payload: dict) -> dict:
@@ -205,6 +206,10 @@ def handler(event, context):
     query = parse_qs(event.get("rawQueryString") or "")
     if not query and isinstance(event.get("queryStringParameters"), dict):
         query = {k: [v] for k, v in event["queryStringParameters"].items() if v is not None}
+
+    if path.startswith("/api/customer-forms/"):
+        status, payload = customer_forms.route(method, path, headers=event.get("headers") or {}, query=query, body=_event_body(event))
+        return _crm_lambda_response(status, payload)
 
     if path.startswith("/api/crm"):
         if method == "OPTIONS":

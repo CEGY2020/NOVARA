@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NOVARA — Upload Customer Forms</title>
+  <link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="novara-ui-standard.css">
+  <style>
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+    .form-grid label{display:flex;flex-direction:column;gap:5px;color:#000}
+    .form-grid input,.form-grid select,textarea{font:inherit;padding:8px;border:1px solid #879caf;border-radius:5px;max-width:100%;box-sizing:border-box}
+    textarea{width:100%;min-height:160px} .wide{grid-column:1/-1}
+    .upload-actions{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}
+    #form-status{white-space:pre-wrap} #form-status.is-error{color:#a01919}
+    #source-text{white-space:pre-wrap;max-height:260px;overflow:auto;background:#fff;padding:12px;color:#000}
+    .data-table th{background:#dbeaf5;color:#000} [hidden]{display:none!important}
+  </style>
+</head>
+<body data-page="master-data-import" data-role="aem">
+<div class="dashboard-layout"><aside class="sidebar" id="sidebar-root"></aside><main class="main-content">
+  <header class="topbar"><div><h2>Upload Customer Forms</h2><p>Add contact information and notes to your PHEEP customers.</p></div><div id="user-profile-root"></div></header>
+  <p><a href="leads.html">Back to Leads</a> · <a href="master-data-import.html">Master Data Upload</a></p>
+  <section class="card"><h3>1. Choose a form</h3>
+    <p>PDF, Word (.docx), Excel (.xlsx), or CSV, up to 2 MB each. Review one site per import. For a form with several sites, repeat the review for each site.</p>
+    <label for="customer-file">Customer form</label> <input id="customer-file" type="file" accept=".pdf,.docx,.xlsx,.csv">
+    <button id="read-form" type="button" class="primary-btn">Read Form</button>
+    <p id="form-status" role="status" aria-live="polite">Loading customer records…</p>
+  </section>
+  <section id="review-section" class="card" hidden><h3>2. Review and match</h3>
+    <p>Choose existing records when available. Blank contact fields keep existing information. Notes are appended. Only enter a stage or follow-up date when you want to change it.</p>
+    <details><summary>View extracted form text</summary><pre id="source-text"></pre></details>
+    <form id="review-form"><div class="form-grid">
+      <label>Company / customer<select id="companyId"><option value="">Match by name or create new</option></select></label>
+      <label>Company / customer name<input id="companyName" maxlength="160"></label>
+      <label>Site<select id="siteId"><option value="">Match by name/address or create new</option></select></label>
+      <label>Site name<input id="siteName" maxlength="160"></label>
+      <label>Street address<input id="address"></label><label>City<input id="city"></label>
+      <label>State<input id="state"></label><label>ZIP<input id="zip"></label>
+      <label>Lead<select id="leadId"><option value="">Match site or create a new lead</option></select></label>
+      <label>Contact name<input id="contactName"></label><label>Email<input id="email" type="email"></label><label>Phone<input id="phone" type="tel"></label>
+      <label>Stage<select id="stage"><option value="">Keep existing / New Lead</option><option>New Lead</option><option>Contacted</option><option>Qualified</option><option>Proposal Sent</option><option>Won</option><option>Lost</option></select></label>
+      <label>Next follow-up<input id="followUp" type="date"></label><label>Assigned to<input id="assignedTo"></label>
+      <label class="wide">Notes to add — include contact dates, discussions, pool details, and next actions<textarea id="notes" maxlength="60000"></textarea></label>
+      <label class="wide"><span><input type="checkbox" id="review-confirm" required> I checked the customer, site, contact details, and notes for this import.</span></label>
+    </div><div class="upload-actions"><button id="save-form" type="submit" class="primary-btn">Save Customer and Form</button><button id="reload-records" type="button" class="secondary-btn">Reload Records</button></div></form>
+  </section>
+  <section class="card"><h3>Uploaded forms</h3><p>The original documents remain linked to their sites and leads.</p>
+    <label>Find a site or filename <input id="document-search" type="search"></label>
+    <div id="documents" class="table-wrap"></div>
+  </section>
+</main></div>
+<script src="auth.js"></script><script src="role.js"></script><script src="api-config.js"></script><script src="api-client.js"></script><script src="nav.js"></script><script src="customer-form-upload.js"></script>
+</body></html>
