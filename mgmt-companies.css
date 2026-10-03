@@ -63,3 +63,10 @@ body[data-page="companies"] .company-link {border:0;background:transparent;paddi
  .company-report-section:first-of-type {break-before:auto;}
 }
 body[data-page="companies"] .data-table th:first-child,body[data-page="companies"] .data-table td:first-child {white-space:normal;width:auto;}
+body[data-page="companies"] .companies-table {table-layout:fixed;width:100%;}
+body[data-page="companies"] .companies-table th,body[data-page="companies"] .companies-table td {overflow-wrap:anywhere;white-space:normal!important;}
+body[data-page="companies"] .companies-table th:nth-child(1) {width:23%;}
+body[data-page="companies"] .companies-table th:nth-child(2),body[data-page="companies"] .companies-table th:nth-child(3) {width:12%;}
+body[data-page="companies"] .companies-table th:nth-child(4) {width:13%;}
+body[data-page="companies"] .companies-table th:nth-child(5) {width:16%;}
+body[data-page="companies"] .companies-table th:nth-child(6),body[data-page="companies"] .companies-table th:nth-child(7),body[data-page="companies"] .companies-table th:nth-child(8) {width:8%;}
