@@ -321,6 +321,7 @@
 
   function renderSystems(systems) {
     lastSystems = Array.isArray(systems) ? systems : [];
+    if (window.NovaraNav) lastSystems = lastSystems.filter(NovaraNav.matchesApplication);
     systemsById = {};
     if (!lastSystems.length) {
       tbody.innerHTML =
@@ -462,6 +463,7 @@
     return request
       .then(function (data) {
         var systems = (data && data.systems) || [];
+        if (window.NovaraNav) systems = systems.filter(NovaraNav.matchesApplication);
         renderSystems(systems);
         if (!systems.length) {
           setStatus("No systems found in NOVARASystems.", false);
