@@ -14,7 +14,7 @@ import sales_reports
 import site_evaluations
 import summary_reports
 import workflow_documents
-import customer_forms
+import customer_forms  # Includes the structured portfolio importer.
 
 
 def _crm_lambda_response(status: int, payload: dict) -> dict:

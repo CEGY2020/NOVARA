@@ -32,7 +32,7 @@
     ['Form','Site','Lead','Uploaded','Download'].forEach(label => {const th = document.createElement('th'); th.textContent = label; head.appendChild(th);});
     const body = table.createTBody();
     documents.slice().sort((a,b) => String(b.UpdatedAt).localeCompare(String(a.UpdatedAt))).forEach(doc => {
-      const site = (records.sites.find(s => s.SiteID === doc.SiteID) || {}).SiteName || doc.SiteID;
+      const site = doc.SiteIDs ? doc.SiteIDs.length + ' sites' : (records.sites.find(s => s.SiteID === doc.SiteID) || {}).SiteName || doc.SiteID;
       if (![doc.FileName,site,doc.LeadID].join(' ').toLowerCase().includes(filter)) return;
       const row = body.insertRow();
       [doc.FileName,site,doc.LeadID,String(doc.UpdatedAt).slice(0,10)].forEach(value => row.insertCell().textContent = value);
@@ -91,9 +91,13 @@
       fieldNames.forEach(id => $(id).value='');
       Object.entries(preview.fields || {}).forEach(([id,value]) => {if (fieldNames.includes(id)) $(id).value=value;});
       $('source-text').textContent=preview.text || '(No extracted text)';
-      $('notes').value=preview.text || '';
+      $('notes').value='';
       $('review-confirm').checked=false;
       filePayload=payload; $('review-section').hidden=false;
+      if (window.NovaraStructuredForms && preview.structured) {
+        window.NovaraStructuredForms.show(preview.structured, payload, records, reload);
+        $('review-section').hidden=true;
+      }
       status(preview.warning + ' Review the address and contact details before saving.');
     } catch (err) {status(err.message,true);} finally {lock(false);}
   });

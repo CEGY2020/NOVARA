@@ -120,6 +120,7 @@ def _company_item(body: dict) -> dict:
         "NeedsReview": _yn(body, "NeedsReview"),
         "ReviewReason": _text(body.get("ReviewReason") or body.get("reviewReason")),
         "UpdatedAt": _now(),
+        **{k: _text(body[k]) for k in ("Address", "City", "State", "Zip", "Phone", "Email", "Notes") if k in body},
     }
 
 
@@ -129,8 +130,8 @@ def _contact_item(body: dict) -> dict:
     name = _text(body.get("ContactName") or body.get("contactName") or body.get("Name"))
     if not contact_id:
         raise ValueError("ContactID is required")
-    if not site_id:
-        raise ValueError("SiteID is required")
+    if not site_id and not _text(body.get("CompanyID") or body.get("companyId")):
+        raise ValueError("SiteID or CompanyID is required")
     if not name:
         raise ValueError("ContactName is required")
     return {
@@ -141,6 +142,8 @@ def _contact_item(body: dict) -> dict:
         "SiteKey": _text(body.get("SiteKey") or body.get("siteKey")),
         "SiteName": _text(body.get("SiteName") or body.get("siteName")),
         "ContactName": name,
+        "Scope": _text(body.get("Scope")) or ("Site" if site_id else "Company"),
+        **{k: _text(body[k]) for k in ("Title", "OfficePhone", "VerificationStatus", "Notes") if k in body},
         "Email": _text(body.get("Email") or body.get("email")),
         "Phone": _text(body.get("Phone") or body.get("phone")),
         "ProgramPool": _yn(body, "ProgramPool"),
@@ -189,6 +192,8 @@ def _site_item(body: dict) -> dict:
         "Status": _text(body.get("Status") or body.get("status")) or "Needs Review",
         "Systems": 0,
         "UpdatedAt": _now(),
+        **{k: _text(body[k]) for k in ("PoolAreaSqFt", "PoolCount", "PoolAreaStatus", "SavingsAllowanceMonthlyPer800SqFt",
+            "PoolEvidence", "ManagementStatus", "Notes", "EstimatedMonthlySavings", "EstimatedAnnualSavings") if k in body},
     }
 
 
@@ -196,6 +201,11 @@ def _put(table_name: str, key_name: str, item: dict, *, create_only: bool) -> tu
     from botocore.exceptions import ClientError
 
     table = novara_api.dynamodb_table(table_name)
+    if not create_only:
+        existing = table.get_item(Key={key_name: item[key_name]}, ConsistentRead=True).get("Item") or {}
+        if key_name == "SiteID" and "Systems" in existing:
+            item["Systems"] = existing["Systems"]
+        item = {**existing, **item}
     kwargs: dict[str, Any] = {"Item": item}
     if create_only:
         kwargs["ConditionExpression"] = f"attribute_not_exists({key_name})"
