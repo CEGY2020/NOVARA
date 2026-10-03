@@ -183,6 +183,7 @@
     }).catch(function(err){window.alert(err.message||'Unable to delete company.');}).finally(function(){button.disabled=false;});
   });
 
+  if(window.NovaraNav && NovaraNav.application) $("program-filter").value=NovaraNav.application==="RHW"?"Restaurant":NovaraNav.application;
   load();
 })();
 
