@@ -3591,7 +3591,8 @@ def scan_users(*, status: str | None = None) -> dict:
             "status must be one of: " + ", ".join(USER_STATUSES)
         )
     items = _scan_user_items()
-    users = [normalize_user(json_safe(item)) for item in items]
+    users = [normalize_user(json_safe(item)) for item in items
+             if str(item.get("Status") or item.get("status") or "") != "Deleted"]
     if status_filter:
         users = [row for row in users if row.get("status") == status_filter]
     users.sort(
@@ -5232,6 +5233,30 @@ def _user_admin(headers):
     return user, None
 
 
+
+def handle_user_delete_request(user_id, *, headers=None):
+    actor, error = _user_admin(headers)
+    if error:
+        return error
+    if actor["userId"] == user_id:
+        return 409, {"error": "You cannot delete your own administrator account."}
+    existing = find_user_by_id(user_id)
+    if not existing or existing.get("Status") == "Deleted":
+        return 404, {"error": "User was not found."}
+    current = normalize_user(existing)
+    if current["role"] == "aem" and current["status"] == "Active":
+        admins = [normalize_user(row) for row in _scan_user_items()]
+        if sum(row["role"] == "aem" and row["status"] == "Active" for row in admins) <= 1:
+            return 409, {"error": "Keep at least one active administrator."}
+    # Only the login record is deleted; customer, site and service records remain.
+    # Reserve the ID so future signups cannot inherit references to this user.
+    dynamodb_table(USERS_TABLE_NAME).put_item(
+        Item={"UserID": user_id, "Status": "Deleted",
+              "DeletedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ConditionExpression="attribute_exists(UserID)")
+    return 200, {"ok": True, "deleted": True, "userId": user_id}
+
+
 def handle_user_edit_request(body, *, user_id, headers=None):
     actor, error = _user_admin(headers)
     if error:
@@ -5701,6 +5726,8 @@ def route_request(
         return 405, {"error": "Method not allowed"}
     user_path_id = _user_id_from_path(normalized)
     if user_path_id is not None:
+        if method == "DELETE":
+            return handle_user_delete_request(user_path_id, headers=headers)
         if method == "PUT":
             return handle_user_edit_request(body, user_id=user_path_id, headers=headers)
         return 405, {"error": "Method not allowed"}
