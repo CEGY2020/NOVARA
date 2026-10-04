@@ -1,0 +1,16 @@
+/* Compact wave banners with readable content, inspired by utility-site layouts. */
+body.platform-waves {--page-wave:url("images/platform-wave-3.svg");background:#eef4f7;}
+body.platform-waves[data-wave="1"] {--page-wave:url("images/platform-wave-1.svg");}
+body.platform-waves[data-wave="2"] {--page-wave:url("images/platform-wave-2.svg");}
+body.platform-waves[data-wave="3"] {--page-wave:url("images/platform-wave-3.svg");}
+body.platform-waves[data-wave="4"] {--page-wave:url("images/platform-wave-4.svg");}
+body.platform-waves[data-wave="5"] {--page-wave:url("images/platform-wave-5.svg");}
+.platform-waves .main-content {background:transparent;}
+body.platform-waves .topbar {min-height:0;padding:14px 24px;border-radius:10px;background-image:linear-gradient(90deg,rgba(3,28,48,.88),rgba(3,28,48,.42)),var(--page-wave);background-position:center,center 48%;background-size:cover;box-shadow:0 5px 18px rgba(9,47,69,.10);}
+body.platform-waves .topbar h2,body.platform-waves .topbar p,body.platform-waves .topbar strong,body.platform-waves .topbar span,body.platform-waves .topbar small {color:white;}
+body.platform-waves .topbar .user-avatar {background:#dceff4;color:#163f63;}
+body.platform-waves .topbar .logout-btn {background:white;color:#163f63;}
+.platform-waves .panel,.platform-waves .card,.platform-waves .data-table,.platform-waves .portfolio-card {background:white;}
+.platform-waves .app-navigation {background:white;}
+@media(max-width:760px){body.platform-waves .topbar{padding:12px 16px;gap:12px;flex-wrap:wrap;}}
+@media print{body.platform-waves{background:white;}body.platform-waves .topbar{background:none;box-shadow:none;}body.platform-waves .topbar h2,body.platform-waves .topbar p{color:black;}}
