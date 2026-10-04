@@ -93,7 +93,7 @@
     return rows.filter(function(row){
       var relationship=String(row.RelationshipType||"").toLowerCase();
       var status=String(row.CustomerStatus||row.Status||row.status||"").toLowerCase();
-      return String(row[field]||"").toUpperCase()==="YES" &&
+      return (relationship==="customer" || /^(active|current)$/.test(status) || row._assignedCustomer===true) && String(row[field]||"").toUpperCase()==="YES" &&
         !/contractor|service provider|prospect|lead/.test(relationship) &&
         !/^(inactive|archived|former|closed)$/.test(status);
     }).sort(function(a,b){return String(a.CompanyName||"").localeCompare(String(b.CompanyName||""));});
@@ -112,7 +112,7 @@
             (data.sites||[]).forEach(function(site){
               var id=site.ownerId||site.companyId||site.CompanyID;
               if(!id)return;
-              var row=byId[id]||(byId[id]={CompanyID:id,CompanyName:site.owner||site.companyName||site.CompanyName||id});
+              var row=byId[id]||(byId[id]={CompanyID:id,CompanyName:site.owner||site.companyName||site.CompanyName||id,_assignedCustomer:true});
               var type=String(site.systemType||site.SystemType||"").toUpperCase();
               if(/RHW|RESTAURANT/.test(type))row.ProgramRestaurant="YES";
               if(/DHW|DOMESTIC/.test(type))row.ProgramDHW="YES";
@@ -131,6 +131,10 @@
     }
     root.querySelectorAll("[data-customer-app]").forEach(function(menu){
       var app=menu.getAttribute("data-customer-app"),panel=menu.querySelector(".navigation-dropdown");
+      function reviewPortals(){
+        if(app!=="RHW")return;
+        panel.insertAdjacentHTML("beforeend",'<div class="customer-menu-heading"><strong>RHW review portals</strong></div>'+[{label:"Chipotle RHW",href:appHref("chipotle-rhw.html",app)},{label:"AS Plumbing RHW",href:appHref("as-plumbing-rhw.html",app)}].map(dropdownLink).join(""));
+      }
       function list(){
         panel.innerHTML='<div class="customer-menu-heading"><strong>'+app+' customers</strong><span>Select a customer to open the submenu.</span></div><p class="customer-menu-message" role="status">Loading customers…</p>';
         records().then(function(rows){
@@ -143,12 +147,12 @@
             var hint=document.createElement("span");hint.className="menu-definition";hint.textContent="Open "+app+" submenu →";button.appendChild(hint);
             button.addEventListener("click",function(){submenu(customer);});panel.appendChild(button);
           });
-          var add=document.createElement("a");add.href=appHref("companies.html?action=add-customer",app);add.className="customer-menu-add";add.textContent="+ Add customer";panel.appendChild(add);
+          var add=document.createElement("a");add.href=appHref("companies.html?action=add-customer",app);add.className="customer-menu-add";add.textContent="+ Add customer";panel.appendChild(add);reviewPortals();
         }).catch(function(error){
           panel.innerHTML='<div class="customer-menu-heading"><strong>'+app+' customers</strong></div>';
           var message=document.createElement("p");message.className="customer-menu-message";message.setAttribute("role","status");message.textContent=error.message||"Unable to load customers.";panel.appendChild(message);
           if(!window.NovaraAuth||!NovaraAuth.getToken()){var login=document.createElement("a");login.href="login.html";login.textContent="Log in";panel.appendChild(login);}
-          else {var retry=document.createElement("button");retry.type="button";retry.className="customer-menu-choice";retry.textContent="Retry";retry.onclick=function(){request=null;list();};panel.appendChild(retry);}
+          else {var retry=document.createElement("button");retry.type="button";retry.className="customer-menu-choice";retry.textContent="Retry";retry.onclick=function(){request=null;list();};panel.appendChild(retry);}reviewPortals();
         });
       }
       function submenu(customer){
