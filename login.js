@@ -109,7 +109,9 @@
           window.NovaraRole && NovaraRole.getHomeForRole
             ? NovaraRole.getHomeForRole(role)
             : "dashboard.html";
-        window.location.href = home;
+        var portal=new URLSearchParams(location.search).get("portal");
+        var portalHomes={"as-plumbing":"as-plumbing-rhw.html?application=RHW","chipotle":"chipotle-rhw.html?application=RHW"};
+        window.location.href = portalHomes[portal] || home;
       })
       .catch(function (err) {
         setMessage((err && err.message) || "Invalid email or password.", true);
