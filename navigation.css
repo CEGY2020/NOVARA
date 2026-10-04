@@ -49,3 +49,13 @@
 .account-identity {grid-column:1/-1;padding:8px 12px 14px;border-bottom:1px solid #dce3e9;color:#163f63;}
 .account-identity strong {display:block;margin-bottom:4px;font-size:16px;}
 .account-identity span {display:block;font-size:14px;line-height:1.5;color:#526477;}
+
+.customer-menu-heading {grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:0 8px 12px;border-bottom:1px solid #dce3e9;}
+.customer-menu-heading strong {margin:0;}
+.customer-menu-heading span {color:#526477;font-size:14px;}
+.customer-menu-message {grid-column:1/-1;padding:8px;color:#526477;}
+.customer-menu-choice,.customer-menu-back {font:inherit;color:#163f63;background:#f4f9fc;border:1px solid #c6d9e5;border-radius:6px;padding:12px;text-align:left;cursor:pointer;}
+.customer-menu-choice:hover,.customer-menu-back:hover {background:#eaf4fa;border-color:#1687b6;}
+.customer-menu-choice:focus-visible,.customer-menu-back:focus-visible {outline:3px solid #1687b6;outline-offset:2px;}
+.customer-menu-add {border:1px dashed #1687b6;align-self:start;}
+[data-customer-app] .navigation-dropdown {grid-template-columns:repeat(auto-fit,minmax(170px,1fr));max-height:65vh;overflow:auto;}
