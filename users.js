@@ -52,7 +52,7 @@
   function statusBadge(status) {
     var normalized = String(status || "Pending");
     var cls = "status-badge status-" + normalized.toLowerCase();
-    return '<span class="' + cls + '">' + escapeHtml(normalized) + "</span>";
+    return '<span class="' + cls + '">' + escapeHtml(normalized==="OnHold"?"On hold":normalized) + "</span>";
   }
 
   function queryParam(name) {
@@ -186,6 +186,7 @@
           "<td class=\"users-notes\">" +
           escapeHtml(note) +
           "</td>" +
+          '<td class="users-actions"><button type="button" class="secondary-btn user-edit-btn" data-user-id="'+escapeHtml(user.userId)+'">Edit</button> <button type="button" class="secondary-btn user-hold-btn" data-user-id="'+escapeHtml(user.userId)+'" data-status="'+(user.status==="OnHold"?"Active":"OnHold")+'">'+(user.status==="OnHold"?"Reactivate":"Put on hold")+'</button></td>' +
           "</tr>"
         );
       })
@@ -340,7 +341,7 @@
       return Promise.reject(new Error("API client is unavailable."));
     }
     setStatus(
-      (status === "Active" ? "Approving" : "Rejecting") + " " + userId + "…"
+      (status === "Active" ? "Activating" : status === "OnHold" ? "Putting on hold" : "Rejecting") + " " + userId + "…"
     );
     return NovaraApi.updateUserStatus(userId, status, options || {})
       .then(function () {
@@ -453,6 +454,31 @@
   if (refreshBtn) {
     refreshBtn.addEventListener("click", loadUsers);
   }
+
+
+  var editPanel=document.createElement("section");editPanel.className="users-section";editPanel.hidden=true;
+  editPanel.innerHTML='<h3>Edit user</h3><form id="user-edit-form" class="site-form"><div class="form-grid"><label class="form-field"><span>Name</span><input name="FullName" required maxlength="120"></label><label class="form-field"><span>Email</span><input name="Email" type="email" required maxlength="160"></label><label class="form-field"><span>Company</span><input name="Company" maxlength="160"></label><label class="form-field"><span>Role</span><select name="Role"><option value="aem">Administrator</option><option value="contractor">Contractor</option><option value="owner">Owner / customer</option><option value="mgmt">Management company</option><option value="sales">Sales</option></select></label></div><p>Changing email or role ends the user’s current session. On hold accounts keep their records and email; they cannot sign in until reactivated.</p><button class="primary-btn" type="submit">Save changes</button> <button class="secondary-btn" type="button" id="user-edit-cancel">Cancel</button><p id="user-edit-message" role="status"></p></form>';
+  document.querySelector("main").insertBefore(editPanel,document.querySelector('[aria-labelledby="all-users-heading"]'));
+  var editForm=editPanel.querySelector("form"),editingId="";
+  editPanel.querySelector("#user-edit-cancel").onclick=function(){editPanel.hidden=true;};
+  if(allBody)allBody.addEventListener("click",function(event){
+    var button=event.target.closest("button[data-user-id]");if(!button)return;
+    var user=findUser(button.getAttribute("data-user-id"));if(!user)return;
+    if(button.classList.contains("user-edit-btn")){
+      editingId=user.userId;
+      ["FullName","Email","Company","Role"].forEach(function(key){var source={FullName:"fullName",Email:"email",Company:"company",Role:"role"}[key];editForm.elements[key].value=user[source]||"";});
+      editPanel.hidden=false;editPanel.querySelector("#user-edit-message").textContent="";editPanel.scrollIntoView({behavior:"smooth",block:"center"});editForm.elements.FullName.focus();
+    }else if(button.classList.contains("user-hold-btn")){
+      var next=button.getAttribute("data-status");
+      if(!confirm((next==="OnHold"?"Put on hold and end access for ":"Reactivate ")+(user.fullName||user.email)+"?"))return;
+      button.disabled=true;updateStatus(user.userId,next,{sendRejectionEmail:false}).catch(function(){}).finally(function(){button.disabled=false;});
+    }
+  });
+  editForm.addEventListener("submit",function(event){
+    event.preventDefault();var payload={};["FullName","Email","Company","Role"].forEach(function(key){payload[key]=editForm.elements[key].value.trim();});
+    var message=editPanel.querySelector("#user-edit-message"),save=editForm.querySelector('[type="submit"]');save.disabled=true;message.textContent="Saving…";
+    NovaraApi.sendJson("/api/users/"+encodeURIComponent(editingId),"PUT",payload).then(function(){editPanel.hidden=true;loadUsers();}).catch(function(error){message.textContent=error.message||"Could not save user.";}).finally(function(){save.disabled=false;});
+  });
 
   loadUsers();
 })();
