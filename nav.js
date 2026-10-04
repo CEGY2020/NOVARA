@@ -92,6 +92,11 @@
       ["novara-ui-standard.css","submenu-lists.css?v=20261003"].forEach(function(href){if(href.indexOf("novara-ui")===0&&document.querySelector('link[href^="novara-ui-standard"]'))return;var style=document.createElement("link");style.rel="stylesheet";style.href=href;document.head.appendChild(style);});
       var listTools=document.createElement("script");listTools.src="submenu-lists.js?v=20261003";document.head.appendChild(listTools);
     }
+    document.body.classList.add("platform-waves");
+    var waveMap={RHW:"1",DHW:"2",HVAC:"4",Pool:"5"};
+    var pageWaves={dashboard:"3",portfolio:"5",sites:"1",systems:"2",owners:"4","mgmt-companies":"5",companies:"1",contacts:"2",providers:"4",equipment:"3",alarms:"4",leads:"3","user-guide":"5",reports:"5",settings:"2"};
+    document.body.setAttribute("data-wave",waveMap[application]||pageWaves[currentPage]||"3");
+    var waveStyle=document.createElement("link");waveStyle.rel="stylesheet";waveStyle.href="platform-waves.css?v=20261003";document.head.appendChild(waveStyle);
     var menus=APPLICATIONS.map(function(app){
       return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
     }).join("");
