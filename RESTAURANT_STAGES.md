@@ -31,3 +31,11 @@ Build evidence-based keep/repair/replace comparisons using measured kitchen dema
 - Confirm leak protection pump purpose and response options.
 - Confirm alarm escalation and report scope requirements.
 - Review stage one before activating integrations.
+
+## Expanded inputs and UtilityAPI gas setup
+
+Added demand changes/expansion, sanitation specifications, photos and piping references, loaded gas pressure, water treatment/scale history, sensor accuracy and missing-data response, acknowledgement/closure/delivery-failure procedures, protective-action approval, downtime impact, capital priorities, report interpretation review, and change approval records.
+
+A tenth section records UtilityAPI customer authorization, gas meter UIDs, site mapping, billing history, refresh preference, collection cost approval, tariff/rate basis, gas units/conversion, other connected gas loads, DHW allocation and sync health. The Load stored gas records action reads authenticated existing ProLink records for the entered site, only when fuel or units identify gas. It does not initiate collection or monitoring, and does not label manually entered sync metadata as verified.
+
+Existing backend settings and bills endpoints do not perform live UtilityAPI calls. Next implementation: authenticated server-side client using a protected token; explicit authorization-to-site meter mapping; gas-only meter discovery; paginated bill and available interval retrieval; idempotent records; unit preservation; data coverage; status/errors and authorized revocation. Paid historical/ongoing collections require a reviewed collection cost decision. Scheduled telemetry sync and UtilityAPI data availability are different cadences. Do not put the API token or customer credentials into browser drafts, exports or the public repository.
