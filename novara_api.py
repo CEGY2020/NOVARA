@@ -101,7 +101,7 @@ LEAD_STAGES = (
     "Lost",
 )
 USER_ROLES = ("aem", "owner", "mgmt", "contractor", "sales")
-USER_STATUSES = ("Pending", "Active", "Rejected")
+USER_STATUSES = ("Pending", "Active", "Rejected", "OnHold")
 USER_ROLE_LABELS = {
     "aem": "AEM",
     "owner": "Owner",
@@ -3880,14 +3880,16 @@ def update_user_status(
     next_status = _as_text(status)
     if not target_id:
         raise ValueError("UserID is required")
-    if next_status not in ("Active", "Rejected"):
-        raise ValueError("Status must be Active or Rejected")
+    if next_status not in ("Active", "Rejected", "OnHold"):
+        raise ValueError("Status must be Active, Rejected or OnHold")
 
     existing = find_user_by_id(target_id)
     if not existing:
         raise LookupError(f"UserID '{target_id}' was not found")
 
     if decision_token:
+        if next_status not in ("Active", "Rejected"):
+            raise PermissionError("Email decision links cannot suspend accounts")
         stored_hash = first_present(
             existing,
             ("DecisionTokenHash", "decisionTokenHash", "decision_token_hash"),
@@ -3917,6 +3919,8 @@ def update_user_status(
     names = {"#status": "Status"}
     values: dict[str, Any] = {":status": next_status, ":updated": now}
     remove_parts: list[str] = ["DecisionTokenHash"]
+    if next_status != "Active":
+        remove_parts.extend(["SessionTokenHash", "SessionExpiresAt"])
 
     if next_status == "Rejected":
         update_expression += ", RejectionReason = :reason"
@@ -3952,7 +3956,7 @@ def update_user_status(
     user = normalize_user(updated)
 
     email_result: dict | None = None
-    if next_status == "Active":
+    if next_status == "Active" and normalize_user(existing).get("status") == "Pending":
         email_result = notify_user_welcome(user)
     elif next_status == "Rejected" and send_rejection_email:
         email_result = notify_user_rejection(user, reason_text)
@@ -5218,6 +5222,76 @@ def _user_status_path_id(path: str) -> str | None:
     return None
 
 
+
+def _user_admin(headers):
+    user, error = optional_auth_user(headers)
+    if error or not user:
+        return None, (401, {"error": error or "Sign in as an administrator."})
+    if user.get("role") != "aem":
+        return None, (403, {"error": "Only an AEM administrator can manage users."})
+    return user, None
+
+
+def handle_user_edit_request(body, *, user_id, headers=None):
+    actor, error = _user_admin(headers)
+    if error:
+        return error
+    if not isinstance(body, dict):
+        return 400, {"error": "JSON body is required"}
+    existing = find_user_by_id(user_id)
+    if not existing:
+        return 404, {"error": "User was not found."}
+    current = normalize_user(existing)
+    name = _as_text(body.get("FullName", current["fullName"]))
+    email = _as_text(body.get("Email", current["email"])).lower()
+    company = _as_text(body.get("Company", current["company"]))
+    role = _as_text(body.get("Role", current["role"])).lower()
+    if not name or len(name) > 120 or not _EMAIL_PATTERN.fullmatch(email) or len(email) > 160 or len(company) > 160 or role not in USER_ROLES:
+        return 400, {"error": "Enter a name, valid email, company and valid role within the field limits."}
+    if actor["userId"] == user_id and role != current["role"]:
+        return 409, {"error": "You cannot change your own administrator role."}
+    duplicate = find_user_by_email(email)
+    if duplicate and normalize_user(duplicate)["userId"] != user_id:
+        return 409, {"error": "This email already belongs to another account."}
+    if current["role"] == "aem" and current["status"] == "Active" and role != "aem":
+        admins = [normalize_user(row) for row in _scan_user_items()]
+        if sum(row["role"] == "aem" and row["status"] == "Active" for row in admins) <= 1:
+            return 409, {"error": "Keep at least one active administrator."}
+    names = {"#name": "FullName", "#email": "Email", "#company": "Company", "#role": "Role"}
+    values = {":name": name, ":email": email, ":company": company, ":role": role,
+              ":updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    expression = "SET #name=:name, #email=:email, #company=:company, #role=:role, UpdatedAt=:updated"
+    if email != current["email"] or role != current["role"]:
+        expression += " REMOVE SessionTokenHash, SessionExpiresAt, DecisionTokenHash"
+    response = dynamodb_table(USERS_TABLE_NAME).update_item(
+        Key={"UserID": user_id}, UpdateExpression=expression,
+        ExpressionAttributeNames=names, ExpressionAttributeValues=values,
+        ConditionExpression="attribute_exists(UserID)", ReturnValues="ALL_NEW")
+    return 200, {"ok": True, "user": normalize_user(response["Attributes"])}
+
+
+def handle_admin_user_status(body, *, user_id, headers=None):
+    # Existing email approval links retain their restricted, one-time decision path.
+    token = body and (body.get("DecisionToken") or body.get("decisionToken") or body.get("token"))
+    if token:
+        return handle_user_status_request(body, user_id=user_id)
+    actor, error = _user_admin(headers)
+    if error:
+        return error
+    status = _as_text((body or {}).get("Status") or (body or {}).get("status"))
+    target = find_user_by_id(user_id)
+    if not target:
+        return 404, {"error": "User was not found."}
+    if actor["userId"] == user_id and status != "Active":
+        return 409, {"error": "You cannot suspend or reject your own administrator account."}
+    current = normalize_user(target)
+    if current["role"] == "aem" and current["status"] == "Active" and status != "Active":
+        admins = [normalize_user(row) for row in _scan_user_items()]
+        if sum(row["role"] == "aem" and row["status"] == "Active" for row in admins) <= 1:
+            return 409, {"error": "Keep at least one active administrator."}
+    return handle_user_status_request(body, user_id=user_id)
+
+
 def handle_user_status_request(
     body: dict | None, *, user_id: str
 ) -> tuple[int, dict]:
@@ -5617,7 +5691,7 @@ def route_request(
     if user_status_id is not None:
         if method != "PUT":
             return 405, {"error": "Method not allowed"}
-        return handle_user_status_request(body, user_id=user_status_id)
+        return handle_admin_user_status(body, user_id=user_status_id, headers=headers)
     if normalized.endswith("/api/users") or normalized == "/users":
         if method == "GET":
             return handle_users_request(params)
@@ -5627,6 +5701,8 @@ def route_request(
         return 405, {"error": "Method not allowed"}
     user_path_id = _user_id_from_path(normalized)
     if user_path_id is not None:
+        if method == "PUT":
+            return handle_user_edit_request(body, user_id=user_path_id, headers=headers)
         return 405, {"error": "Method not allowed"}
     if normalized.endswith("/api/health") or normalized == "/health":
         if method != "GET":
