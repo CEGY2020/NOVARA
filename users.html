@@ -15,7 +15,7 @@
     <header class="topbar">
       <div>
         <h2>Users</h2>
-        <p>Approve or reject pending NOVARA accounts</p>
+        <p>Edit accounts, approve new users, or put access on hold</p>
       </div>
       <div class="topbar-actions">
         <button type="button" class="secondary-btn" id="refresh-users-btn">
@@ -59,12 +59,12 @@
             <th>Role</th>
             <th>Company</th>
             <th>Status</th>
-            <th>Notes</th>
+            <th>Notes</th><th>Actions</th>
           </tr>
         </thead>
         <tbody id="all-users-tbody">
           <tr>
-            <td colspan="7">Loading…</td>
+            <td colspan="8">Loading…</td>
           </tr>
         </tbody>
       </table>
@@ -132,7 +132,7 @@
 <script src="role.js"></script>
 <script src="auth.js"></script>
 <script src="nav.js?v=20261003-top"></script>
-<script src="users.js"></script>
+<script src="users.js?v=20261004-edit-hold"></script>
 
 </body>
 </html>
