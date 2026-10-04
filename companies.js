@@ -126,7 +126,7 @@
 
   function populateStates(){var found={};state.sites.forEach(function(s){var st=text(s.State||s.state).toUpperCase();if(st)found[st]=true;});var select=$("state-filter"),current=select.value;select.innerHTML='<option value="">All</option>'+Object.keys(found).sort().map(function(st){return '<option value="'+esc(st)+'">'+esc(st)+'</option>';}).join('');if(current&&found[current])select.value=current;}
 
-  function load(){if(!window.NovaraApi){$("companies-status").textContent='NOVARA API unavailable.';return;}$("companies-status").textContent='Loading companies, sites, and contacts…';Promise.all([NovaraApi.getMasterCompanies(),NovaraApi.getMasterSites(),NovaraApi.getContacts()]).then(function(values){state.companies=(values[0]&&values[0].companies)||[];state.sites=(values[1]&&values[1].sites)||[];state.contacts=(values[2]&&values[2].contacts)||[];populateStates();render();}).catch(function(err){$("companies-status").textContent=err&&err.message?err.message:'Could not load company lookup data.';});}
+  function load(){if(!window.NovaraApi){$("companies-status").textContent='NOVARA API unavailable.';return;}$("companies-status").textContent='Loading companies, sites, and contacts…';Promise.all([NovaraApi.getMasterCompanies(),NovaraApi.getMasterSites(),NovaraApi.getContacts()]).then(function(values){state.companies=(values[0]&&values[0].companies)||[];state.sites=(values[1]&&values[1].sites)||[];state.contacts=(values[2]&&values[2].contacts)||[];populateStates();render();var requested=new URLSearchParams(location.search).get("companyId");if(requested&&state.companies.some(function(row){return companyId(row)===requested;}))showCompany(requested);}).catch(function(err){$("companies-status").textContent=err&&err.message?err.message:'Could not load company lookup data.';});}
 
   $("company-search").addEventListener('input',render);$("relationship-filter").addEventListener('change',render);$("program-filter").addEventListener('change',render);$("utility-filter").addEventListener('change',render);$("state-filter").addEventListener('change',render);
   $("clear-company-search").addEventListener('click',function(){$("company-search").value='';$("relationship-filter").value='';$("program-filter").value='';$("utility-filter").value='';$("state-filter").value='';render();$("company-search").focus();});
@@ -184,6 +184,34 @@
   });
 
   if(window.NovaraNav && NovaraNav.application) $("program-filter").value=NovaraNav.application==="RHW"?"Restaurant":NovaraNav.application;
+
+  // Customer creation uses the same permanent company directory as lookup.
+  function setupAddCustomer(){
+    var params=new URLSearchParams(location.search),app=params.get("application")||"RHW";
+    var fields={RHW:"ProgramRestaurant",DHW:"ProgramDHW",HVAC:"ProgramHVAC",Pool:"ProgramPool"};
+    if(!fields[app])app="RHW";
+    var main=document.querySelector("main"),panel=document.createElement("section");
+    panel.className="detail-panel";panel.hidden=params.get("action")!=="add-customer";
+    panel.innerHTML='<h3>Add customer</h3><form class="edit-form" id="new-customer-form"><label>Customer name<input name="name" required maxlength="180" autocomplete="organization"></label><label>Application<select name="application"><option>RHW</option><option>DHW</option><option>HVAC</option><option value="Pool">Pools</option></select></label><label>Email<input name="email" type="email" autocomplete="email"></label><label>Phone<input name="phone" type="tel" autocomplete="tel"></label><label class="wide">Address<input name="address" autocomplete="street-address"></label><div class="edit-buttons"><button class="primary-btn" type="submit">Save customer</button><button class="secondary-btn" type="button" id="cancel-new-customer">Cancel</button><span role="status" id="new-customer-status"></span></div></form>';
+    main.prepend(panel);var form=panel.querySelector("form");form.elements.application.value=app;
+    var add=document.createElement("button");add.type="button";add.className="primary-btn";add.textContent="+ Add customer";add.style.marginBottom="16px";main.insertBefore(add,panel);
+    add.onclick=function(){panel.hidden=false;form.elements.name.focus();};
+    panel.querySelector("#cancel-new-customer").onclick=function(){panel.hidden=true;};
+    form.addEventListener("submit",function(event){
+      event.preventDefault();var status=panel.querySelector("#new-customer-status");
+      if(!window.NovaraAuth||!NovaraAuth.getToken()){status.textContent="Sign in to save a customer.";return;}
+      var name=form.elements.name.value.trim();if(!name){status.textContent="Enter a customer name.";return;}
+      var payload={CompanyID:"CUST-"+crypto.randomUUID(),CompanyName:name,RelationshipType:"Customer",Email:form.elements.email.value.trim(),Phone:form.elements.phone.value.trim(),Address:form.elements.address.value.trim(),NeedsReview:"NO",ProgramRestaurant:"NO",ProgramDHW:"NO",ProgramHVAC:"NO",ProgramPool:"NO"};
+      var selectedApp=form.elements.application.value;payload[fields[selectedApp]]="YES";
+      var submit=form.querySelector('[type="submit"]');submit.disabled=true;status.textContent="Saving…";
+      NovaraApi.createMasterCompany(payload).then(function(data){
+        var row=data.item||payload;state.companies.push(row);render();panel.hidden=true;form.reset();form.elements.application.value=app;showCompany(companyId(row));
+        status.textContent="Saved.";location.href="companies.html?application="+encodeURIComponent(selectedApp)+"&companyId="+encodeURIComponent(companyId(row));
+      }).catch(function(err){status.textContent=err.message||"Customer could not be saved.";}).finally(function(){submit.disabled=false;});
+    });
+  }
+  setupAddCustomer();
+
   load();
 })();
 
