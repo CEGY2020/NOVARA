@@ -42,3 +42,10 @@
 .app-navigation .user-alarm-status.has-alarms,.app-navigation .user-alarm-status.has-alarms:hover {background:#b91c1c;}
 .app-navigation .user-alarm-status.no-alarms,.app-navigation .user-alarm-status.no-alarms:hover {background:#15803d;}
 .app-navigation .user-alarm-status.alarm-unknown {background:#526477;}
+
+.account-bust {display:block;width:25px;height:25px;fill:#707780;}
+.account-menu>summary {display:flex;align-items:center;justify-content:center;padding:5px 9px;}
+.account-menu>summary::after {content:none;}
+.account-identity {grid-column:1/-1;padding:8px 12px 14px;border-bottom:1px solid #dce3e9;color:#163f63;}
+.account-identity strong {display:block;margin-bottom:4px;font-size:16px;}
+.account-identity span {display:block;font-size:14px;line-height:1.5;color:#526477;}
