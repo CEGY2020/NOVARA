@@ -186,7 +186,7 @@
           "<td class=\"users-notes\">" +
           escapeHtml(note) +
           "</td>" +
-          '<td class="users-actions"><button type="button" class="secondary-btn user-edit-btn" data-user-id="'+escapeHtml(user.userId)+'">Edit</button> <button type="button" class="secondary-btn user-hold-btn" data-user-id="'+escapeHtml(user.userId)+'" data-status="'+(user.status==="OnHold"?"Active":"OnHold")+'">'+(user.status==="OnHold"?"Reactivate":"Put on hold")+'</button></td>' +
+          '<td class="users-actions"><button type="button" class="secondary-btn user-edit-btn" data-user-id="'+escapeHtml(user.userId)+'">Edit</button> <button type="button" class="secondary-btn user-hold-btn" data-user-id="'+escapeHtml(user.userId)+'" data-status="'+(user.status==="OnHold"?"Active":"OnHold")+'">'+(user.status==="OnHold"?"Reactivate":"Put on hold")+'</button> <button type="button" class="secondary-btn user-delete-btn" data-user-id="'+escapeHtml(user.userId)+'">Delete</button></td>' +
           "</tr>"
         );
       })
@@ -464,7 +464,14 @@
   if(allBody)allBody.addEventListener("click",function(event){
     var button=event.target.closest("button[data-user-id]");if(!button)return;
     var user=findUser(button.getAttribute("data-user-id"));if(!user)return;
-    if(button.classList.contains("user-edit-btn")){
+    if(button.classList.contains("user-delete-btn")){
+      if(!confirm("Permanently delete "+(user.fullName||user.email)+" ("+user.email+")? This removes the login and ends access. Customer and site records remain. This cannot be undone."))return;
+      button.disabled=true;setStatus("Deleting user…");
+      NovaraApi.sendJson("/api/users/"+encodeURIComponent(user.userId),"DELETE").then(function(){
+        if(editingId===user.userId)editPanel.hidden=true;
+        loadUsers();
+      }).catch(function(error){setStatus(error.message||"Could not delete user.",true);}).finally(function(){button.disabled=false;});
+    }else if(button.classList.contains("user-edit-btn")){
       editingId=user.userId;
       ["FullName","Email","Company","Role"].forEach(function(key){var source={FullName:"fullName",Email:"email",Company:"company",Role:"role"}[key];editForm.elements[key].value=user[source]||"";});
       editPanel.hidden=false;editPanel.querySelector("#user-edit-message").textContent="";editPanel.scrollIntoView({behavior:"smooth",block:"center"});editForm.elements.FullName.focus();
