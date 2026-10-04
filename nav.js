@@ -87,11 +87,88 @@
   function definitionMenu(label, href, active) {
     return '<details class="application-menu definition-menu"'+(active?' data-active="true"':'')+'><summary>'+label+'</summary><div class="navigation-dropdown">'+dropdownLink({label:label,href:href})+'</div></details>';
   }
+
+  function customerRows(rows, app) {
+    var field={RHW:"ProgramRestaurant",DHW:"ProgramDHW",HVAC:"ProgramHVAC",Pool:"ProgramPool"}[app];
+    return rows.filter(function(row){
+      var relationship=String(row.RelationshipType||"").toLowerCase();
+      var status=String(row.CustomerStatus||row.Status||row.status||"").toLowerCase();
+      return String(row[field]||"").toUpperCase()==="YES" &&
+        !/contractor|service provider|prospect|lead/.test(relationship) &&
+        !/^(inactive|archived|former|closed)$/.test(status);
+    }).sort(function(a,b){return String(a.CompanyName||"").localeCompare(String(b.CompanyName||""));});
+  }
+  function setupCustomerMenus(root) {
+    var request;
+    function records(){
+      if(!request) request=new Promise(function(resolve,reject){
+        function read(){
+          if(!window.NovaraAuth || !NovaraAuth.getToken()){reject(new Error("Sign in to view customers."));return;}
+          if(!window.NovaraApi){reject(new Error("Customer directory unavailable."));return;}
+          // Master directory is shared: only directory roles use it here.
+          if(role==="aem"||role==="sales") NovaraApi.getMasterCompanies().then(function(data){resolve(data.companies||[]);},reject);
+          else NovaraApi.getSites().then(function(data){
+            var byId={};
+            (data.sites||[]).forEach(function(site){
+              var id=site.ownerId||site.companyId||site.CompanyID;
+              if(!id)return;
+              var row=byId[id]||(byId[id]={CompanyID:id,CompanyName:site.owner||site.companyName||site.CompanyName||id});
+              var type=String(site.systemType||site.SystemType||"").toUpperCase();
+              if(/RHW|RESTAURANT/.test(type))row.ProgramRestaurant="YES";
+              if(/DHW|DOMESTIC/.test(type))row.ProgramDHW="YES";
+              if(/HVAC/.test(type))row.ProgramHVAC="YES";
+              if(/POOL/.test(type))row.ProgramPool="YES";
+            });resolve(Object.keys(byId).map(function(id){return byId[id];}));
+          },reject);
+        }
+        if(window.NovaraApi)read();
+        else {
+          function script(src){return new Promise(function(resolve,reject){var s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});}
+          Promise.resolve().then(function(){if(!window.NovaraAuth)return script("auth.js");}).then(function(){if(window.NOVARA_API_BASE===undefined)return script("api-config.js");}).then(function(){if(!window.NovaraApi)return script("api-client.js");}).then(read,reject);
+        }
+      });
+      return request;
+    }
+    root.querySelectorAll("[data-customer-app]").forEach(function(menu){
+      var app=menu.getAttribute("data-customer-app"),panel=menu.querySelector(".navigation-dropdown");
+      function list(){
+        panel.innerHTML='<div class="customer-menu-heading"><strong>'+app+' customers</strong><span>Select a customer to open the submenu.</span></div><p class="customer-menu-message" role="status">Loading customers…</p>';
+        records().then(function(rows){
+          var customers=customerRows(rows,app);
+          panel.innerHTML='<div class="customer-menu-heading"><strong>'+app+' customers</strong><span>Select a customer to open the submenu.</span></div>';
+          if(!customers.length){var empty=document.createElement("p");empty.className="customer-menu-message";empty.textContent="No customers added for "+app+" yet.";panel.appendChild(empty);}
+          customers.forEach(function(customer){
+            var button=document.createElement("button");button.type="button";button.className="customer-menu-choice";
+            var name=document.createElement("strong");name.textContent=customer.CompanyName||customer.CompanyID;button.appendChild(name);
+            var hint=document.createElement("span");hint.className="menu-definition";hint.textContent="Open "+app+" submenu →";button.appendChild(hint);
+            button.addEventListener("click",function(){submenu(customer);});panel.appendChild(button);
+          });
+          var add=document.createElement("a");add.href=appHref("companies.html?action=add-customer",app);add.className="customer-menu-add";add.textContent="+ Add customer";panel.appendChild(add);
+        }).catch(function(error){
+          panel.innerHTML='<div class="customer-menu-heading"><strong>'+app+' customers</strong></div>';
+          var message=document.createElement("p");message.className="customer-menu-message";message.setAttribute("role","status");message.textContent=error.message||"Unable to load customers.";panel.appendChild(message);
+          if(!window.NovaraAuth||!NovaraAuth.getToken()){var login=document.createElement("a");login.href="login.html";login.textContent="Log in";panel.appendChild(login);}
+          else {var retry=document.createElement("button");retry.type="button";retry.className="customer-menu-choice";retry.textContent="Retry";retry.onclick=function(){request=null;list();};panel.appendChild(retry);}
+        });
+      }
+      function submenu(customer){
+        panel.innerHTML="";
+        var heading=document.createElement("div");heading.className="customer-menu-heading";
+        var back=document.createElement("button");back.type="button";back.className="customer-menu-back";back.textContent="← Customers";back.onclick=function(){list();};heading.appendChild(back);
+        var name=document.createElement("strong");name.textContent=customer.CompanyName+" · "+app;heading.appendChild(name);panel.appendChild(heading);
+        var detail=document.createElement("a");detail.href=appHref("companies.html?companyId="+encodeURIComponent(customer.CompanyID),app);detail.innerHTML="<strong>Customer details</strong><span class='menu-definition'>Company, linked sites and contacts.</span>";panel.appendChild(detail);
+        panel.insertAdjacentHTML("beforeend",portfolioItems(app).map(dropdownLink).join(""));
+        back.focus();
+      }
+      var loaded=false;menu.addEventListener("toggle",function(){if(menu.open&&!loaded){loaded=true;list();}});
+    });
+  }
+
   function renderSidebar(root) {
     document.body.classList.add("top-navigation-layout");
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
-    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-user-icon";document.head.appendChild(css);
+    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261004-customers";document.head.appendChild(css);
     if(currentPage!=="leads"&&currentPage!=="restaurant"&&currentPage!=="rhw-portal"){
       ["novara-ui-standard.css","submenu-lists.css?v=20261003"].forEach(function(href){if(href.indexOf("novara-ui")===0&&document.querySelector('link[href^="novara-ui-standard"]'))return;var style=document.createElement("link");style.rel="stylesheet";style.href=href;document.head.appendChild(style);});
       var listTools=document.createElement("script");listTools.src="submenu-lists.js?v=20261003";document.head.appendChild(listTools);
@@ -102,12 +179,13 @@
     document.body.setAttribute("data-wave",waveMap[application]||pageWaves[currentPage]||"3");
     var waveStyle=document.createElement("link");waveStyle.rel="stylesheet";waveStyle.href="platform-waves.css?v=20261003";document.head.appendChild(waveStyle);
     var menus=APPLICATIONS.map(function(app){
-      return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
+      return '<details class="application-menu" data-customer-app="'+app+'"'+(application===app?' data-active="true"':'')+'><summary>'+(app==="Pool"?"Pools":app)+'</summary><div class="navigation-dropdown"><p class="customer-menu-message">Loading customers…</p></div></details>';
     }).join("");
     var customers=NAV_ITEMS.some(function(item){return item.id==="companies"});
     var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
     var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
     root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'" aria-label="Optima ProLink home"><img src="images/optima-prolink-logo-clean.svg" alt="Optima ProLink"></a><nav aria-label="Main menu">'+menus+(customers?definitionMenu("Customers","companies.html",currentPage==="companies"||currentPage==="contacts"):'')+(leads?definitionMenu("Leads","leads.html",currentPage==="leads"):'')+definitionMenu("User Guide","user-guide.html",currentPage==="user-guide")+'</nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary aria-label="User account"><svg class="account-bust" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"></circle><path d="M3 22v-3a9 9 0 0 1 18 0v3z"></path></svg></summary><div class="navigation-dropdown">'+utilityItems.map(dropdownLink).join("")+'</div></details>':'');
+    setupCustomerMenus(root);
     var account=root.querySelector(".account-menu");
     if(account){
       var name=(currentUser&&(currentUser.fullName||currentUser.email))||"Not signed in";
