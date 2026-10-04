@@ -1,10 +1,11 @@
 /* Shared top navigation; loaded by nav.js on every portal page. */
 .top-navigation-layout .dashboard-layout { display:flex; flex-direction:column; }
-.app-navigation { display:flex; align-items:center; flex-wrap:wrap; gap:12px 28px; width:100%; padding:18px 32px; background:#fff; border-bottom:3px solid #1687b6; position:relative; z-index:100; font:16px Arial,Helvetica,sans-serif; color:#163f63; }
-.platform-brand { color:#163f63; font-size:24px; font-weight:700; text-decoration:none; white-space:nowrap; }
-.app-navigation nav { display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1; }
-.app-navigation nav>a, .application-menu summary { display:block; padding:12px 14px; color:#163f63; text-decoration:none; font-size:16px; font-weight:600; border-radius:4px; cursor:pointer; }
-.application-menu { position:static; }
+.app-navigation { display:flex; align-items:center; flex-wrap:nowrap; gap:14px; width:100%; height:60px; padding:6px 20px; background:#fff; border-bottom:3px solid #1687b6; position:relative; z-index:100; font:16px Arial,Helvetica,sans-serif; color:#163f63; }
+.platform-brand { display:flex; align-items:center; flex:0 0 auto; text-decoration:none; }
+.platform-brand img { display:block; width:112px; height:46px; object-fit:contain; }
+.app-navigation nav { display:flex; align-items:center; flex-wrap:nowrap; gap:2px; flex:1; min-width:0; }
+.app-navigation nav>a, .application-menu summary { display:block; padding:8px 9px; white-space:nowrap; color:#163f63; text-decoration:none; font-size:14px; font-weight:600; border-radius:4px; cursor:pointer; }
+.application-menu { position:static; flex:0 0 auto; }
 .application-menu summary { list-style:none; }
 .application-menu summary::-webkit-details-marker { display:none; }
 .application-menu summary::after { content:" ▾"; }
@@ -29,8 +30,10 @@
 .guide-section { margin-bottom:20px; line-height:1.7; }
 .guide-section h3 { margin-bottom:8px; }
 .guide-section ol { padding-left:24px; }
-@media(max-width:760px) { .app-navigation {padding:16px; gap:12px;} .app-navigation nav {width:100%; flex-basis:100%;} .app-navigation nav>a,.application-menu summary {padding:10px;} .navigation-dropdown {position:fixed; left:16px; right:16px; top:auto; min-width:0; max-height:60vh; overflow:auto; grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px;} .account-menu .navigation-dropdown {left:16px;right:16px;grid-template-columns:repeat(2,minmax(0,1fr));} }
+@media(max-width:760px) { .app-navigation {padding:6px 10px; gap:8px;} .platform-brand img {width:86px;} .app-navigation nav>a,.application-menu summary {padding:8px 7px;} .navigation-dropdown {position:fixed; left:16px; right:16px; top:60px; min-width:0; max-height:60vh; overflow:auto; grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px;} .account-menu .navigation-dropdown {left:16px;right:16px;grid-template-columns:repeat(2,minmax(0,1fr));} }
 @media print { .app-navigation,.application-context,#user-profile-root {display:none!important;} }
 
 .definition-menu .navigation-dropdown { grid-template-columns:minmax(0,480px); }
 @media(max-width:760px) { .definition-menu .navigation-dropdown {grid-template-columns:minmax(0,1fr);} }
+
+@media(max-width:1000px) { .app-navigation nav {overflow-x:auto; scrollbar-width:thin;} .navigation-dropdown {position:fixed; top:60px; left:12px; right:12px; max-height:calc(100dvh - 76px); overflow-y:auto;} .account-menu .navigation-dropdown {left:12px;right:12px;} }
