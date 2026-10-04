@@ -87,14 +87,25 @@
     document.body.classList.add("top-navigation-layout");
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
-    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-alarms";document.head.appendChild(css);
+    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-user-icon";document.head.appendChild(css);
     var menus=APPLICATIONS.map(function(app){
       return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
     }).join("");
     var customers=NAV_ITEMS.some(function(item){return item.id==="companies"});
     var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
     var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
-    root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'" aria-label="Optima ProLink home"><img src="images/optima-prolink-logo-clean.svg" alt="Optima ProLink"></a><nav aria-label="Main menu">'+menus+(customers?definitionMenu("Customers","companies.html",currentPage==="companies"||currentPage==="contacts"):'')+(leads?definitionMenu("Leads","leads.html",currentPage==="leads"):'')+definitionMenu("User Guide","user-guide.html",currentPage==="user-guide")+'</nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(dropdownLink).join("")+'</div></details>':'');
+    root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'" aria-label="Optima ProLink home"><img src="images/optima-prolink-logo-clean.svg" alt="Optima ProLink"></a><nav aria-label="Main menu">'+menus+(customers?definitionMenu("Customers","companies.html",currentPage==="companies"||currentPage==="contacts"):'')+(leads?definitionMenu("Leads","leads.html",currentPage==="leads"):'')+definitionMenu("User Guide","user-guide.html",currentPage==="user-guide")+'</nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary aria-label="User account"><svg class="account-bust" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"></circle><path d="M3 22v-3a9 9 0 0 1 18 0v3z"></path></svg></summary><div class="navigation-dropdown">'+utilityItems.map(dropdownLink).join("")+'</div></details>':'');
+    var account=root.querySelector(".account-menu");
+    if(account){
+      var name=(currentUser&&(currentUser.fullName||currentUser.email))||"Not signed in";
+      account.querySelector("summary").setAttribute("aria-label","User account: "+name);
+      account.querySelector("summary").setAttribute("title",name);
+      var identity=document.createElement("div");identity.className="account-identity";
+      var nameEl=document.createElement("strong");nameEl.textContent=name;identity.appendChild(nameEl);
+      if(currentUser&&currentUser.email&&currentUser.email!==name){var email=document.createElement("span");email.textContent=currentUser.email;identity.appendChild(email);}
+      var roleEl=document.createElement("span");roleEl.textContent=currentUser?(ROLE_TITLES[role]||role):"Sign in to view your account";identity.appendChild(roleEl);
+      account.querySelector(".navigation-dropdown").prepend(identity);
+    }
     var badge=document.createElement("a");badge.id="user-alarm-status";badge.href="active-alarms.html";badge.className="user-alarm-status alarm-unknown";badge.textContent="Checking alarms…";badge.setAttribute("aria-live","polite");root.insertBefore(badge,root.querySelector(".account-menu"));
     var alarmScript=document.createElement("script");alarmScript.src="alarm-status.js?v=20261003";document.head.appendChild(alarmScript);
     // Mouse hover opens dropdowns; touch and keyboard keep native details controls.
