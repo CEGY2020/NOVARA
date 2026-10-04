@@ -37,3 +37,8 @@
 @media(max-width:760px) { .definition-menu .navigation-dropdown {grid-template-columns:minmax(0,1fr);} }
 
 @media(max-width:1000px) { .app-navigation nav {overflow-x:auto; scrollbar-width:thin;} .navigation-dropdown {position:fixed; top:60px; left:12px; right:12px; max-height:calc(100dvh - 76px); overflow-y:auto;} .account-menu .navigation-dropdown {left:12px;right:12px;} }
+
+.app-navigation .user-alarm-status {flex:0 0 auto;padding:8px 10px;border-radius:5px;color:white;font-size:14px;font-weight:700;white-space:nowrap;text-decoration:none;}
+.app-navigation .user-alarm-status.has-alarms,.app-navigation .user-alarm-status.has-alarms:hover {background:#b91c1c;}
+.app-navigation .user-alarm-status.no-alarms,.app-navigation .user-alarm-status.no-alarms:hover {background:#15803d;}
+.app-navigation .user-alarm-status.alarm-unknown {background:#526477;}
