@@ -88,6 +88,10 @@
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
     var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-user-icon";document.head.appendChild(css);
+    if(currentPage!=="leads"){
+      ["novara-ui-standard.css","submenu-lists.css?v=20261003"].forEach(function(href){if(href.indexOf("novara-ui")===0&&document.querySelector('link[href^="novara-ui-standard"]'))return;var style=document.createElement("link");style.rel="stylesheet";style.href=href;document.head.appendChild(style);});
+      var listTools=document.createElement("script");listTools.src="submenu-lists.js?v=20261003";document.head.appendChild(listTools);
+    }
     var menus=APPLICATIONS.map(function(app){
       return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
     }).join("");
