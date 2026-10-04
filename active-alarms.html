@@ -15,41 +15,12 @@
     <header class="topbar">
       <div>
         <h2>Active Alarms</h2>
-        <p>Highest-priority conditions across the portfolio</p>
+        <p>Current system conditions for your sites</p>
       </div>
       <div id="user-profile-root"></div>
     </header>
 
-    <table class="data-table">
-      <tr>
-        <th>Alarm</th>
-        <th>Site</th>
-        <th>System</th>
-        <th>Severity</th>
-        <th>Time</th>
-      </tr>
-      <tr>
-        <td>High temperature differential</td>
-        <td>Vista Springs</td>
-        <td>DHW System 3</td>
-        <td class="severity-critical">Critical</td>
-        <td>12 minutes ago</td>
-      </tr>
-      <tr>
-        <td>Extended heater runtime</td>
-        <td>Highlander Pointe</td>
-        <td>Boiler 2</td>
-        <td class="severity-warning">Warning</td>
-        <td>48 minutes ago</td>
-      </tr>
-      <tr>
-        <td>Sensor communication delay</td>
-        <td>La Verne Pool</td>
-        <td>Controller</td>
-        <td class="severity-info">Info</td>
-        <td>1 hour ago</td>
-      </tr>
-    </table>
+    <table class="data-table"><thead><tr><th>Alarm / Status</th><th>Site</th><th>System</th><th>Last update</th></tr></thead><tbody id="user-alarm-rows"><tr><td colspan="4">Checking alarms…</td></tr></tbody></table>
   </main>
 </div>
 
