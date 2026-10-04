@@ -477,7 +477,14 @@
   editForm.addEventListener("submit",function(event){
     event.preventDefault();var payload={};["FullName","Email","Company","Role"].forEach(function(key){payload[key]=editForm.elements[key].value.trim();});
     var message=editPanel.querySelector("#user-edit-message"),save=editForm.querySelector('[type="submit"]');save.disabled=true;message.textContent="Saving…";
-    NovaraApi.sendJson("/api/users/"+encodeURIComponent(editingId),"PUT",payload).then(function(){editPanel.hidden=true;loadUsers();}).catch(function(error){message.textContent=error.message||"Could not save user.";}).finally(function(){save.disabled=false;});
+    NovaraApi.sendJson("/api/users/"+encodeURIComponent(editingId),"PUT",payload).then(function(){
+      var current=window.NovaraAuth&&NovaraAuth.getCurrentUser();
+      if(current&&current.userId===editingId){
+        if(payload.Email.toLowerCase()!==current.email){NovaraAuth.logout("login.html");return;}
+        NovaraAuth.updateCurrentUser({fullName:payload.FullName,company:payload.Company});
+      }
+      editPanel.hidden=true;loadUsers();
+    }).catch(function(error){message.textContent=error.message||"Could not save user.";}).finally(function(){save.disabled=false;});
   });
 
   loadUsers();
