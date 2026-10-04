@@ -1,0 +1,13 @@
+/* Leads-style shared submenu lists and forms. */
+.submenu-list-page .main-content {font-family:Arial,Helvetica,sans-serif;color:#000;}
+.submenu-toolbar {padding:16px;background:#fff;border:1px solid #dce6ed;border-radius:10px;margin-bottom:18px;}
+.submenu-toolbar input,.submenu-toolbar select {min-height:42px;padding:9px 12px;border:1px solid #cfd8de;border-radius:8px;background:#fff;color:#000;font:16px Arial,Helvetica,sans-serif;}
+.submenu-toolbar .filter-field {flex:1;min-width:180px;}
+.submenu-toolbar .filter-field span {color:#000;}
+.submenu-list-page .data-table {background:#fff;border-radius:10px;}
+.submenu-list-page .data-table th {background:#dbeaf5;color:#000;white-space:nowrap;}
+.submenu-sort {border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0;}
+.submenu-sort:focus-visible {outline:2px solid #1687b6;outline-offset:4px;}
+.submenu-filtered {display:none!important;}
+.submenu-list-page .site-form label {display:flex;flex-direction:column;gap:6px;}
+@media print {.submenu-toolbar,.topbar-actions button,.modal-backdrop,input[type=search],.company-toolbar {display:none!important;}.submenu-list-page .main-content {padding:0!important;}.submenu-sort {font-size:inherit;}}
