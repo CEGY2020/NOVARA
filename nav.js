@@ -87,7 +87,7 @@
     document.body.classList.add("top-navigation-layout");
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
-    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-compact-logo";document.head.appendChild(css);
+    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-alarms";document.head.appendChild(css);
     var menus=APPLICATIONS.map(function(app){
       return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
     }).join("");
@@ -95,6 +95,8 @@
     var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
     var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
     root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'" aria-label="Optima ProLink home"><img src="images/optima-prolink-logo-clean.svg" alt="Optima ProLink"></a><nav aria-label="Main menu">'+menus+(customers?definitionMenu("Customers","companies.html",currentPage==="companies"||currentPage==="contacts"):'')+(leads?definitionMenu("Leads","leads.html",currentPage==="leads"):'')+definitionMenu("User Guide","user-guide.html",currentPage==="user-guide")+'</nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(dropdownLink).join("")+'</div></details>':'');
+    var badge=document.createElement("a");badge.id="user-alarm-status";badge.href="active-alarms.html";badge.className="user-alarm-status alarm-unknown";badge.textContent="Checking alarms…";badge.setAttribute("aria-live","polite");root.insertBefore(badge,root.querySelector(".account-menu"));
+    var alarmScript=document.createElement("script");alarmScript.src="alarm-status.js?v=20261003";document.head.appendChild(alarmScript);
     // Mouse hover opens dropdowns; touch and keyboard keep native details controls.
     root.querySelectorAll(".application-menu").forEach(function(menu){
       var closeTimer;
