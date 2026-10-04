@@ -43,10 +43,10 @@
   }
   function portfolioItems(app) {
     var items=[{id:"portfolio",label:"Portfolio",href:"portfolio.html"}];
-    [["sites","Sites","sites.html"],["systems","Systems","systems.html"],["owners","Owners","owners.html"],["mgmt-companies","Management Companies","mgmt-companies.html"],["companies","Contacts","contacts.html"],["systems","Equipment / Assets","systems.html"],["alarms","Alerts","active-alarms.html"]].forEach(function(entry){
+    [["sites","Sites","sites.html"],["systems","Systems","systems.html"],["owners","Owners","owners.html"],["mgmt-companies","Management Companies","mgmt-companies.html"],["companies","Contacts","contacts.html"],["systems","Equipment / Assets","equipment.html"],["alarms","Alerts","active-alarms.html"]].forEach(function(entry){
       if (NAV_ITEMS.some(function(item){return item.id===entry[0]})) items.push({id:entry[0],label:entry[1],href:entry[2]});
     });
-    if(role==="aem") items.splice(items.length-2,0,{id:"providers",label:"Service Providers / Contractors",href:"portfolio.html#service-providers"});
+    if(role==="aem") items.splice(items.length-2,0,{id:"providers",label:"Service Providers / Contractors",href:"service-providers.html"});
     return items.map(function(item){return {id:item.id,label:item.label,href:appHref(item.href,app)}});
   }
   var MENU_DEFINITIONS = {
@@ -59,8 +59,8 @@
     "Owners":"Property owners and contacts.",
     "Management Companies":"Property managers and contacts.",
     "Contacts":"Names, emails, and phone numbers.",
-    "Service Providers / Contractors":"Installation and service partners. Planned.",
-    "Equipment / Assets":"Equipment details within systems.",
+    "Service Providers / Contractors":"Installation and service partners.",
+    "Equipment / Assets":"Equipment totals by site and system.",
     "Alerts":"Warnings and system faults.",
     "Dashboard":"Portfolio operating overview.",
     "Home":"Your account overview.",
