@@ -31,3 +31,6 @@
 .guide-section ol { padding-left:24px; }
 @media(max-width:760px) { .app-navigation {padding:16px; gap:12px;} .app-navigation nav {width:100%; flex-basis:100%;} .app-navigation nav>a,.application-menu summary {padding:10px;} .navigation-dropdown {position:fixed; left:16px; right:16px; top:auto; min-width:0; max-height:60vh; overflow:auto; grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px;} .account-menu .navigation-dropdown {left:16px;right:16px;grid-template-columns:repeat(2,minmax(0,1fr));} }
 @media print { .app-navigation,.application-context,#user-profile-root {display:none!important;} }
+
+.definition-menu .navigation-dropdown { grid-template-columns:minmax(0,480px); }
+@media(max-width:760px) { .definition-menu .navigation-dropdown {grid-template-columns:minmax(0,1fr);} }
