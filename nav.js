@@ -43,6 +43,7 @@
   }
   function portfolioItems(app) {
     var items=[{id:"portfolio",label:"Portfolio",href:"portfolio.html"}];
+    if(app==="RHW")items.push({id:"restaurant",label:"Restaurant Workspace",href:"restaurant-workspace.html"});
     [["sites","Sites","sites.html"],["systems","Systems","systems.html"],["owners","Owners","owners.html"],["mgmt-companies","Management Companies","mgmt-companies.html"],["companies","Contacts","contacts.html"],["systems","Equipment / Assets","equipment.html"],["alarms","Alerts","active-alarms.html"]].forEach(function(entry){
       if (NAV_ITEMS.some(function(item){return item.id===entry[0]})) items.push({id:entry[0],label:entry[1],href:entry[2]});
     });
@@ -54,6 +55,7 @@
     "Leads":"Track outreach, surveys, agreements, purchases, and deployment progress.",
     "User Guide":"Instructions for using the platform and its features.",
     "Portfolio":"Overview and shortcuts.",
+    "Restaurant Workspace":"Restaurant setup, equipment, alarm routing, job costs and reports.",
     "Sites":"Properties and locations.",
     "Systems":"Connected heating and cooling systems.",
     "Owners":"Property owners and contacts.",
@@ -88,7 +90,7 @@
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
     var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-user-icon";document.head.appendChild(css);
-    if(currentPage!=="leads"){
+    if(currentPage!=="leads"&&currentPage!=="restaurant"){
       ["novara-ui-standard.css","submenu-lists.css?v=20261003"].forEach(function(href){if(href.indexOf("novara-ui")===0&&document.querySelector('link[href^="novara-ui-standard"]'))return;var style=document.createElement("link");style.rel="stylesheet";style.href=href;document.head.appendChild(style);});
       var listTools=document.createElement("script");listTools.src="submenu-lists.js?v=20261003";document.head.appendChild(listTools);
     }
