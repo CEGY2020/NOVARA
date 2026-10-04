@@ -508,15 +508,14 @@ def main(argv: list[str] | None = None) -> int:
         method="PUT",
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(user_status_req, timeout=30) as resp:
-        user_updated = json.loads(resp.read().decode("utf-8"))
-        print(f"  -> {resp.status} {user_updated}")
-        if not user_updated.get("ok"):
-            print(
-                "ERROR: PUT /api/users/{id}/status did not return ok",
-                file=sys.stderr,
-            )
+    try:
+        with urllib.request.urlopen(user_status_req, timeout=30):
+            print("ERROR: unauthenticated user status update was accepted", file=sys.stderr)
             return 1
+    except urllib.error.HTTPError as exc:
+        if exc.code not in (401, 403):
+            raise
+        print(f"  -> {exc.code} (expected: administrator authentication required)")
 
     user_login_url = f"{api_url}/api/users/login"
     user_login_body = json.dumps(
@@ -532,15 +531,19 @@ def main(argv: list[str] | None = None) -> int:
         method="POST",
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(user_login_req, timeout=30) as resp:
-        user_login = json.loads(resp.read().decode("utf-8"))
-        print(f"  -> {resp.status} {user_login}")
-        if not user_login.get("ok") or not user_login.get("token"):
-            print(
-                "ERROR: POST /api/users/login did not return ok+token",
-                file=sys.stderr,
-            )
-            return 1
+    try:
+        with urllib.request.urlopen(user_login_req, timeout=30) as resp:
+            user_login = json.loads(resp.read().decode("utf-8"))
+            print(f"  -> {resp.status} authenticated smoke user (token omitted)")
+            if not user_login.get("ok") or not user_login.get("token"):
+                print("ERROR: login did not return ok+token", file=sys.stderr)
+                return 1
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            print("Smoke account awaits administrator approval; no automatic activation.")
+            print("Deploy complete.")
+            return 0
+        raise
 
     session_url = f"{api_url}/api/users/session"
     print(f"GET {session_url}")
