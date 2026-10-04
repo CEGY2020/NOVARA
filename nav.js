@@ -61,6 +61,28 @@
     var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
     var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
     root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'">Optima ProLink</a><nav aria-label="Main menu">'+menus+(customers?'<a href="companies.html"'+(currentPage==="companies"||currentPage==="contacts"?' aria-current="page"':'')+'>Customers</a>':'')+(leads?'<a href="leads.html"'+(currentPage==="leads"?' aria-current="page"':'')+'>Leads</a>':'')+'<a href="user-guide.html"'+(currentPage==="user-guide"?' aria-current="page"':'')+'>User Guide</a></nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(function(item){return '<a href="'+item.href+'">'+item.label+'</a>'}).join("")+'</div></details>':'');
+    // Mouse hover opens dropdowns; touch and keyboard keep native details controls.
+    root.querySelectorAll(".application-menu").forEach(function(menu){
+      var closeTimer;
+      menu.addEventListener("mouseenter",function(){
+        if(!window.matchMedia("(hover: hover) and (pointer: fine)").matches)return;
+        window.clearTimeout(closeTimer);
+        root.querySelectorAll("details").forEach(function(other){if(other!==menu)other.open=false;});
+        menu.open=true;
+      });
+      menu.addEventListener("mouseleave",function(){
+        if(!window.matchMedia("(hover: hover) and (pointer: fine)").matches)return;
+        closeTimer=window.setTimeout(function(){
+          if(!menu.contains(document.activeElement))menu.open=false;
+        },160);
+      });
+      menu.addEventListener("focusout",function(){
+        window.clearTimeout(closeTimer);
+        closeTimer=window.setTimeout(function(){
+          if(!menu.contains(document.activeElement)&&!menu.matches(":hover"))menu.open=false;
+        },160);
+      });
+    });
     root.addEventListener("toggle",function(event){if(!event.target.open)return;root.querySelectorAll("details").forEach(function(menu){if(menu!==event.target)menu.open=false});},true);
     document.addEventListener("click",function(event){if(!root.contains(event.target))root.querySelectorAll("details").forEach(function(menu){menu.open=false});});
     root.addEventListener("keydown",function(event){if(event.key==="Escape")root.querySelectorAll("details").forEach(function(menu){if(menu.open){menu.open=false;menu.querySelector("summary").focus()}});});
