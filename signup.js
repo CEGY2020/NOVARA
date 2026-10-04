@@ -5,6 +5,17 @@
   var roleInput = document.getElementById("role");
   var loginLink = document.getElementById("loginLink");
   var selectedRole = null;
+  var params = new URLSearchParams(location.search);
+  var portal = params.get("portal");
+  var portalPaths = {"as-plumbing":"as-plumbing-rhw.html?application=RHW","chipotle":"chipotle-rhw.html?application=RHW"};
+  var portalPath = portalPaths[portal] || "";
+  // These values prepare a form; the server still controls approval and access.
+  ["fullName","email","company"].forEach(function(id){
+    var input=document.getElementById(id),value=params.get(id);
+    if(input&&value) input.value=value.slice(0,Number(input.maxLength)||160);
+  });
+  function loginHref(role){return "login.html?role="+encodeURIComponent(role)+(portalPath?"&portal="+encodeURIComponent(portal):"");}
+
 
   if (window.NovaraRole) {
     selectedRole = NovaraRole.captureRoleFromQuery() || "aem";
@@ -22,7 +33,7 @@
     }
 
     if (loginLink) {
-      loginLink.href = "login.html?role=" + encodeURIComponent(selectedRole);
+      loginLink.href = loginHref(selectedRole);
     }
   } else if (roleInput) {
     roleInput.value = "AEM";
@@ -120,7 +131,7 @@
           );
           window.setTimeout(function () {
             window.location.href =
-              "login.html?role=" + encodeURIComponent(role);
+              loginHref(role);
           }, 1200);
           return;
         }
@@ -140,7 +151,9 @@
         }
       })
       .catch(function (err) {
-        setMessage((err && err.message) || "Sign-up failed.", true);
+        var message=(err && err.message)||"Sign-up failed.";
+        if(/already registered/i.test(message))message="This email already has an account. Use its existing login, or enter a different email for this test account.";
+        setMessage(message,true);
       })
       .finally(function () {
         if (submitBtn) {
