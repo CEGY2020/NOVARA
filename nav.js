@@ -49,18 +49,46 @@
     if(role==="aem") items.splice(items.length-2,0,{id:"providers",label:"Service Providers / Contractors",href:"portfolio.html#service-providers"});
     return items.map(function(item){return {id:item.id,label:item.label,href:appHref(item.href,app)}});
   }
+  var MENU_DEFINITIONS = {
+    "Portfolio":"Overview and shortcuts.",
+    "Sites":"Properties and locations.",
+    "Systems":"Connected heating and cooling systems.",
+    "Owners":"Property owners and contacts.",
+    "Management Companies":"Property managers and contacts.",
+    "Contacts":"Names, emails, and phone numbers.",
+    "Service Providers / Contractors":"Installation and service partners. Planned.",
+    "Equipment / Assets":"Equipment details within systems.",
+    "Alerts":"Warnings and system faults.",
+    "Dashboard":"Portfolio operating overview.",
+    "Home":"Your account overview.",
+    "Performance":"System operating performance.",
+    "Savings":"Energy savings overview.",
+    "Energy Savings":"Energy savings overview.",
+    "Master Data Upload":"Import customer forms and records.",
+    "Pool Post-VSS":"Pool survey review and next steps.",
+    "Users":"Manage platform user accounts.",
+    "Utility Data":"Energy usage and utility bills.",
+    "Reports":"View portfolio reports.",
+    "Settings":"Account and platform preferences.",
+    "Pipeline":"Lead stages and sales progress.",
+    "Team":"Management team information.",
+    "Agreements":"Service and installation agreements."
+  };
+  function dropdownLink(item) {
+    return '<a href="'+escapeText(item.href)+'"><strong>'+escapeText(item.label)+'</strong><span class="menu-definition">'+escapeText(MENU_DEFINITIONS[item.label] || "Open "+item.label.toLowerCase()+".")+'</span></a>';
+  }
   function renderSidebar(root) {
     document.body.classList.add("top-navigation-layout");
     root.className="app-navigation";
     root.setAttribute("aria-label","Platform navigation");
-    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-1";document.head.appendChild(css);
+    var css=document.createElement("link");css.rel="stylesheet";css.href="navigation.css?v=20261003-horizontal";document.head.appendChild(css);
     var menus=APPLICATIONS.map(function(app){
-      return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(function(item){return '<a href="'+item.href+'">'+item.label+'</a>'}).join("")+'</div></details>';
+      return '<details class="application-menu"'+(application===app?' data-active="true"':'')+'><summary>'+app+'</summary><div class="navigation-dropdown">'+portfolioItems(app).map(dropdownLink).join("")+'</div></details>';
     }).join("");
     var customers=NAV_ITEMS.some(function(item){return item.id==="companies"});
     var leads=NAV_ITEMS.some(function(item){return item.id==="leads"||item.id==="sales-leads"});
     var utilityItems=NAV_ITEMS.filter(function(item){return ["sites","systems","owners","mgmt-companies","companies","leads","sales-leads","alarms"].indexOf(item.id)<0});
-    root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'">Optima ProLink</a><nav aria-label="Main menu">'+menus+(customers?'<a href="companies.html"'+(currentPage==="companies"||currentPage==="contacts"?' aria-current="page"':'')+'>Customers</a>':'')+(leads?'<a href="leads.html"'+(currentPage==="leads"?' aria-current="page"':'')+'>Leads</a>':'')+'<a href="user-guide.html"'+(currentPage==="user-guide"?' aria-current="page"':'')+'>User Guide</a></nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(function(item){return '<a href="'+item.href+'">'+item.label+'</a>'}).join("")+'</div></details>':'');
+    root.innerHTML='<a class="platform-brand" href="'+(window.NovaraRole?NovaraRole.getHomeForRole(role):"dashboard.html")+'">Optima ProLink</a><nav aria-label="Main menu">'+menus+(customers?'<a href="companies.html"'+(currentPage==="companies"||currentPage==="contacts"?' aria-current="page"':'')+'>Customers</a>':'')+(leads?'<a href="leads.html"'+(currentPage==="leads"?' aria-current="page"':'')+'>Leads</a>':'')+'<a href="user-guide.html"'+(currentPage==="user-guide"?' aria-current="page"':'')+'>User Guide</a></nav>'+(utilityItems.length?'<details class="application-menu account-menu"><summary>Account</summary><div class="navigation-dropdown">'+utilityItems.map(dropdownLink).join("")+'</div></details>':'');
     // Mouse hover opens dropdowns; touch and keyboard keep native details controls.
     root.querySelectorAll(".application-menu").forEach(function(menu){
       var closeTimer;
