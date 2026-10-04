@@ -1,0 +1,9 @@
+.landing-page .hero-image {object-position:center;animation:none;}
+.landing-page .hero-veil {background:linear-gradient(90deg,rgba(0,18,34,.14),transparent 65%);}
+.landing-page .hero-content {position:absolute;top:66.666%;left:clamp(24px,6vw,100px);width:auto;max-width:calc(100% - 48px);padding:0;align-items:flex-start;gap:18px;transform:translateY(-50%);animation:none;}
+.landing-page .hero-brand-logo {width:clamp(180px,23vw,340px);height:auto;filter:none;animation:none;}
+.landing-page .hero-ctas {width:auto;display:flex;flex-direction:row;gap:28px;animation:none;justify-content:flex-start;}
+.landing-page .hero-ctas a {color:white;font:600 17px Arial,Helvetica,sans-serif;letter-spacing:.06em;text-decoration:none;padding:4px 0;background:none;border:0;box-shadow:none;}
+.landing-page .hero-ctas a:hover {text-decoration:underline;}
+.landing-page .hero-ctas a:focus-visible {outline:2px solid white;outline-offset:5px;}
+@media(max-width:560px){.landing-page .hero-image{object-position:65% center;}.landing-page .hero-brand-logo{width:210px;}.landing-page .hero-content{left:24px;}.landing-page .hero-ctas a{font-size:15px;}}
