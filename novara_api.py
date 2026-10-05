@@ -2017,6 +2017,7 @@ def normalize_lead(item: dict) -> dict:
         "contactPhone": str(contact_phone or ""),
         "source": str(source or ""),
         "systemType": str(system_type or ""),
+        "siteType": str(first_present(item, ("SiteType", "siteType"), default="") or ""),
         "stage": str(stage or ""),
         "nextFollowUp": str(next_follow_up or ""),
         "assignedTo": str(assigned_to or ""),
@@ -2052,6 +2053,9 @@ def scan_leads() -> dict:
         "count": len(leads),
         "leads": leads,
     }
+
+
+LEAD_SITE_TYPES = ["Private School","Hotel","Multifamily","Country Club","Nonprofit / YMCA / Recreation Center","Swimming School","Other"]
 
 
 def parse_lead_payload(body: dict | None) -> tuple[dict | None, str | None]:
@@ -2097,6 +2101,9 @@ def parse_lead_payload(body: dict | None) -> tuple[dict | None, str | None]:
         if "ContactPhone" in body
         else body.get("contactPhone")
     )
+    site_type = _as_text(body.get("SiteType") if "SiteType" in body else body.get("siteType"))
+    if site_type and site_type not in LEAD_SITE_TYPES:
+        return None, "SiteType must be one of: " + ", ".join(LEAD_SITE_TYPES)
     source = _as_text(body.get("Source") if "Source" in body else body.get("source"))
     system_type = _as_text(
         body.get("SystemType") if "SystemType" in body else body.get("systemType")
@@ -2157,6 +2164,8 @@ def parse_lead_payload(body: dict | None) -> tuple[dict | None, str | None]:
         "Notes": notes,
         "UpdatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    if "SiteType" in body or "siteType" in body:
+        item["SiteType"] = site_type
     if estimated_savings is not None:
         item["EstimatedSavings"] = estimated_savings
     else:
@@ -2170,6 +2179,11 @@ def save_lead(item: dict, *, mode: str = "upsert") -> dict:
 
     ensure_leads_table()
     table = dynamodb_table(LEADS_TABLE_NAME)
+    # Preserve classification when older clients omit the optional field.
+    if mode != "create" and "SiteType" not in item:
+        existing = table.get_item(Key={"LeadID": item["LeadID"]}).get("Item") or {}
+        if "SiteType" in existing:
+            item = dict(item, SiteType=existing["SiteType"])
     # DynamoDB rejects Python None / float; omit empty optional numeric.
     write_item = {k: v for k, v in item.items() if v is not None}
     kwargs = {"Item": write_item}
