@@ -1,6 +1,6 @@
 (function(){
 var chipotle=document.body.dataset.organization==="chipotle"||new URLSearchParams(location.search).get("portal")==="chipotle";
-try{var user=window.NovaraAuth&&window.NovaraAuth.getUser?window.NovaraAuth.getUser():null;chipotle=chipotle||!!(user&&String(user.Company||user.company||"").toLowerCase()==="chipotle");}catch(e){}
+try{var user=window.NovaraAuth&&window.NovaraAuth.getCurrentUser?window.NovaraAuth.getCurrentUser():null;chipotle=chipotle||!!(user&&String(user.Company||user.company||"").toLowerCase()==="chipotle");}catch(e){}
 if(!chipotle)return;
 document.body.classList.add("chipotle-workspace");
 var heading=document.querySelector(".topbar>div");
