@@ -23,13 +23,15 @@
       <label class="filter-field"><span>Stage</span><select id="filter-stage" aria-label="Filter by stage"><option value="">All stages</option><option value="New Lead">New Lead</option><option value="Contacted">Contacted</option><option value="Qualified">Qualified</option><option value="Proposal Sent">Proposal Sent</option><option value="Won">Won</option><option value="Lost">Lost</option></select></label>
       <label class="filter-field"><span>Assigned To</span><select id="filter-assigned" aria-label="Filter by assigned to"><option value="">Anyone</option></select></label>
       <label class="filter-field"><span>Lead Type</span><select id="filter-lead-type" aria-label="Filter by lead type"><option value="">All Lead Types</option><option value="DHW NG">DHW NG</option><option value="DHW kW">DHW kW</option><option value="Pool">Pool</option><option value="HVAC">HVAC</option><option value="Other">Other</option></select></label>
+<label class="filter-field"><span>Site Type</span><select id="filter-site-type" aria-label="Filter by site type"><option value="">All site types</option><option value="Private School">Private School</option><option value="Hotel">Hotel</option><option value="Multifamily">Multifamily</option><option value="Country Club">Country Club</option><option value="Nonprofit / YMCA / Recreation Center">Nonprofit / YMCA / Recreation Center</option><option value="Swimming School">Swimming School</option><option value="Other">Other</option><option value="unclassified">Unclassified</option></select></label>
+<label class="filter-field"><span>Sort</span><select id="sort-site-type" aria-label="Sort leads"><option value="">Follow-up priority</option><option value="asc">Site type A–Z</option><option value="desc">Site type Z–A</option></select></label>
       <label class="filter-field"><span>Utility Territory</span><select id="filter-utility-territory" aria-label="Filter by utility territory"><option value="">All Territories</option><option value="SoCalGas">SoCalGas</option><option value="SDG&E">SDG&amp;E</option><option value="PG&E">PG&amp;E</option><option value="Verify">Verify</option></select></label>
       <label class="filter-field"><span>Next Contact</span><select id="filter-followup" aria-label="Filter by next contact date"><option value="">All Leads</option><option value="today">Contact Today</option><option value="overdue">Overdue</option><option value="due-soon">Next 7 Days</option><option value="next-30">Next 30 Days</option><option value="none">No Follow-Up Scheduled</option></select></label>
       <div class="lead-toolbar-actions"><button type="button" class="primary-btn" id="print-leads-btn">Print Call Sheet</button><button type="button" class="secondary-btn" id="clear-lead-filters-btn">Clear Filters</button></div>
       <p id="leads-status" class="chart-status" aria-live="polite">Loading leads…</p>
     </div>
 
-    <div id="leads-list-view" class="leads-view" role="tabpanel" aria-labelledby="tab-list"><table class="data-table"><thead><tr><th>Lead ID</th><th>Company / Site</th><th>Contact</th><th>Lead Type</th><th>Utility Territory</th><th>Stage</th><th>Next Follow-up</th><th>Assigned To</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody id="leads-tbody"><tr><td colspan="10">Loading…</td></tr></tbody></table></div>
+    <div id="leads-list-view" class="leads-view" role="tabpanel" aria-labelledby="tab-list"><table class="data-table"><thead><tr><th>Lead ID</th><th>Company / Site</th><th>Contact</th><th>Lead Type</th><th id="site-type-heading">Site Type</th><th>Utility Territory</th><th>Stage</th><th>Next Follow-up</th><th>Assigned To</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody id="leads-tbody"><tr><td colspan="11">Loading…</td></tr></tbody></table></div>
     <div id="leads-pipeline-view" class="leads-view" role="tabpanel" aria-labelledby="tab-pipeline" hidden><div id="pipeline-board" class="pipeline-board" aria-live="polite"><p class="pipeline-empty">Loading pipeline…</p></div></div>
   </main>
 </div>
@@ -42,6 +44,7 @@
       <div class="form-grid">
         <label class="form-field"><span>Lead ID <em>*</em></span><input type="text" id="field-leadId" name="LeadID" required maxlength="64" autocomplete="off" readonly aria-readonly="true"><small class="field-hint" id="lead-id-hint">Auto-generated sequentially (LD001…)</small></label>
         <label class="form-field"><span>Company Name <em>*</em></span><input type="text" id="field-companyName" name="CompanyName" required maxlength="160" autocomplete="organization"></label>
+        <label class="form-field"><span>Site Type</span><select id="field-siteType" name="SiteType"><option value="">Select site type…</option><option value="Private School">Private School</option><option value="Hotel">Hotel</option><option value="Multifamily">Multifamily</option><option value="Country Club">Country Club</option><option value="Nonprofit / YMCA / Recreation Center">Nonprofit / YMCA / Recreation Center</option><option value="Swimming School">Swimming School</option><option value="Other">Other</option></select></label>
         <label class="form-field"><span>Owner</span><select id="field-ownerId" name="OwnerID"><option value="">Select owner…</option></select></label>
         <label class="form-field"><span>Site Name</span><div class="inline-picker-row"><select id="field-siteId" name="SiteID"><option value="">Select site…</option></select><button type="button" class="secondary-btn inline-add-btn" id="lead-add-site-btn">+ Add New</button></div><input type="hidden" id="field-siteName" name="SiteName"><small class="field-hint" id="lead-site-hint">Choose an existing site or add a new one.</small></label>
         <label class="form-field"><span>Management Company</span><div class="inline-picker-row"><select id="field-mgmtCompanyId" name="MgmtCompanyID"><option value="">Select management company…</option></select><button type="button" class="secondary-btn inline-add-btn" id="lead-add-mgmt-btn">+ Add New</button></div><input type="hidden" id="field-mgmtCompanyName" name="MgmtCompanyName"></label>
@@ -73,9 +76,9 @@
 <script src="phone-format.js?v=leads-type-utility-1"></script>
 <script src="maps-config.js?v=1"></script>
 <script src="address-autocomplete.js?v=2"></script>
-<script src="leads.js?v=leads-type-utility-1"></script>
+<script src="leads.js?v=site-types-20261005"></script>
 <script src="leads-site-picker.js?v=leads-type-utility-1"></script>
 <script src="lead-company-owner-tools.js?v=2"></script>
-<script src="leads-followup-tools.js?v=leads-type-utility-1"></script>
+<script src="leads-followup-tools.js?v=site-types-20261005"></script>
 </body>
 </html>
