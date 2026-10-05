@@ -7,6 +7,8 @@
   var assignedFilter = document.getElementById("filter-assigned");
   var leadTypeFilter = document.getElementById("filter-lead-type");
   var utilityTerritoryFilter = document.getElementById("filter-utility-territory");
+  var siteTypeFilter = document.getElementById("filter-site-type");
+  var siteTypeSort = document.getElementById("sort-site-type");
   var searchInput = document.getElementById("lead-search");
   var printBtn = document.getElementById("print-leads-btn");
   var clearBtn = document.getElementById("clear-lead-filters-btn");
@@ -98,6 +100,7 @@
       lead && lead.assignedTo,
       lead && lead.source,
       lead && lead.systemType,
+      lead && lead.siteType,
       utilityTerritory(lead),
       lead && lead.notes,
     ]
@@ -151,6 +154,8 @@
   }
 
   function matchesAllFilters(lead) {
+    var siteType = siteTypeFilter ? siteTypeFilter.value : "";
+    if (siteType === "unclassified" ? Boolean(lead.siteType) : siteType && text(lead.siteType) !== siteType) return false;
     return matchesStageAndAssigned(lead) && matchesLeadTypeAndUtility(lead) && matchesFollowUp(lead) && matchesSearch(lead);
   }
 
@@ -166,6 +171,10 @@
   }
 
   function sortLeads(a, b) {
+    if (siteTypeSort && siteTypeSort.value) {
+      var typeOrder = text(a && a.siteType || "Unclassified").localeCompare(text(b && b.siteType || "Unclassified"));
+      if (typeOrder) return siteTypeSort.value === "desc" ? -typeOrder : typeOrder;
+    }
     var pa = leadPriority(a);
     var pb = leadPriority(b);
     if (pa !== pb) return pa - pb;
@@ -190,7 +199,7 @@
     rows.forEach(function (row) {
       var id = row.getAttribute("data-lead-id");
       var lead = leadsById[id];
-      row.hidden = !lead || !matchesSearch(lead) || !matchesFollowUp(lead);
+      row.hidden = !lead || !matchesAllFilters(lead);
     });
 
     var sortedRows = rows.slice().sort(function (a, b) {
@@ -220,7 +229,7 @@
     Array.prototype.forEach.call(cards, function (card) {
       var id = card.getAttribute("data-lead-id");
       var lead = leadsById[id];
-      card.hidden = !lead || !matchesSearch(lead) || !matchesFollowUp(lead);
+      card.hidden = !lead || !matchesAllFilters(lead);
     });
 
     var columns = pipelineBoard.querySelectorAll(".pipeline-column");
@@ -246,6 +255,7 @@
     if (followUpFilter && followUpFilter.value && labels[followUpFilter.value]) {
       parts.push(labels[followUpFilter.value]);
     }
+    if (siteTypeFilter && siteTypeFilter.value) parts.push("site type " + siteTypeFilter.options[siteTypeFilter.selectedIndex].text);
     if (stageFilter && stageFilter.value) parts.push(stageFilter.value);
     if (assignedFilter && assignedFilter.value) parts.push("assigned to " + assignedFilter.value);
     if (leadTypeFilter && leadTypeFilter.value) parts.push("lead type " + leadTypeFilter.value);
@@ -325,6 +335,7 @@
       return (
         "<tr>" +
         "<td><strong>" + escapeHtml(company) + "</strong><br><span>" + escapeHtml(lead.leadId || "") + "</span></td>" +
+        "<td>" + escapeHtml(lead.siteType || "Unclassified") + "</td>" +
         "<td>" + escapeHtml(contact) + "</td>" +
         "<td>" + escapeHtml(lead.contactPhone || "—") + "</td>" +
         "<td>" + escapeHtml(lead.contactEmail || "—") + "</td>" +
@@ -352,7 +363,7 @@
       "<p><strong>Generated:</strong> " + escapeHtml(generated) + "</p>" +
       (description ? "<p><strong>Filters:</strong> " + escapeHtml(description) + "</p>" : "") +
       "<p><strong>Leads:</strong> " + leads.length + "</p>" +
-      "<table><thead><tr><th>Company / Site</th><th>Contact</th><th>Phone</th><th>Email</th><th>Stage</th><th>Next Contact</th><th>Assigned</th><th>Action / Notes</th></tr></thead><tbody>" +
+      "<table><thead><tr><th>Company / Site</th><th>Site Type</th><th>Contact</th><th>Phone</th><th>Email</th><th>Stage</th><th>Next Contact</th><th>Assigned</th><th>Action / Notes</th></tr></thead><tbody>" +
       rows +
       "</tbody></table>" +
       "<script>window.onload=function(){window.print();};<\/script>" +
@@ -362,6 +373,8 @@
   }
 
   function clearFilters() {
+    if (siteTypeFilter) siteTypeFilter.value = "";
+    if (siteTypeSort) siteTypeSort.value = "";
     if (searchInput) searchInput.value = "";
     if (stageFilter) stageFilter.value = "";
     if (assignedFilter) assignedFilter.value = "";
@@ -376,6 +389,9 @@
     queueApply();
   }
 
+  if (siteTypeFilter) siteTypeFilter.addEventListener("change", queueApply);
+  if (siteTypeSort) siteTypeSort.addEventListener("change", queueApply);
+  document.addEventListener("novara:leads-loaded", function(event) {allLeads=event.detail.leads;leadsById={};allLeads.forEach(function(lead){leadsById[lead.leadId]=lead;});queueApply();});
   if (searchInput) searchInput.addEventListener("input", queueApply);
   if (followUpFilter) followUpFilter.addEventListener("change", queueApply);
   if (stageFilter) stageFilter.addEventListener("change", queueApply);
