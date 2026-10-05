@@ -8,7 +8,7 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-brand img{width:48px;height:48px;flex:0 0 48px;background:white;border-radius:50%}
 .chipotle-workspace .topbar h2{font-size:20px!important;margin:0 0 4px!important}
 .chipotle-workspace .topbar p{font-size:13px!important;margin:0!important}
-.chipotle-workspace :is(h1,h2,h3,p,label,small,span,a,button,input,select,textarea,li,strong){color:#000}
+.chipotle-workspace :is(h1,h2,h3,p,label,small,span,a,button,input,select,textarea,li,strong){color:#000!important}
 .chipotle-workspace .topbar :is(h2,p){color:#fff!important}
 .chipotle-workspace .topbar #user-profile-root :is(p,span,strong){color:#fff!important}
 .chipotle-workspace .topbar #user-profile-root button{color:#000!important}
@@ -44,3 +44,6 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace .portal-next{padding:16px;margin:16px 0}
 @media(max-width:720px){.chipotle-workspace .restaurant-layout{display:block}.chipotle-workspace .topbar{flex-wrap:wrap}.chipotle-workspace .field :is(input,select),.chipotle-workspace button,.chipotle-workspace .file-button{min-height:40px}.chipotle-workspace .main-content{padding:12px!important}}
 @media print{.chipotle-workspace .topbar :is(h2,p){color:#000!important}}
+
+.chipotle-workspace .topbar .user-avatar{color:#000!important}
+.chipotle-workspace .topbar .logout-btn{background:#fff;color:#000!important}
