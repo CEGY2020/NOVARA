@@ -238,6 +238,7 @@
       ContactName: lead.contactName || "",
       ContactEmail: lead.contactEmail || "",
       ContactPhone: formatPhoneValue(lead.contactPhone || ""),
+      SiteType: lead.siteType || "",
       Source: lead.source || "",
       SystemType: normalizeSystemTypeValue(lead.systemType || ""),
       Stage: stageOverride != null ? stageOverride : lead.stage || "New Lead",
@@ -258,6 +259,7 @@
       ContactName: fieldValue("field-contactName"),
       ContactEmail: fieldValue("field-contactEmail"),
       ContactPhone: formatPhoneValue(fieldValue("field-contactPhone")),
+      SiteType: fieldValue("field-siteType"),
       Source: fieldValue("field-source"),
       SystemType: normalizeSystemTypeValue(fieldValue("field-systemType")),
       Stage: fieldValue("field-stage") || "New Lead",
@@ -343,6 +345,7 @@
         "field-contactPhone",
         formatPhoneValue(lead.contactPhone || "")
       );
+      setFieldValue("field-siteType", lead.siteType || "");
       setFieldValue("field-source", lead.source || "");
       setFieldValue(
         "field-systemType",
@@ -513,7 +516,7 @@
     if (!tbody) return;
     if (!leads.length) {
       tbody.innerHTML =
-        '<tr><td colspan="10">No leads match the current filters.</td></tr>';
+        '<tr><td colspan="11">No leads match the current filters.</td></tr>';
       return;
     }
 
@@ -543,6 +546,7 @@
           escapeHtml(normalizeSystemTypeValue(lead.systemType || "") || "—") +
           "</td>" +
           "<td>" +
+          escapeHtml(lead.siteType || "Unclassified") + "</td><td>" +
           escapeHtml(utilityTerritory(lead)) +
           "</td>" +
           "<td>" +
@@ -614,6 +618,7 @@
                   escapeHtml(lead.contactName || "—") +
                   "</p>" +
                   '<dl class="pipeline-card-meta">' +
+                  "<div><dt>Site type</dt><dd>" + escapeHtml(lead.siteType || "Unclassified") + "</dd></div>" +
                   "<div><dt>Follow-up</dt><dd>" +
                   followUpCellHtml(lead) +
                   "</dd></div>" +
@@ -797,13 +802,14 @@
         allLeads = (data && data.leads) || [];
         rebuildAssignedFilterOptions();
         renderViews();
+        document.dispatchEvent(new CustomEvent("novara:leads-loaded", {detail: {leads: allLeads}}));
       })
       .catch(function (err) {
         allLeads = [];
         leadsById = {};
         if (tbody) {
           tbody.innerHTML =
-            '<tr><td colspan="10">Unable to load leads.</td></tr>';
+            '<tr><td colspan="11">Unable to load leads.</td></tr>';
         }
         if (pipelineBoard) {
           pipelineBoard.innerHTML =
