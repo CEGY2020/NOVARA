@@ -1,0 +1,46 @@
+/* Compact Chipotle portal and restaurant forms. */
+body.chipotle-workspace{--ink:#000;color:#000}
+.chipotle-workspace #sidebar-root,.chipotle-workspace .application-context{display:none!important}
+.chipotle-workspace .dashboard-layout{display:block!important;padding-top:0!important}
+.chipotle-workspace .main-content{margin:0 auto!important;padding:16px!important;max-width:1400px;width:100%;box-sizing:border-box}
+.chipotle-workspace .topbar{min-height:0!important;padding:12px 16px!important;margin:0 0 12px!important;display:flex;align-items:center;gap:16px}
+.chipotle-brand{display:flex;align-items:center;gap:12px}
+.chipotle-brand img{width:48px;height:48px;flex:0 0 48px;background:white;border-radius:50%}
+.chipotle-workspace .topbar h2{font-size:20px!important;margin:0 0 4px!important}
+.chipotle-workspace .topbar p{font-size:13px!important;margin:0!important}
+.chipotle-workspace :is(h1,h2,h3,p,label,small,span,a,button,input,select,textarea,li,strong){color:#000}
+.chipotle-workspace .topbar :is(h2,p){color:#fff!important}
+.chipotle-workspace .topbar #user-profile-root :is(p,span,strong){color:#fff!important}
+.chipotle-workspace .topbar #user-profile-root button{color:#000!important}
+.chipotle-workspace .review-banner,.chipotle-workspace .portal-review{padding:9px 12px;margin:12px 0;font-size:13px;gap:12px}
+.chipotle-workspace .workspace-bar{padding:10px;gap:8px;margin-bottom:14px}
+.chipotle-workspace :is(button,.file-button,.workspace-bar select){min-height:36px;padding:7px 10px;font-size:13px}
+.chipotle-workspace .restaurant-layout{grid-template-columns:185px minmax(0,1fr);gap:16px}
+.chipotle-workspace .section-nav{top:16px;gap:4px}
+.chipotle-workspace .section-nav button{padding:8px 10px;font-size:13px}
+.chipotle-workspace .section-nav small{opacity:1}
+.chipotle-workspace .section-nav button[aria-current=step],.chipotle-workspace .section-nav button[aria-current=step] small,.chipotle-workspace #save-draft{color:#fff!important}
+.chipotle-workspace .workspace-overview{margin-bottom:14px;gap:12px}
+.chipotle-workspace .workspace-overview h1{font-size:23px;margin:5px 0}
+.chipotle-workspace .workspace-overview p{font-size:14px;margin:6px 0}
+.chipotle-workspace .form-section,.chipotle-workspace .review-card{padding:16px;border-radius:10px;margin-bottom:14px}
+.chipotle-workspace .form-section h2{font-size:20px}
+.chipotle-workspace .form-section>p{font-size:14px;margin-bottom:14px}
+.chipotle-workspace .fields-grid{gap:12px}
+.chipotle-workspace .field{gap:5px;font-size:13px}
+.chipotle-workspace .field :is(input,select,textarea){min-height:36px;padding:7px 9px}
+.chipotle-workspace .field textarea{min-height:72px}
+.chipotle-workspace .field.check input{min-height:20px}
+.chipotle-workspace .repeat-record{padding:14px}
+.chipotle-workspace .repeat-heading{margin:20px 0 10px}
+.chipotle-workspace .record-header{margin-bottom:12px}
+.chipotle-workspace .portal-intro{padding:12px 0}
+.chipotle-workspace .portal-intro h1{font-size:26px;margin:6px 0}
+.chipotle-workspace .portal-intro p{margin:8px 0;font-size:14px}
+.chipotle-workspace .portal-cards{gap:12px}
+.chipotle-workspace .portal-card{padding:16px;min-height:0;border-radius:10px}
+.chipotle-workspace .portal-card h2{font-size:18px;margin:9px 0 6px}
+.chipotle-workspace .portal-card p{line-height:1.45;margin-bottom:12px}
+.chipotle-workspace .portal-next{padding:16px;margin:16px 0}
+@media(max-width:720px){.chipotle-workspace .restaurant-layout{display:block}.chipotle-workspace .topbar{flex-wrap:wrap}.chipotle-workspace .field :is(input,select),.chipotle-workspace button,.chipotle-workspace .file-button{min-height:40px}.chipotle-workspace .main-content{padding:12px!important}}
+@media print{.chipotle-workspace .topbar :is(h2,p){color:#000!important}}
