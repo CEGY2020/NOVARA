@@ -59,18 +59,21 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace :is(input,select,textarea){font-family:Arial,sans-serif!important;font-size:12pt!important;color:#000!important;text-transform:none!important}
 .chipotle-workspace .topbar{background:#fff!important;color:#000!important}
 .chipotle-workspace .topbar :is(h1,h2,h3,p,strong,span,a){color:#000!important}
-.chipotle-workspace #save-draft,.chipotle-workspace .section-nav button[aria-current=step]{background:#fff!important;color:#000!important;border:1px solid #000!important}
+.chipotle-workspace #save-draft{background:#fff!important;color:#000!important;border:1px solid #000!important}
 .chipotle-workspace #user-profile-root>div>span{display:none!important}
 
-/* Left restaurant menu hover applies to every RHW workspace, not only Chipotle-branded pages. */
+/* Left restaurant menu: light blue on hover and keep the selected item light blue. */
 body[data-page="restaurant"] .section-nav button{
   transition:background-color .15s ease,border-color .15s ease!important;
 }
-body[data-page="restaurant"] .section-nav button:hover{
+body[data-page="restaurant"] .section-nav button:hover,
+body[data-page="restaurant"] .section-nav button[aria-current="step"]{
   background:#eaf6ff!important;
-  border-color:#8fd3f4!important;
+  border:1px solid #8fd3f4!important;
   color:#000!important;
 }
-body[data-page="restaurant"] .section-nav button:hover small{
+body[data-page="restaurant"] .section-nav button:hover small,
+body[data-page="restaurant"] .section-nav button[aria-current="step"] small{
   color:#000!important;
+  opacity:1!important;
 }
