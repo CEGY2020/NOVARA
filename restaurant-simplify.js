@@ -3,7 +3,6 @@
 
 const SITE_KEEP=new Set([
   'Restaurant / chain',
-  'Store number',
   'Site ID',
   'Street address',
   'City',
@@ -12,9 +11,24 @@ const SITE_KEEP=new Set([
   'Utility territory',
   'Time zone',
   'Servicing contractor',
-  'Restaurant area (sq ft)',
-  'Meals per day'
+  'Restaurant area (sq ft)'
 ]);
+
+function moveMealsToAdvise(){
+  const site=document.getElementById('section-site');
+  const advise=document.getElementById('section-advise');
+  if(!site||!advise)return;
+  const mealsInput=Array.from(site.querySelectorAll('[data-label]')).find(function(el){
+    return el.dataset.label==='Meals per day';
+  });
+  if(!mealsInput)return;
+  const field=mealsInput.closest('.field');
+  const grid=advise.querySelector('.fields-grid');
+  if(!field||!grid)return;
+  field.style.display='';
+  delete field.dataset.simpleHidden;
+  grid.insertBefore(field,grid.firstChild);
+}
 
 function simplifySite(){
   const section=document.getElementById('section-site');
@@ -40,6 +54,7 @@ function simplifySite(){
 
 function refresh(){
   simplifySite();
+  moveMealsToAdvise();
   document.dispatchEvent(new CustomEvent('restaurant-simple-refresh'));
 }
 
