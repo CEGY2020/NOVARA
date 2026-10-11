@@ -24,8 +24,9 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace .form-section h2{font-size:20px}
 .chipotle-workspace .form-section>p{font-size:12pt;margin-bottom:14px}
 .chipotle-workspace .fields-grid{gap:8px 12px}
-.chipotle-workspace .field{gap:3px;font-size:12pt}
-.chipotle-workspace .field :is(input,select,textarea){height:30px!important;min-height:30px!important;padding:3px 8px!important;border:1px solid #7f8c99!important;border-radius:5px!important;background:#fff!important;box-shadow:none!important;line-height:1.15!important;box-sizing:border-box!important}
+.chipotle-workspace .field{gap:3px;font-size:12pt;font-weight:700!important}
+.chipotle-workspace label{font-weight:700!important}
+.chipotle-workspace .field :is(input,select,textarea){height:30px!important;min-height:30px!important;padding:3px 8px!important;border:1px solid #7f8c99!important;border-radius:5px!important;background:#fff!important;box-shadow:none!important;line-height:1.15!important;box-sizing:border-box!important;font-weight:400!important}
 .chipotle-workspace .field textarea{height:52px!important;min-height:52px!important;resize:vertical}
 .chipotle-workspace .field :is(input,select,textarea):focus{background:#eaf6ff!important;border-color:#1687b6!important;outline:2px solid #8fd3f4!important;outline-offset:1px!important;box-shadow:none!important}
 .chipotle-workspace .field.check{min-height:26px!important}
