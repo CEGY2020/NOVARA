@@ -26,6 +26,53 @@ function parseAddress(components){
   out.zip=zip+(suffix?'-'+suffix:'');
   return out;
 }
+function isUsDst(date){
+  var y=date.getUTCFullYear();
+  function nthSunday(month,n){
+    var d=new Date(Date.UTC(y,month,1));
+    var first=(7-d.getUTCDay())%7+1;
+    return new Date(Date.UTC(y,month,first+(n-1)*7,10));
+  }
+  var start=nthSunday(2,2);
+  var nov=new Date(Date.UTC(y,10,1));
+  var firstSunday=(7-nov.getUTCDay())%7+1;
+  var end=new Date(Date.UTC(y,10,firstSunday,9));
+  return date>=start&&date<end;
+}
+function timeZoneFor(state,utcOffsetMinutes){
+  state=String(state||'').toUpperCase();
+  if(state==='HI')return 'Pacific/Honolulu';
+  if(state==='AZ')return 'America/Phoenix';
+  if(state==='AK')return 'America/Anchorage';
+
+  var offset=Number(utcOffsetMinutes);
+  if(Number.isFinite(offset)){
+    var dst=isUsDst(new Date());
+    if(dst){
+      if(offset===-420)return 'America/Los_Angeles';
+      if(offset===-360)return 'America/Denver';
+      if(offset===-300)return 'America/Chicago';
+      if(offset===-240)return 'America/New_York';
+      if(offset===-480)return 'America/Anchorage';
+    }else{
+      if(offset===-480)return 'America/Los_Angeles';
+      if(offset===-420)return 'America/Denver';
+      if(offset===-360)return 'America/Chicago';
+      if(offset===-300)return 'America/New_York';
+      if(offset===-540)return 'America/Anchorage';
+    }
+  }
+
+  var pacific=['CA','WA','NV'];
+  var mountain=['CO','MT','NM','UT','WY'];
+  var central=['AL','AR','IA','IL','LA','MN','MS','MO','OK','WI'];
+  var eastern=['CT','DC','DE','GA','MA','MD','ME','NH','NJ','NY','NC','OH','PA','RI','SC','VT','VA','WV'];
+  if(pacific.indexOf(state)>=0)return 'America/Los_Angeles';
+  if(mountain.indexOf(state)>=0)return 'America/Denver';
+  if(central.indexOf(state)>=0)return 'America/Chicago';
+  if(eastern.indexOf(state)>=0)return 'America/New_York';
+  return '';
+}
 function status(message,isError){
   var addr=field('Street address');if(!addr)return;
   var host=addr.closest('.field')||addr.parentNode;
@@ -87,15 +134,17 @@ async function attach(){
       try{
         var prediction=event.placePrediction;if(!prediction)return;
         var place=prediction.toPlace();
-        await place.fetchFields({fields:['addressComponents','formattedAddress','displayName']});
+        await place.fetchFields({fields:['addressComponents','formattedAddress','displayName','utcOffsetMinutes']});
         var p=parseAddress(place.addressComponents);
         if(!p.address&&place.formattedAddress)p.address=place.formattedAddress.split(',')[0].trim();
         setField('Street address',p.address);
         setField('City',p.city);
         setField('State',p.state);
         setField('ZIP',p.zip);
+        var tz=timeZoneFor(p.state,place.utcOffsetMinutes);
+        if(tz)setField('Time zone',tz);
         widget.value=p.address||place.formattedAddress||widget.value;
-        status('Address selected. City, State and ZIP filled automatically.',false);
+        status('Address selected. City, State, ZIP and Time Zone filled automatically.',false);
       }catch(err){console.error(err);status('Address selected, but the details could not be filled automatically.',true);}
     });
   }catch(err){console.error(err);original.style.display='';original.dataset.googleAddressReady='';status(err&&err.message?err.message:'Google address lookup could not start.',true);}
