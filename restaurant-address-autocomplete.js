@@ -17,8 +17,7 @@ function setField(label,value){
     var option=Array.from(el.options||[]).find(function(o){return norm(o.value)===norm(wanted)||norm(o.textContent)===norm(wanted);});
     if(option)el.value=option.value;else el.value=wanted;
   }else el.value=wanted;
-  fire(el);
-  return true;
+  fire(el);return true;
 }
 function parseAddress(components){
   var out={address:'',city:'',state:'',zip:''},num='',route='',zip='',suffix='';
@@ -33,9 +32,7 @@ function parseAddress(components){
     if(t.indexOf('postal_code')>=0)zip=c.longText||'';
     if(t.indexOf('postal_code_suffix')>=0)suffix=c.longText||'';
   });
-  out.address=[num,route].filter(Boolean).join(' ').trim();
-  out.zip=zip+(suffix?'-'+suffix:'');
-  return out;
+  out.address=[num,route].filter(Boolean).join(' ').trim();out.zip=zip+(suffix?'-'+suffix:'');return out;
 }
 function isUsDst(date){
   var y=date.getUTCFullYear();
@@ -45,9 +42,7 @@ function isUsDst(date){
 }
 function timeZoneFor(state,utcOffsetMinutes){
   state=String(state||'').toUpperCase();
-  if(state==='HI')return 'Pacific/Honolulu';
-  if(state==='AZ')return 'America/Phoenix';
-  if(state==='AK')return 'America/Anchorage';
+  if(state==='HI')return 'Pacific/Honolulu';if(state==='AZ')return 'America/Phoenix';if(state==='AK')return 'America/Anchorage';
   var offset=Number(utcOffsetMinutes);
   if(Number.isFinite(offset)){
     var dst=isUsDst(new Date());
@@ -70,46 +65,64 @@ function suppressBrowserAutofill(el){
   var form=el.closest&&el.closest('form');if(form)form.setAttribute('autocomplete','off');
 }
 function loadMaps(){
-  if(global.google&&global.google.maps)return Promise.resolve();
-  if(loadPromise)return loadPromise;
-  if(!key)return Promise.reject(new Error('Google address lookup is not configured.'));
+  if(global.google&&global.google.maps)return Promise.resolve();if(loadPromise)return loadPromise;if(!key)return Promise.reject(new Error('Google address lookup is not configured.'));
   loadPromise=new Promise(function(resolve,reject){
-    var cb='__novaraRestaurantAddressGoogleReady';
-    var timer=setTimeout(function(){reject(new Error('Google address lookup did not finish loading.'));},15000);
+    var cb='__novaraRestaurantAddressGoogleReady',timer=setTimeout(function(){reject(new Error('Google address lookup did not finish loading.'));},15000);
     global[cb]=function(){clearTimeout(timer);try{delete global[cb];}catch(_){global[cb]=undefined;}resolve();};
     var s=document.createElement('script');s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&loading=async&libraries=places&v=weekly&callback='+cb;s.async=true;s.defer=true;s.onerror=function(){clearTimeout(timer);reject(new Error('Google address lookup could not load.'));};document.head.appendChild(s);
-  });
-  return loadPromise;
+  });return loadPromise;
 }
-function applyTimeZone(state,offset){
-  var tz=timeZoneFor(state,offset);if(!tz)return;
-  [0,50,200].forEach(function(delay){setTimeout(function(){setField('Time zone',tz);status('',false);},delay);});
+function applyTimeZone(state,offset){var tz=timeZoneFor(state,offset);if(!tz)return;[0,50,200].forEach(function(delay){setTimeout(function(){setField('Time zone',tz);status('',false);},delay);});}
+function closeMenu(menu){if(menu){menu.innerHTML='';menu.style.display='none';}}
+function menuFor(input){
+  var host=input.closest('.field')||input.parentNode;host.style.position='relative';
+  var menu=host.querySelector('.restaurant-address-menu');
+  if(!menu){menu=document.createElement('div');menu.className='restaurant-address-menu';menu.style.cssText='position:absolute;left:0;right:0;top:100%;z-index:9999;background:#fff;border:1px solid #7f8c99;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.18);max-height:260px;overflow:auto;display:none';host.appendChild(menu);}
+  return menu;
+}
+function styleAddressInput(input){
+  input.style.height='32px';input.style.minHeight='32px';input.style.padding='5px 8px';input.style.font='12pt Arial,sans-serif';input.style.color='#000';input.style.background='#fff';input.style.border='1px solid #7f8c99';input.style.borderRadius='5px';input.style.boxSizing='border-box';input.style.width='100%';
 }
 async function attach(){
-  var original=field('Street address');
-  if(!original||original.dataset.googleAddressReady==='1')return;
-  original.dataset.googleAddressReady='1';suppressBrowserAutofill(original);
+  var original=field('Street address');if(!original||original.dataset.googleAddressReady==='1')return;
+  original.dataset.googleAddressReady='1';suppressBrowserAutofill(original);styleAddressInput(original);
   try{
     await loadMaps();
     var places=typeof global.google.maps.importLibrary==='function'?await global.google.maps.importLibrary('places'):global.google.maps.places;
-    var PlaceAutocompleteElement=places.PlaceAutocompleteElement||(global.google.maps.places&&global.google.maps.places.PlaceAutocompleteElement);
-    if(!PlaceAutocompleteElement)throw new Error('Google Places address autocomplete is unavailable.');
-    var widget=new PlaceAutocompleteElement();widget.includedRegionCodes=['us'];widget.placeholder='Start typing restaurant address…';widget.value=original.value||'';widget.style.display='block';widget.style.width='100%';widget.style.boxSizing='border-box';widget.style.minHeight='32px';suppressBrowserAutofill(widget);
-    original.parentNode.insertBefore(widget,original);original.style.display='none';
-    if(original.value)status('',false);else status('Start typing the restaurant address and select the correct location.',false);
-    widget.addEventListener('focus',function(){suppressBrowserAutofill(widget);},true);
-    widget.addEventListener('gmp-select',async function(event){
+    var AutocompleteSuggestion=places.AutocompleteSuggestion||(global.google.maps.places&&global.google.maps.places.AutocompleteSuggestion);
+    var AutocompleteSessionToken=places.AutocompleteSessionToken||(global.google.maps.places&&global.google.maps.places.AutocompleteSessionToken);
+    if(!AutocompleteSuggestion||typeof AutocompleteSuggestion.fetchAutocompleteSuggestions!=='function')throw new Error('Google Places address autocomplete is unavailable.');
+    var menu=menuFor(original),token=AutocompleteSessionToken?new AutocompleteSessionToken():null,timer=0,lastQuery='';
+    async function search(){
+      var q=String(original.value||'').trim();lastQuery=q;closeMenu(menu);if(q.length<3)return;
       try{
-        var prediction=event.placePrediction;if(!prediction)return;
-        var place=prediction.toPlace();await place.fetchFields({fields:['addressComponents','formattedAddress','displayName','utcOffsetMinutes']});
-        var p=parseAddress(place.addressComponents);if(!p.address&&place.formattedAddress)p.address=place.formattedAddress.split(',')[0].trim();
-        setField('Street address',p.address);setField('City',p.city);setField('State',p.state);setField('ZIP',p.zip);
-        applyTimeZone(p.state,place.utcOffsetMinutes);
-        widget.value=p.address||place.formattedAddress||widget.value;
-        status('',false);
-      }catch(err){console.error(err);status('Address selected, but the details could not be filled automatically.',true);}
-    });
-  }catch(err){console.error(err);original.style.display='';original.dataset.googleAddressReady='';status(err&&err.message?err.message:'Google address lookup could not start.',true);}
+        var req={input:q,includedRegionCodes:['us']};if(token)req.sessionToken=token;
+        var res=await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);if(lastQuery!==q)return;
+        var suggestions=(res&&res.suggestions)||[];if(!suggestions.length)return;
+        menu.innerHTML='';
+        suggestions.slice(0,8).forEach(function(s){
+          var pred=s.placePrediction;if(!pred)return;
+          var btn=document.createElement('button');btn.type='button';btn.style.cssText='display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #e2e7eb;background:#fff;padding:8px 10px;font:12pt Arial,sans-serif;color:#000;cursor:pointer';
+          btn.textContent=pred.text&&pred.text.toString?pred.text.toString():String(pred.text||'');
+          btn.addEventListener('mousedown',function(e){e.preventDefault();});
+          btn.addEventListener('click',async function(){
+            try{
+              var place=pred.toPlace();await place.fetchFields({fields:['addressComponents','formattedAddress','displayName','utcOffsetMinutes']});
+              var p=parseAddress(place.addressComponents);if(!p.address&&place.formattedAddress)p.address=place.formattedAddress.split(',')[0].trim();
+              setField('Street address',p.address);setField('City',p.city);setField('State',p.state);setField('ZIP',p.zip);applyTimeZone(p.state,place.utcOffsetMinutes);closeMenu(menu);status('',false);
+              token=AutocompleteSessionToken?new AutocompleteSessionToken():null;
+            }catch(err){console.error(err);status('Address selected, but the details could not be filled automatically.',true);}
+          });
+          menu.appendChild(btn);
+        });menu.style.display='block';
+      }catch(err){console.error(err);status('Google address lookup could not return suggestions.',true);}
+    }
+    original.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(search,180);});
+    original.addEventListener('focus',function(){suppressBrowserAutofill(original);if(String(original.value||'').trim().length>=3)search();},true);
+    original.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu(menu);});
+    document.addEventListener('click',function(e){if(e.target!==original&&!menu.contains(e.target))closeMenu(menu);});
+    status('',false);
+  }catch(err){console.error(err);original.dataset.googleAddressReady='';status(err&&err.message?err.message:'Google address lookup could not start.',true);}
 }
 function start(){attach();var root=document.getElementById('section-content');if(root&&global.MutationObserver)new MutationObserver(function(){setTimeout(attach,0);}).observe(root,{childList:true,subtree:true});}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
