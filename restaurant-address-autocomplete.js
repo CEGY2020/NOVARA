@@ -33,6 +33,19 @@ function status(message,isError){
   if(!el&&host){el=document.createElement('small');el.className='restaurant-address-status';el.style.cssText='display:block;margin-top:3px;font:700 9pt Arial,sans-serif';host.appendChild(el);}
   if(el){el.textContent=message||'';el.style.color=isError?'#a12622':'#555';}
 }
+function suppressBrowserAutofill(el){
+  if(!el)return;
+  el.setAttribute('autocomplete','new-password');
+  el.setAttribute('autocorrect','off');
+  el.setAttribute('autocapitalize','none');
+  el.setAttribute('spellcheck','false');
+  el.setAttribute('data-lpignore','true');
+  el.setAttribute('data-1p-ignore','true');
+  el.setAttribute('data-form-type','other');
+  el.setAttribute('name','novara-restaurant-address-lookup');
+  var form=el.closest&&el.closest('form');
+  if(form)form.setAttribute('autocomplete','off');
+}
 function loadMaps(){
   if(global.google&&global.google.maps)return Promise.resolve();
   if(loadPromise)return loadPromise;
@@ -52,7 +65,7 @@ async function attach(){
   var original=field('Street address');
   if(!original||original.dataset.googleAddressReady==='1')return;
   original.dataset.googleAddressReady='1';
-  original.setAttribute('autocomplete','off');
+  suppressBrowserAutofill(original);
   try{
     await loadMaps();
     var places=typeof global.google.maps.importLibrary==='function'?await global.google.maps.importLibrary('places'):global.google.maps.places;
@@ -64,10 +77,12 @@ async function attach(){
     widget.placeholder='Start typing restaurant address…';
     widget.value=original.value||'';
     widget.style.display='block';widget.style.width='100%';widget.style.boxSizing='border-box';widget.style.minHeight='32px';
+    suppressBrowserAutofill(widget);
     original.parentNode.insertBefore(widget,original);
     original.style.display='none';
     status('Start typing the restaurant address and select the correct location.',false);
 
+    widget.addEventListener('focus',function(){suppressBrowserAutofill(widget);},true);
     widget.addEventListener('gmp-select',async function(event){
       try{
         var prediction=event.placePrediction;if(!prediction)return;
