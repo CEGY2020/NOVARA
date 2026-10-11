@@ -1,110 +1,98 @@
 (function(){
 'use strict';
 
-const SECTION_TITLES={
-  site:'Restaurant Profile',equipment:'DHW & Kitchen Equipment',core:'Core · Points & Operating Settings',
-  alert:'Alert · Conditions & Routing',leaks:'Alert · Leak Protection',service:'Contractor · Work & Full Job Costs',
-  advise:'Advise · Sizing & Upgrade Review',report:'ProLink · Report Assistant',access:'ProLink · Access Request',
-  utility:'Gas Data · UtilityAPI'
-};
 let scheduled=false;
 
-function originalSections(){
-  return Array.from(document.querySelectorAll('#section-content > .form-section')).filter(function(section){
-    return section.id!=='section-additional';
-  });
+function cleanupStandalone(){
+  const standalone=document.getElementById('section-additional');
+  if(standalone)standalone.remove();
+  const navButton=document.getElementById('additional-input-nav');
+  if(navButton)navButton.remove();
 }
 
-function buildAdditional(){
-  scheduled=false;
-  const root=document.getElementById('section-content');
-  const nav=document.getElementById('section-nav');
-  if(!root||!nav)return;
+function buildSectionAdditional(section){
+  if(!section||section.id==='section-additional')return;
 
-  const existing=document.getElementById('section-additional');
-  if(existing)existing.remove();
-  const oldButton=document.getElementById('additional-input-nav');
-  if(oldButton)oldButton.remove();
+  const old=section.querySelector(':scope > .section-additional-input');
+  if(old){
+    const oldFields=Array.from(old.querySelectorAll('.field[data-additional-from]'));
+    const mainGrid=section.querySelector(':scope > .fields-grid');
+    if(mainGrid){
+      oldFields.forEach(function(field){
+        field.style.display='none';
+        field.dataset.simpleHidden='true';
+        delete field.dataset.additionalFrom;
+        mainGrid.append(field);
+      });
+    }
+    old.remove();
+  }
 
-  const sources=originalSections();
-  const groups=[];
-  sources.forEach(function(section){
-    const id=section.id.replace(/^section-/,'');
-    const fields=Array.from(section.querySelectorAll('.field[data-simple-hidden="true"]'));
-    if(fields.length)groups.push({id:id,fields:fields});
+  const fields=Array.from(section.querySelectorAll(':scope > .fields-grid > .field[data-simple-hidden="true"]'));
+  const hiddenExtras=Array.from(section.children).filter(function(el){
+    return el.dataset&&el.dataset.simpleHidden==='true'&&(el.classList.contains('repeat-heading')||el.classList.contains('repeat-record')||el.classList.contains('empty-records'));
   });
-  if(!groups.length)return;
+  if(!fields.length&&!hiddenExtras.length)return;
 
-  const extra=document.createElement('section');
-  extra.id='section-additional';
-  extra.className='form-section';
-  extra.hidden=true;
-  const h2=document.createElement('h2');h2.textContent='Additional Input';
-  const p=document.createElement('p');p.textContent='Optional detail and engineering information that is not needed on the main day-to-day forms.';
-  extra.append(h2,p);
+  const details=document.createElement('details');
+  details.className='section-additional-input';
+  const summary=document.createElement('summary');
+  summary.textContent='Additional Input';
+  details.append(summary);
 
-  groups.forEach(function(group){
-    const heading=document.createElement('div');
-    heading.className='repeat-heading additional-input-heading';
-    const h3=document.createElement('h3');
-    h3.textContent=SECTION_TITLES[group.id]||group.id;
-    heading.append(h3);
-    extra.append(heading);
+  const note=document.createElement('p');
+  note.className='additional-input-note';
+  note.textContent='Optional detail and engineering information for this section.';
+  details.append(note);
 
+  if(fields.length){
     const grid=document.createElement('div');
     grid.className='fields-grid additional-input-grid';
-    group.fields.forEach(function(field){
+    fields.forEach(function(field){
       field.style.display='';
       delete field.dataset.simpleHidden;
-      field.dataset.additionalFrom=group.id;
+      field.dataset.additionalFrom=section.id.replace(/^section-/,'');
       grid.append(field);
     });
-    extra.append(grid);
-  });
+    details.append(grid);
+  }
 
-  const footer=document.createElement('div');
-  footer.className='section-footer';
-  const back=document.createElement('button');
-  back.type='button';back.textContent='← Previous';
-  back.addEventListener('click',function(){
-    const buttons=Array.from(nav.querySelectorAll('button:not(#additional-input-nav)'));
-    if(buttons.length)buttons[buttons.length-1].click();
-  });
-  const done=document.createElement('button');
-  done.type='button';done.textContent='Back to Restaurant Profile';
-  done.addEventListener('click',function(){
-    const first=nav.querySelector('button:not(#additional-input-nav)');
-    if(first)first.click();
-  });
-  footer.append(back,done);
-  extra.append(footer);
-  root.append(extra);
+  if(hiddenExtras.length){
+    const records=document.createElement('div');
+    records.className='additional-input-records';
+    hiddenExtras.forEach(function(el){
+      el.style.display='';
+      delete el.dataset.simpleHidden;
+      records.append(el);
+    });
+    details.append(records);
+  }
 
-  const button=document.createElement('button');
-  button.id='additional-input-nav';
-  button.type='button';
-  button.textContent='Additional Input';
-  const small=document.createElement('small');small.textContent='Optional detail fields';button.append(small);
-  button.addEventListener('click',function(){
-    originalSections().forEach(function(section){section.hidden=true;});
-    extra.hidden=false;
-    Array.from(nav.children).forEach(function(b){b.removeAttribute('aria-current');});
-    button.setAttribute('aria-current','step');
-    root.scrollIntoView({behavior:'smooth',block:'start'});
-  });
-  nav.append(button);
+  const footer=section.querySelector(':scope > .section-footer');
+  if(footer)section.insertBefore(details,footer);
+  else section.append(details);
+}
 
-  nav.querySelectorAll('button:not(#additional-input-nav)').forEach(function(b){
-    b.addEventListener('click',function(){extra.hidden=true;button.removeAttribute('aria-current');},{capture:true});
-  });
+function addStyles(){
+  if(document.getElementById('restaurant-additional-input-styles'))return;
+  const style=document.createElement('style');
+  style.id='restaurant-additional-input-styles';
+  style.textContent='body[data-page="restaurant"] .section-additional-input{margin-top:18px;border-top:1px solid #bfcbd3;padding-top:10px}body[data-page="restaurant"] .section-additional-input>summary{cursor:pointer;font:700 12pt Arial,sans-serif;color:#000;padding:5px 0}body[data-page="restaurant"] .section-additional-input[open]>summary{margin-bottom:8px}body[data-page="restaurant"] .additional-input-note{margin:0 0 10px!important;font:12pt Arial,sans-serif!important;color:#000!important}body[data-page="restaurant"] .additional-input-grid{margin-bottom:8px}body[data-page="restaurant"] .additional-input-records{margin-top:10px}';
+  document.head.append(style);
+}
 
+function build(){
+  scheduled=false;
+  cleanupStandalone();
+  addStyles();
+  document.querySelectorAll('#section-content > .form-section').forEach(buildSectionAdditional);
   document.dispatchEvent(new CustomEvent('restaurant-additional-input-ready'));
 }
 
 function schedule(){
   if(scheduled)return;
   scheduled=true;
-  setTimeout(buildAdditional,20);
+  setTimeout(build,30);
 }
 
 function start(){
@@ -113,7 +101,7 @@ function start(){
   const root=document.getElementById('section-content');
   if(root&&window.MutationObserver){
     new MutationObserver(function(mutations){
-      if(mutations.some(function(m){return Array.from(m.addedNodes||[]).some(function(n){return n.nodeType===1&&n.id!=='section-additional';});}))schedule();
+      if(mutations.some(function(m){return m.addedNodes&&m.addedNodes.length;}))schedule();
     }).observe(root,{childList:true});
   }
 }
