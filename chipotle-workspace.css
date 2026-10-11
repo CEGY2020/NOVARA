@@ -15,7 +15,7 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace .restaurant-layout{grid-template-columns:185px minmax(0,1fr);gap:16px}
 .chipotle-workspace .section-nav{top:16px;gap:4px}
 .chipotle-workspace .section-nav button{padding:6px 8px;font-size:12pt;transition:background-color .15s ease,border-color .15s ease}
-.chipotle-workspace .section-nav button:hover{background:#eaf6ff!important;border-color:#8fd3f4!important;color:#000!important}
+.chipotle-workspace .section-nav button:hover{background:#d6ecfa!important;border-color:#6fb9e8!important;color:#000!important}
 .chipotle-workspace .section-nav button:hover small{color:#000!important}
 .chipotle-workspace .section-nav small{opacity:1}
 .chipotle-workspace .section-nav button[aria-current=step],.chipotle-workspace .section-nav button[aria-current=step] small,.chipotle-workspace #save-draft{color:#000!important}
@@ -62,14 +62,14 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace #save-draft{background:#fff!important;color:#000!important;border:1px solid #000!important}
 .chipotle-workspace #user-profile-root>div>span{display:none!important}
 
-/* Left restaurant menu: light blue on hover and keep the selected item light blue. */
+/* Left restaurant menu: stronger light blue on hover and selected. */
 body[data-page="restaurant"] .section-nav button{
   transition:background-color .15s ease,border-color .15s ease!important;
 }
 body[data-page="restaurant"] .section-nav button:hover,
 body[data-page="restaurant"] .section-nav button[aria-current="step"]{
-  background:#eaf6ff!important;
-  border:1px solid #8fd3f4!important;
+  background:#d6ecfa!important;
+  border:1px solid #6fb9e8!important;
   color:#000!important;
 }
 body[data-page="restaurant"] .section-nav button:hover small,
