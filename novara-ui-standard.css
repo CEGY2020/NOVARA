@@ -5,6 +5,9 @@ body {
   min-width: 100%;
   min-height: 100%;
   margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
+  color: #000;
 }
 
 .dashboard-layout,
@@ -17,14 +20,10 @@ body {
   max-width: none;
   box-sizing: border-box;
   color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
 }
 
-.main-content h1,
-.main-content h2,
-.main-content h3,
-.main-content h4,
-.main-content h5,
-.main-content h6,
 .main-content p,
 .main-content label,
 .main-content span,
@@ -35,11 +34,9 @@ body {
 .main-content input,
 .main-content select,
 .main-content textarea,
+.main-content button,
+.main-content a,
 .modal-panel,
-.modal-panel h1,
-.modal-panel h2,
-.modal-panel h3,
-.modal-panel h4,
 .modal-panel p,
 .modal-panel label,
 .modal-panel span,
@@ -47,7 +44,25 @@ body {
 .modal-panel small,
 .modal-panel input,
 .modal-panel select,
-.modal-panel textarea {
+.modal-panel textarea,
+.modal-panel button,
+.modal-panel a {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
+  color: #000;
+}
+
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6,
+.modal-panel h1,
+.modal-panel h2,
+.modal-panel h3,
+.modal-panel h4 {
+  font-family: Arial, Helvetica, sans-serif;
   color: #000;
 }
 
@@ -57,7 +72,6 @@ body {
   color: #fff;
 }
 
-/* Larger form typography for readability. */
 .site-form,
 .site-form label,
 .site-form .form-field,
@@ -67,36 +81,38 @@ body {
 .site-form textarea,
 .site-form button,
 .modal-panel {
-  font-size: 18px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
+  color: #000;
 }
 
 .site-form .form-field > span,
 .modal-header h3 {
-  font-size: 19px;
   font-weight: 700;
+  color: #000;
 }
 
 .site-form input,
 .site-form select,
 .site-form textarea {
-  min-height: 46px;
-  line-height: 1.35;
+  min-height: 34px;
+  line-height: 1.2;
   color: #000;
   background: #fff;
 }
 
 .site-form textarea {
-  min-height: 110px;
+  min-height: 72px;
 }
 
 .site-form .field-hint {
-  font-size: 15px;
+  font-size: 12pt;
   color: #000;
 }
 
 .site-form .inline-picker-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -109,9 +125,9 @@ body {
 .site-form .inline-add-btn {
   flex: 0 0 auto;
   min-width: 112px;
-  min-height: 46px;
+  min-height: 34px;
   white-space: nowrap;
-  font-size: 17px;
+  font-size: 12pt;
   font-weight: 700;
 }
 
@@ -119,18 +135,18 @@ body {
   grid-column: 1 / -1;
   border: 2px solid #b7c3cf;
   border-radius: 10px;
-  padding: 16px;
+  padding: 12px;
   background: #fff;
 }
 
 .site-form .inline-create-panel strong {
-  font-size: 20px;
+  font-size: 12pt;
 }
 
 .site-form .inline-create-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
   flex-wrap: wrap;
 }
 
@@ -143,7 +159,7 @@ body {
   .site-form textarea,
   .site-form button,
   .modal-panel {
-    font-size: 17px;
+    font-size: 12pt;
   }
 
   .site-form .inline-picker-row {
