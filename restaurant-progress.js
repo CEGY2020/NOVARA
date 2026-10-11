@@ -2,7 +2,7 @@
 'use strict';
 
 const REQUIRED={
-  site:['Restaurant / chain','Store number','Site ID','Street address','City','State','ZIP','Utility territory','Time zone','Servicing contractor'],
+  site:['Restaurant / chain','Site ID','Street address','City','State','ZIP','Utility territory','Time zone','Servicing contractor'],
   equipment:['Plant arrangement'],
   core:['Controller / gateway','Controller ID'],
   alert:['Restaurant staff receive notices','Backup contractor / dispatch contact','After-hours emergency contact'],
