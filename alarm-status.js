@@ -8,6 +8,19 @@ function render(rows){state(rows.length?rows.length+" active alarm"+(rows.length
 function script(src){return new Promise((resolve,reject)=>{var s=document.createElement("script");s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});}
 function unavailable(){state("Alarms unavailable","alarm-unknown");var b=document.getElementById("user-alarm-rows");if(b)b.innerHTML='<tr><td colspan="4">Alarms unavailable. Please try again.</td></tr>';}
 function refresh(){var u=window.NovaraAuth&&NovaraAuth.getCurrentUser();if(!u){state("Sign in for alarms","alarm-unknown");return;}Promise.all([NovaraApi.getSites(),NovaraApi.getSystems()]).then(d=>{if(!Array.isArray(d[0].sites)||!Array.isArray(d[1].systems))throw Error("Invalid data");render(collect(scopeSites(d[0].sites,u),d[1].systems));}).catch(unavailable);}
+function ensureAemRhwPortal(){
+  var menu=document.querySelector('[data-customer-app="RHW"]');
+  var panel=menu&&menu.querySelector('.navigation-dropdown');
+  if(!panel||panel.querySelector('[data-aem-rhw-portal]'))return;
+  if(panel.textContent.indexOf('RHW review portals')===-1)return;
+  var link=document.createElement('a');
+  link.href='restaurant-workspace.html?application=RHW&portal=aem';
+  link.setAttribute('data-aem-rhw-portal','true');
+  var title=document.createElement('strong');title.textContent='AEM RHW';
+  var desc=document.createElement('span');desc.className='menu-definition';desc.textContent='AEM forms, reports and upgrade planning.';
+  link.append(title,desc);panel.appendChild(link);
+}
+var rhwObserver=new MutationObserver(ensureAemRhwPortal);rhwObserver.observe(document.body,{childList:true,subtree:true});ensureAemRhwPortal();
 window.NovaraAlarmStatus={scopeSites:scopeSites,collect:collect,refresh:refresh};
 Promise.resolve().then(()=>{if(!window.NovaraAuth)return script("auth.js");}).then(()=>{if(window.NOVARA_API_BASE===undefined)return script("api-config.js");}).then(()=>{if(!window.NovaraApi)return script("api-client.js");}).then(()=>{refresh();setInterval(()=>{if(!document.hidden)refresh();},60000);}).catch(unavailable);
 })();
