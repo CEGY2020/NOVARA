@@ -14,7 +14,9 @@ body.chipotle-workspace{--ink:#000;color:#000}
 .chipotle-workspace :is(button,.file-button,.workspace-bar select){min-height:30px;padding:4px 8px;font-size:12pt}
 .chipotle-workspace .restaurant-layout{grid-template-columns:185px minmax(0,1fr);gap:16px}
 .chipotle-workspace .section-nav{top:16px;gap:4px}
-.chipotle-workspace .section-nav button{padding:6px 8px;font-size:12pt}
+.chipotle-workspace .section-nav button{padding:6px 8px;font-size:12pt;transition:background-color .15s ease,border-color .15s ease}
+.chipotle-workspace .section-nav button:hover{background:#eaf6ff!important;border-color:#8fd3f4!important;color:#000!important}
+.chipotle-workspace .section-nav button:hover small{color:#000!important}
 .chipotle-workspace .section-nav small{opacity:1}
 .chipotle-workspace .section-nav button[aria-current=step],.chipotle-workspace .section-nav button[aria-current=step] small,.chipotle-workspace #save-draft{color:#000!important}
 .chipotle-workspace .workspace-overview{margin-bottom:14px;gap:12px}
