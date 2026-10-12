@@ -11,6 +11,9 @@ var totalOutput=document.getElementById('totalOutputBtu');
 var tankQty=document.getElementById('storageTankQty');
 var tankGal=document.getElementById('storageTankGallons');
 var totalStorage=document.getElementById('totalStorageGallons');
+var reviewLink=document.getElementById('review-link');
+var q=new URLSearchParams(location.search),leadId=q.get('leadId')||'';
+if(reviewLink){reviewLink.href='dhw-review.html?leadId='+encodeURIComponent(leadId);if(!leadId){reviewLink.setAttribute('aria-disabled','true');reviewLink.style.pointerEvents='none';reviewLink.style.opacity='.55'}}
 
 function n(v){var x=parseFloat(v);return isFinite(x)?x:0}
 function showConditional(){
